@@ -1,0 +1,228 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String
+  name         String
+  createdAt    DateTime  @default(now())
+  company      Company?
+}
+
+model Company {
+  id             String    @id @default(cuid())
+  userId         String    @unique
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  razaoSocial    String
+  cnpj           String
+  logradouro     String
+  numero         String
+  complemento    String?
+  bairro         String
+  cidade         String
+  uf             String
+  cep            String
+
+  banco          String
+  agencia        String
+  conta          String
+
+  socioNome      String
+  socioCpf       String
+
+  logoUrl        String?
+
+  objetoSocial   String
+  atendeServico  Boolean   @default(true)
+  atendeBem      Boolean   @default(true)
+  keywords       Keyword[]
+  editais        Edital[]
+
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+model Keyword {
+  id         String   @id @default(cuid())
+  companyId  String
+  company    Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  term       String
+  createdAt  DateTime @default(now())
+
+  @@unique([companyId, term])
+}
+
+enum EditalStatus {
+  NOVO
+  APROVADO
+  REPROVADO
+}
+
+model Edital {
+  id                  String        @id @default(cuid())
+  companyId           String
+  company             Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  fonte               String        @default("PNCP")
+  numeroControlePNCP  String
+  titulo              String
+  descricao           String
+  orgaoNome           String
+  orgaoCnpj           String
+  municipio           String?
+  uf                  String?
+  modalidade          String?
+  situacao            String?
+  dataPublicacao      DateTime?
+  dataAberturaProposta DateTime?
+  dataEncerramentoProposta DateTime?
+  valorGlobal         Float?
+  orcamentoSigiloso   Boolean       @default(false)
+  tipoObjeto          String?
+  linkPortal           String
+  keywordMatched      String?
+
+  status              EditalStatus  @default(NOVO)
+  decidedAt           DateTime?
+
+  analysis            Analysis?
+  proposal            Proposal?
+  documents           Document[]
+  checklistItems      ChecklistItem[]
+  auditLogs           AuditLog[]
+  agentRuns           AgentRun[]
+
+  createdAt           DateTime      @default(now())
+  updatedAt            DateTime     @updatedAt
+
+  @@unique([companyId, numeroControlePNCP])
+}
+
+model Analysis {
+  id                    String   @id @default(cuid())
+  editalId              String   @unique
+  edital                Edital   @relation(fields: [editalId], references: [id], onDelete: Cascade)
+
+  resumoObjeto          String
+  obrigacoesContratada  String
+  habilitacao           String
+  requisitosObrigatorios String
+  requisitosAdicionais  String
+  riscos                String
+  parecer               String
+
+  createdAt             DateTime @default(now())
+}
+
+model Proposal {
+  id                    String   @id @default(cuid())
+  editalId              String   @unique
+  edital                Edital   @relation(fields: [editalId], references: [id], onDelete: Cascade)
+
+  valorGlobalReferencia Float
+  itensJson             String
+  observacoes           String?
+  descontoPercentual    Float    @default(0)
+
+  createdAt             DateTime @default(now())
+}
+
+enum DocumentTipo {
+  ANEXO_GERADO
+  DOCUMENTO_USUARIO
+  DOCUMENTO_PNCP
+}
+
+enum DocumentStatus {
+  PENDENTE
+  GERADO
+  ENVIADO
+  VENCIDO
+  DISPONIVEL
+}
+
+model Document {
+  id               String         @id @default(cuid())
+  editalId         String
+  edital           Edital         @relation(fields: [editalId], references: [id], onDelete: Cascade)
+
+  nome             String
+  tipo             DocumentTipo
+  categoria        String?
+  status           DocumentStatus @default(PENDENTE)
+  conteudoBase64   String?
+  origemUrl        String?
+  validade         DateTime?
+
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+}
+
+enum ChecklistStatus {
+  FALTANTE
+  ENVIADO
+  VENCIDO
+  OK
+}
+
+model ChecklistItem {
+  id            String          @id @default(cuid())
+  editalId      String
+  edital        Edital          @relation(fields: [editalId], references: [id], onDelete: Cascade)
+
+  documentoNome String
+  obrigatorio   Boolean         @default(true)
+  status        ChecklistStatus @default(FALTANTE)
+  validade      DateTime?
+  observacao    String?
+
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+}
+
+enum AuditSeverity {
+  OK
+  ALERTA
+  ERRO
+}
+
+model AuditLog {
+  id          String        @id @default(cuid())
+  editalId    String
+  edital      Edital        @relation(fields: [editalId], references: [id], onDelete: Cascade)
+
+  agente      String
+  etapa       String
+  severidade  AuditSeverity
+  mensagem    String
+  acaoTomada  String?
+
+  createdAt   DateTime      @default(now())
+}
+
+enum AgentRunStatus {
+  RUNNING
+  DONE
+  ERROR
+}
+
+model AgentRun {
+  id          String         @id @default(cuid())
+  editalId    String
+  edital      Edital         @relation(fields: [editalId], references: [id], onDelete: Cascade)
+
+  agentKey    String
+  status      AgentRunStatus @default(RUNNING)
+  message     String?
+
+  startedAt   DateTime       @default(now())
+  finishedAt  DateTime?
+}
