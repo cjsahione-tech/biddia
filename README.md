@@ -1,36 +1,40 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Licitax
 
-## Getting Started
+Plataforma de agentes de IA para participação em licitações públicas brasileiras.
+Next.js 16 (App Router) + Prisma + PostgreSQL, agentes construídos sobre a API do
+PNCP (Portal Nacional de Contratações Públicas) e a API da Anthropic.
 
-First, run the development server:
+**Em produção:** https://licitax.vercel.app
+
+## Agentes
+
+1. **Comercial** — varre o PNCP com as palavras-chave da empresa, filtra por tipo de
+   objeto (serviço/bem) e relevância (IA) antes de capturar qualquer edital.
+2. **Analista** — lê o edital e resume objeto, obrigações, habilitação e riscos.
+3. **Financeiro** — monta a proposta (itens/quantidades/valores) com base no valor de
+   referência do PNCP; permite aplicar desconto e exportar planilha `.xlsx`.
+4. **Advogado** — gera os anexos/declarações timbrados exigidos, em PDF.
+5. **Secretário** — monta e acompanha o checklist de documentos de habilitação.
+6. **Auditor** — audita cada etapa do pipeline e corrige o que falhar automaticamente.
+
+## Rodando localmente
 
 ```bash
+npm install
+npx prisma generate
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Requer um arquivo `.env` (veja `.env.example`) com `DATABASE_URL` (Postgres),
+`JWT_SECRET` e `ANTHROPIC_API_KEY`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Publicando uma atualização
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+O deploy é feito direto (sem depender de repositório remoto):
 
-## Learn More
+```bash
+VERCEL_TOKEN="seu-token-de-https://vercel.com/account/tokens" node scripts/deploy.js
+```
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Variáveis de ambiente do projeto (banco, JWT, chave de IA) já estão configuradas
+na Vercel — só é preciso alterá-las lá se algum valor mudar.
