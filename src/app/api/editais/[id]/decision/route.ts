@@ -35,8 +35,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     // Usa after() (em vez de uma Promise solta) porque é a forma que o Next.js garante
     // que o trabalho realmente termina — tanto em dev quanto em produção na Vercel.
     after(async () => {
+      // Não espera o lote paralelo além de 45s: se algum agente estiver demorando muito
+      // (edital grande), ainda assim dispara a continuação dentro do teto de 60s da
+      // Vercel — o Auditor, na segunda chamada, re-executa o que não tiver terminado.
+      const timeout = new Promise((resolve) => setTimeout(resolve, 45_000));
       try {
-        await executarPipelineCompleto(id);
+        await Promise.race([executarPipelineCompleto(id), timeout]);
       } catch (err) {
         console.error(`Falha no pipeline do edital ${id}:`, err);
       }

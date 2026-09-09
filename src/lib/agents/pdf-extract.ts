@@ -4,8 +4,10 @@ import { baixarArquivoPncp } from "@/lib/agents/pncp";
 import type { Document as DocumentRow } from "@prisma/client";
 
 // Limite de caracteres por documento enviado ao modelo — controla custo/latência
-// mesmo em editais muito longos (dezenas de páginas), sem estourar o contexto.
-const MAX_CHARS_POR_DOCUMENTO = 60_000;
+// mesmo em editais muito longos (dezenas de páginas). Mantido moderado (não maior)
+// porque a Vercel no plano gratuito corta a execução em 60s, e um texto muito grande
+// deixa a resposta do modelo lenta o bastante para estourar esse limite.
+const MAX_CHARS_POR_DOCUMENTO = 35_000;
 
 async function extrairTextoPdf(bytes: Uint8Array): Promise<string | null> {
   try {
