@@ -25,7 +25,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const somaComDesconto = itens.reduce((acc, i) => acc + i.valorTotalComDesconto, 0);
 
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = "Licitax";
+  workbook.creator = "Bidd.IA";
   workbook.created = new Date();
 
   const sheet = workbook.addWorksheet("Proposta");

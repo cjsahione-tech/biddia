@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Licitax — Agentes de IA para Licitações",
+  title: "Bidd.IA — Agentes de IA para Licitações",
   description:
     "Plataforma de agentes de IA que captam, analisam e preparam propostas para licitações públicas de forma autônoma.",
 };

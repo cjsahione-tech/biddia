@@ -60,7 +60,7 @@ export default async function LandingPage() {
       <header className="border-b border-border">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
           <span className="text-lg font-semibold tracking-tight text-foreground">
-            Licit<span className="text-brand">ax</span>
+            Bidd<span className="text-brand">.IA</span>
           </span>
           <nav className="flex items-center gap-3">
             <Link
@@ -87,7 +87,7 @@ export default async function LandingPage() {
           Sua equipe autônoma para participar de licitações públicas
         </h1>
         <p className="mx-auto mt-5 max-w-2xl text-lg text-muted">
-          A Licitax busca editais por você, analisa cada um, monta a proposta financeira,
+          A Bidd.IA busca editais por você, analisa cada um, monta a proposta financeira,
           prepara os anexos jurídicos e mantém a documentação em dia — do jeito certo, todos os dias.
         </p>
         <div className="mt-8 flex items-center justify-center gap-3">
@@ -140,7 +140,7 @@ export default async function LandingPage() {
 
       <footer className="border-t border-border">
         <div className="mx-auto max-w-6xl px-6 py-8 text-center text-xs text-muted">
-          Licitax — dados de editais obtidos publicamente no Portal Nacional de Contratações Públicas (PNCP).
+          Bidd.IA — dados de editais obtidos publicamente no Portal Nacional de Contratações Públicas (PNCP).
         </div>
       </footer>
     </div>

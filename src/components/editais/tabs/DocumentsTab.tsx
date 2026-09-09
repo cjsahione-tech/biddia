@@ -70,7 +70,7 @@ export function DocumentsTab({ editalId, documents }: { editalId: string; docume
 
       {preparados.length > 0 && (
         <div>
-          <h4 className="text-sm font-semibold text-foreground">Anexos preparados pela Licitax</h4>
+          <h4 className="text-sm font-semibold text-foreground">Anexos preparados pela Bidd.IA</h4>
           <div className="mt-3 space-y-3">
             {preparados.map((doc) => (
               <DocumentRow key={doc.id} editalId={editalId} doc={doc} />

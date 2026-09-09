@@ -1,4 +1,4 @@
-# Licitax
+# Bidd.IA
 
 Plataforma de agentes de IA para participação em licitações públicas brasileiras.
 Next.js 16 (App Router) + Prisma + PostgreSQL, agentes construídos sobre a API do
