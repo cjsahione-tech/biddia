@@ -45,3 +45,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# cookies/sessão de testes manuais (nunca deve ir para o repositório)
+*cookies*.txt
