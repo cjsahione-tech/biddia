@@ -1,17 +1,14 @@
 import { executarAgente2 } from "@/lib/agents/agente2-analista";
 import { executarAgente3 } from "@/lib/agents/agente3-financeiro";
 import { executarAgente4 } from "@/lib/agents/agente4-advogado";
-import { executarAgente5 } from "@/lib/agents/agente5-secretario";
-import { executarAgente6 } from "@/lib/agents/agente6-auditor";
 import { logAudit } from "@/lib/agents/run-tracker";
 
 /**
- * Dispara a esteira completa (Analista + Financeiro + Advogado → Secretário → Auditor)
- * após o usuário aprovar um edital. Analista, Financeiro e Advogado rodam em paralelo —
- * cada um lê o texto do edital/TR de forma independente, então não precisam esperar um
- * pelo outro — o que também mantém o tempo total dentro do limite de execução da Vercel.
- * Cada etapa é resiliente: uma falha não impede que o Auditor rode ao final e tente
- * corrigir o que faltou.
+ * Primeira etapa da esteira: Analista, Financeiro e Advogado rodam em paralelo — cada
+ * um lê o texto do edital/TR de forma independente, então não precisam esperar um pelo
+ * outro. A continuação (Secretário → Auditor) roda numa segunda invocação separada
+ * (ver /api/editais/[id]/continuar-pipeline), para não disputar o mesmo orçamento de
+ * execução da Vercel.
  */
 export async function executarPipelineCompleto(editalId: string) {
   const etapasParalelas: Array<[string, () => Promise<unknown>]> = [
@@ -28,13 +25,4 @@ export async function executarPipelineCompleto(editalId: string) {
       await logAudit(editalId, nome, "Execução", "ERRO", `Falha na execução: ${msg}`);
     }
   }
-
-  try {
-    await executarAgente5(editalId);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "erro desconhecido";
-    await logAudit(editalId, "Agente Secretário", "Execução", "ERRO", `Falha na execução: ${msg}`);
-  }
-
-  return executarAgente6(editalId);
 }
