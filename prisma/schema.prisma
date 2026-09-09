@@ -118,6 +118,7 @@ model Analysis {
   requisitosAdicionais  String
   riscos                String
   parecer               String
+  baseadoEmTextoCompleto Boolean @default(false)
 
   createdAt             DateTime @default(now())
 }
@@ -131,6 +132,7 @@ model Proposal {
   itensJson             String
   observacoes           String?
   descontoPercentual    Float    @default(0)
+  baseadoEmTextoCompleto Boolean @default(false)
 
   createdAt             DateTime @default(now())
 }

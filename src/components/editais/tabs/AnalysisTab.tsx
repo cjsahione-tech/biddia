@@ -1,3 +1,4 @@
+import { FonteBadge } from "@/components/ui/FonteBadge";
 import type { EditalDetail } from "@/lib/types";
 
 function parseList(json: string | undefined): string[] {
@@ -46,7 +47,10 @@ export function AnalysisTab({ edital }: { edital: EditalDetail }) {
       {analysis && (
         <>
           <div className="rounded-2xl border border-brand-light bg-brand-light/40 p-5">
-            <h4 className="text-sm font-semibold text-brand">Resumo do objeto (Agente Analista)</h4>
+            <div className="flex items-center justify-between gap-3">
+              <h4 className="text-sm font-semibold text-brand">Resumo do objeto (Agente Analista)</h4>
+              <FonteBadge baseadoEmTextoCompleto={analysis.baseadoEmTextoCompleto} />
+            </div>
             <p className="mt-2 text-sm text-foreground/80">{analysis.resumoObjeto}</p>
           </div>
 

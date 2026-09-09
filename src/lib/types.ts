@@ -70,12 +70,14 @@ export type EditalDetail = EditalListItem & {
     requisitosAdicionais: string;
     riscos: string;
     parecer: string;
+    baseadoEmTextoCompleto: boolean;
   } | null;
   proposal: {
     valorGlobalReferencia: number;
     itensJson: string;
     observacoes: string | null;
     descontoPercentual: number;
+    baseadoEmTextoCompleto: boolean;
   } | null;
   documents: DocumentItem[];
   checklistItems: ChecklistItem[];

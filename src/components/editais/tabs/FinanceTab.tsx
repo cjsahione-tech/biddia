@@ -3,6 +3,7 @@ import { Download, Check } from "lucide-react";
 import { formatBRL } from "@/lib/format";
 import { parseItens, aplicarDesconto } from "@/lib/proposal";
 import { Button } from "@/components/ui/Button";
+import { FonteBadge } from "@/components/ui/FonteBadge";
 import type { EditalDetail } from "@/lib/types";
 
 export function FinanceTab({ edital, onUpdate }: { edital: EditalDetail; onUpdate: () => void }) {
@@ -53,6 +54,8 @@ export function FinanceTab({ edital, onUpdate }: { edital: EditalDetail; onUpdat
 
   return (
     <div className="space-y-6">
+      <FonteBadge baseadoEmTextoCompleto={proposal.baseadoEmTextoCompleto} />
+
       <div className="flex items-center justify-between rounded-2xl border border-border bg-surface/50 p-5">
         <div>
           <p className="text-xs text-muted">Valor de referência do edital (PNCP)</p>

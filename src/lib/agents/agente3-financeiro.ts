@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { askJSON } from "@/lib/anthropic";
+import { obterTextoCompletoEdital } from "@/lib/agents/pdf-extract";
 import { withAgentRun, logAudit } from "@/lib/agents/run-tracker";
 
 type ItemProposta = {
@@ -10,6 +11,7 @@ type ItemProposta = {
 };
 
 type FinanceiroResult = {
+  itensEncontradosNoTexto: boolean;
   itens: ItemProposta[];
   observacoes: string;
 };
@@ -30,26 +32,46 @@ export async function executarAgente3(editalId: string) {
       );
     }
 
+    const { textoEdital, textoTermoReferencia, temTextoCompleto } =
+      await obterTextoCompletoEdital(editalId);
+
     const contexto = `
 Objeto: ${edital.titulo}
 Descrição: ${edital.descricao}
 Resumo do objeto (análise): ${analysis?.resumoObjeto ?? "não disponível"}
 Valor global de referência publicado no PNCP: ${valorReferencia ?? "não publicado"}
+${textoEdital ? `\n=== TEXTO COMPLETO DO EDITAL ===\n${textoEdital}` : ""}
+${textoTermoReferencia ? `\n=== TEXTO COMPLETO DO TERMO DE REFERÊNCIA ===\n${textoTermoReferencia}` : ""}
 `.trim();
+
+    const instrucaoFonte = temTextoCompleto
+      ? `Você TEM ACESSO ao texto completo do edital e/ou termo de referência acima. Esses documentos costumam
+trazer uma planilha ou lista formal de itens (descrição, unidade, quantidade e, às vezes, valor unitário
+estimado). PROCURE essa lista real primeiro e transcreva os itens dela — não invente uma composição alternativa
+se os itens reais estiverem no texto. Marque "itensEncontradosNoTexto": true nesse caso. Só estime valores de
+mercado para o(s) campo(s) que realmente não constarem no texto (ex: quando o edital lista os itens mas não o
+valor unitário).`
+      : `O texto completo do edital não estava disponível — você não tem como saber a lista real de itens. Monte
+uma composição PLAUSÍVEL com base no objeto e no valor de referência (quando houver), e marque
+"itensEncontradosNoTexto": false. Deixe claro nas observações que isso é uma estimativa e precisa ser conferida
+pelo usuário contra o edital real antes do envio.`;
 
     const result = await askJSON<FinanceiroResult>(
       `Você é o agente financeiro de uma empresa que está estruturando uma proposta comercial para um edital
-público brasileiro. Com base no objeto do edital e no valor de referência informado (quando existir), monte uma
-composição de itens plausível (descrição, unidade, quantidade e valor unitário) cuja soma feche aproximadamente
-no valor de referência informado. Se não houver valor de referência, estime um valor de mercado razoável e deixe
-isso explícito nas observações.
+público brasileiro. Monte a composição de itens (descrição, unidade, quantidade e valor unitário) da proposta.
+
+${instrucaoFonte}
+
+A soma dos itens deve fechar aproximadamente no valor de referência informado, quando houver.
 Responda em JSON:
 {
+  "itensEncontradosNoTexto": boolean,
   "itens": [{ "descricao": string, "unidade": string, "quantidade": number, "valorUnitario": number }],
-  "observacoes": string (explique a lógica da composição e alerte que os valores devem ser revisados pelo usuário antes do envio)
+  "observacoes": string (explique a origem dos números — transcrito do edital ou estimado — e alerte para revisão antes do envio)
 }
-Gere entre 2 e 8 itens. Use números puros (sem "R$" ou separadores) em quantidade e valorUnitario.`,
-      contexto
+Gere entre 2 e 20 itens (tantos quantos o edital realmente listar, se disponível). Use números puros (sem "R$" ou separadores) em quantidade e valorUnitario.`,
+      contexto,
+      { maxTokens: 6000 }
     );
 
     const itensComTotal = result.itens.map((item) => ({
@@ -65,11 +87,13 @@ Gere entre 2 e 8 itens. Use números puros (sem "R$" ou separadores) em quantida
         valorGlobalReferencia: valorReferencia ?? somaItens,
         itensJson: JSON.stringify(itensComTotal),
         observacoes: result.observacoes,
+        baseadoEmTextoCompleto: !!result.itensEncontradosNoTexto,
       },
       update: {
         valorGlobalReferencia: valorReferencia ?? somaItens,
         itensJson: JSON.stringify(itensComTotal),
         observacoes: result.observacoes,
+        baseadoEmTextoCompleto: !!result.itensEncontradosNoTexto,
       },
     });
 
@@ -78,7 +102,7 @@ Gere entre 2 e 8 itens. Use números puros (sem "R$" ou separadores) em quantida
       "Agente Financeiro",
       "Montagem da proposta",
       "OK",
-      `Proposta montada com ${itensComTotal.length} item(ns), somando R$ ${somaItens.toFixed(2)}.`
+      `Proposta montada com ${itensComTotal.length} item(ns) (${result.itensEncontradosNoTexto ? "transcritos do texto do edital" : "estimados, texto do edital indisponível"}), somando R$ ${somaItens.toFixed(2)}.`
     );
 
     return { itens: itensComTotal, valorGlobalReferencia: valorReferencia ?? somaItens };
