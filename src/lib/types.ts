@@ -16,7 +16,7 @@ export type EditalListItem = {
   linkPortal: string;
   analysis: { resumoObjeto: string } | null;
   proposal: { valorGlobalReferencia: number } | null;
-  documents: { id: string; nome: string; categoria: "EDITAL" | "TERMO_REFERENCIA" | null }[];
+  documents: { id: string; nome: string; categoria: "EDITAL" | "TERMO_REFERENCIA" | "ANEXO_PRECOS" | null }[];
   _count: { documents: number; checklistItems: number };
 };
 
@@ -33,7 +33,7 @@ export type DocumentItem = {
   id: string;
   nome: string;
   tipo: "ANEXO_GERADO" | "DOCUMENTO_USUARIO" | "DOCUMENTO_PNCP";
-  categoria: "EDITAL" | "TERMO_REFERENCIA" | null;
+  categoria: "EDITAL" | "TERMO_REFERENCIA" | "ANEXO_PRECOS" | null;
   status: "PENDENTE" | "GERADO" | "ENVIADO" | "VENCIDO" | "DISPONIVEL";
   validade: string | null;
   createdAt: string;

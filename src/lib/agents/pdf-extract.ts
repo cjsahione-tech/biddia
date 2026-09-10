@@ -28,11 +28,102 @@ export function base64ParaBytes(dataUrl: string): Uint8Array {
 }
 
 /**
+ * Em documentos maiores que o limite considerado, corta de forma "burra" pelo início —
+ * o que descarta justamente o que costuma ficar no fim de editais longos (anexos,
+ * planilhas de preços, tabelas de itens). Em vez disso, divide o texto em blocos e
+ * pontua cada um pela DENSIDADE de palavras-chave nele — não basta ocorrer a palavra
+ * uma vez qualquer (termos como "item" aparecem soltos o tempo todo em cláusulas
+ * genéricas, tipo "conforme item 8.2"); o que denuncia uma tabela de verdade é várias
+ * palavras-chave diferentes se repetindo concentradas num mesmo trecho curto. Mantém
+ * só os blocos de maior pontuação, na ordem em que aparecem no documento. Sem nenhuma
+ * ocorrência, cai de volta para início + fim do texto (ainda melhor que só o início, já
+ * que anexos costumam vir depois).
+ */
+export function selecionarTrechoRelevante(
+  texto: string,
+  opts: { tamanhoMax: number; palavrasChave: string[]; tamanhoBloco?: number }
+): string {
+  if (texto.length <= opts.tamanhoMax) return texto;
+
+  const tamanhoBloco = opts.tamanhoBloco ?? 2000;
+  const textoLower = texto.toLowerCase();
+  const numBlocos = Math.ceil(texto.length / tamanhoBloco);
+  const pontuacao = new Array(numBlocos).fill(0);
+
+  for (const palavra of opts.palavrasChave) {
+    const alvo = palavra.toLowerCase();
+    let pos = textoLower.indexOf(alvo);
+    while (pos !== -1) {
+      pontuacao[Math.floor(pos / tamanhoBloco)] += 1;
+      pos = textoLower.indexOf(alvo, pos + alvo.length);
+    }
+  }
+
+  if (pontuacao.every((p) => p === 0)) {
+    const metade = Math.floor(opts.tamanhoMax / 2);
+    const fimCabeca = texto.lastIndexOf("\n", metade);
+    const inicioRodape = texto.indexOf("\n", texto.length - metade);
+    const cabeca = texto.slice(0, fimCabeca === -1 ? metade : fimCabeca);
+    const rodape = texto.slice(inicioRodape === -1 ? texto.length - metade : inicioRodape + 1);
+    return `${cabeca}\n\n[...trecho omitido — nenhuma palavra-chave relevante encontrada...]\n\n${rodape}`;
+  }
+
+  const maxBlocos = Math.max(1, Math.ceil(opts.tamanhoMax / tamanhoBloco));
+  const indicesEscolhidos = pontuacao
+    .map((pontos, i) => ({ i, pontos }))
+    .filter((b) => b.pontos > 0)
+    .sort((a, b) => b.pontos - a.pontos)
+    .slice(0, maxBlocos)
+    .map((b) => b.i)
+    .sort((a, b) => a - b);
+
+  // Agrupa blocos vizinhos/consecutivos num único trecho contínuo, em vez de fatiar o
+  // texto em pedacinhos ilegíveis.
+  const grupos: number[][] = [];
+  for (const i of indicesEscolhidos) {
+    const ultimoGrupo = grupos[grupos.length - 1];
+    if (ultimoGrupo && i <= ultimoGrupo[ultimoGrupo.length - 1] + 1) {
+      ultimoGrupo.push(i);
+    } else {
+      grupos.push([i]);
+    }
+  }
+
+  return grupos
+    .map((grupo) => {
+      // Os limites do bloco caem em qualquer posição de caractere — sem ajustar, um
+      // corte no meio de uma linha pode partir um número ao meio (ex: "12.500" virar
+      // "500" de um lado e "12." do outro), corrompendo justamente o dado que se quer
+      // preservar. Estica a borda até a quebra de linha mais próxima antes/depois.
+      let inicio = grupo[0] * tamanhoBloco;
+      let fim = Math.min(texto.length, (grupo[grupo.length - 1] + 1) * tamanhoBloco);
+      if (inicio > 0) {
+        const quebra = texto.lastIndexOf("\n", inicio);
+        inicio = quebra === -1 ? 0 : quebra + 1;
+      }
+      if (fim < texto.length) {
+        const quebra = texto.indexOf("\n", fim);
+        fim = quebra === -1 ? texto.length : quebra;
+      }
+      return texto.slice(inicio, fim);
+    })
+    .join("\n\n[...]\n\n");
+}
+
+/**
  * Extrai o texto de um documento já baixado (ou, na falta de cópia local, tenta
  * buscar direto na fonte oficial como último recurso). Retorna null se não houver
  * como obter texto (arquivo indisponível, PDF só de imagem sem OCR, etc.).
+ *
+ * Quando `palavrasChave` é informado, documentos maiores que o limite são cortados de
+ * forma inteligente (ver `selecionarTrechoRelevante`) em vez de perder tudo que vem
+ * depois do início — importante para quem lê especificamente atrás de uma tabela de
+ * itens/preços, que raramente está nas primeiras páginas.
  */
-export async function extrairTextoDocumento(doc: DocumentRow): Promise<string | null> {
+export async function extrairTextoDocumento(
+  doc: DocumentRow,
+  opts?: { palavrasChave?: string[] }
+): Promise<string | null> {
   let bytes: Uint8Array | null = null;
 
   if (doc.conteudoBase64) {
@@ -54,24 +145,36 @@ export async function extrairTextoDocumento(doc: DocumentRow): Promise<string | 
   const texto = await extrairTextoPdf(bytes);
   console.log(`[pdf-extract] ${doc.nome}: texto extraído =`, texto?.length ?? 0, "chars");
   if (!texto) return null;
+  if (texto.length <= MAX_CHARS_POR_DOCUMENTO) return texto;
 
-  return texto.length > MAX_CHARS_POR_DOCUMENTO
-    ? `${texto.slice(0, MAX_CHARS_POR_DOCUMENTO)}\n\n[...texto truncado — documento maior que o limite considerado...]`
-    : texto;
+  if (opts?.palavrasChave) {
+    return selecionarTrechoRelevante(texto, { tamanhoMax: MAX_CHARS_POR_DOCUMENTO, palavrasChave: opts.palavrasChave });
+  }
+  return `${texto.slice(0, MAX_CHARS_POR_DOCUMENTO)}\n\n[...texto truncado — documento maior que o limite considerado...]`;
 }
 
 export type TextoEdital = {
   textoEdital: string | null;
   textoTermoReferencia: string | null;
+  // Anexos que não são o edital nem o TR em si, mas foram identificados como prováveis
+  // portadores de planilha/tabela de preços (ver classificação em pncp.ts).
+  textoAnexosPrecos: string | null;
   temTextoCompleto: boolean;
 };
 
 /**
- * Busca e extrai o texto do edital (ou aviso equivalente) e do termo de referência
- * de uma contratação, para os agentes lerem o documento de verdade em vez de
- * trabalharem só com o resumo curto vindo da busca do PNCP.
+ * Busca e extrai o texto do edital (ou aviso equivalente), do termo de referência e de
+ * eventuais anexos de preços de uma contratação, para os agentes lerem o documento de
+ * verdade em vez de trabalharem só com o resumo curto vindo da busca do PNCP.
+ *
+ * `palavrasChave`, quando informado, direciona o corte de documentos longos para os
+ * trechos mais relevantes à tarefa de quem está chamando (ex: o Agente Financeiro passa
+ * termos como "valor unitário"/"quantidade" para não perder a tabela de itens).
  */
-export async function obterTextoCompletoEdital(editalId: string): Promise<TextoEdital> {
+export async function obterTextoCompletoEdital(
+  editalId: string,
+  opts?: { palavrasChave?: string[] }
+): Promise<TextoEdital> {
   // Inclui tanto os documentos baixados do PNCP quanto os enviados manualmente
   // pelo usuário na captação — ambos são a fonte do texto real do edital/TR.
   const documentos = await prisma.document.findMany({
@@ -80,15 +183,20 @@ export async function obterTextoCompletoEdital(editalId: string): Promise<TextoE
 
   const docEdital = documentos.find((d) => d.categoria === "EDITAL") ?? null;
   const docTR = documentos.find((d) => d.categoria === "TERMO_REFERENCIA") ?? null;
+  const docsAnexosPrecos = documentos.filter((d) => d.categoria === "ANEXO_PRECOS");
 
-  const [textoEdital, textoTermoReferencia] = await Promise.all([
-    docEdital ? extrairTextoDocumento(docEdital) : Promise.resolve(null),
-    docTR ? extrairTextoDocumento(docTR) : Promise.resolve(null),
+  const [textoEdital, textoTermoReferencia, textosAnexos] = await Promise.all([
+    docEdital ? extrairTextoDocumento(docEdital, opts) : Promise.resolve(null),
+    docTR ? extrairTextoDocumento(docTR, opts) : Promise.resolve(null),
+    Promise.all(docsAnexosPrecos.map((d) => extrairTextoDocumento(d, opts))),
   ]);
+
+  const textoAnexosPrecos = textosAnexos.filter((t): t is string => !!t).join("\n\n---\n\n") || null;
 
   return {
     textoEdital,
     textoTermoReferencia,
-    temTextoCompleto: !!(textoEdital || textoTermoReferencia),
+    textoAnexosPrecos,
+    temTextoCompleto: !!(textoEdital || textoTermoReferencia || textoAnexosPrecos),
   };
 }

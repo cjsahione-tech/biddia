@@ -141,6 +141,17 @@ const EDITAL_TIPO_IDS = new Set([2, 1]);
 // 4=Termo de Referência, 31=Termo de Referência (TR) (variante usada em IRP).
 const TERMO_REFERENCIA_TIPO_IDS = new Set([4, 31]);
 
+// A planilha/tabela de preços quase nunca tem um tipo próprio na taxonomia do PNCP —
+// ou vem dentro do próprio edital/TR, ou é anexada solta como "Estudo Técnico
+// Preliminar"/"Projeto Básico"/etc. Como não dá para confiar só no tipo, também
+// olhamos o título do arquivo à procura de indícios claros de que é uma peça de preços.
+// Só usamos o tipo sozinho (sem bater no título) como último recurso, quando nem
+// sequer existe um termo de referência — nesse caso, um destes costuma ser a peça
+// técnica que mais se aproxima de descrever os itens contratados.
+const TIPOS_TECNICOS_FALLBACK = new Set([5, 6, 7, 8]); // Anteprojeto, Projeto Básico, ETP, Projeto Executivo
+const REGEX_TITULO_PRECOS =
+  /pre[çc]o|planilha|or[çc]amento|or[çc]ament[áa]ria|custo|cota[çc][ãa]o|mapa\s+de\s+pre[çc]os|composi[çc][ãa]o\s+de\s+custo/i;
+
 export async function buscarArquivosCompra(
   cnpj: string,
   ano: string,
@@ -153,11 +164,37 @@ export async function buscarArquivosCompra(
   return data.filter((doc) => doc.statusAtivo);
 }
 
-/** Dentre os arquivos da contratação, identifica o edital (ou aviso equivalente) e o termo de referência. */
+/**
+ * Dentre os arquivos da contratação, identifica o edital (ou aviso equivalente), o
+ * termo de referência e — separadamente — outros anexos com indício de conter a
+ * planilha/tabela de preços. Sem isso, um edital cuja tabela de itens vem num anexo à
+ * parte (comum quando o TR não é um arquivo próprio) nunca chegava ao Agente
+ * Financeiro: só edital e TR eram baixados.
+ */
 export function selecionarDocumentosPrincipais(arquivos: PncpArquivo[]) {
   const edital = arquivos.find((a) => EDITAL_TIPO_IDS.has(a.tipoDocumentoId)) ?? null;
   const termoReferencia = arquivos.find((a) => TERMO_REFERENCIA_TIPO_IDS.has(a.tipoDocumentoId)) ?? null;
-  return { edital, termoReferencia };
+
+  const restantes = arquivos
+    .filter((a) => a.sequencialDocumento !== edital?.sequencialDocumento)
+    .filter((a) => a.sequencialDocumento !== termoReferencia?.sequencialDocumento);
+
+  const porTitulo = restantes.filter((a) => REGEX_TITULO_PRECOS.test(a.titulo));
+  // Só recorre ao tipo genérico (sem bater no título) quando não há termo de
+  // referência algum — do contrário arriscaria baixar anexos técnicos irrelevantes
+  // (ex: minuta de contrato, atas) em toda contratação.
+  const porTipoFallback = termoReferencia
+    ? []
+    : restantes.filter((a) => TIPOS_TECNICOS_FALLBACK.has(a.tipoDocumentoId)).slice(0, 1);
+
+  const vistos = new Set<number>();
+  const anexosPrecos = [...porTitulo, ...porTipoFallback].filter((a) => {
+    if (vistos.has(a.sequencialDocumento)) return false;
+    vistos.add(a.sequencialDocumento);
+    return true;
+  }).slice(0, 3);
+
+  return { edital, termoReferencia, anexosPrecos };
 }
 
 export async function baixarArquivoPncp(url: string): Promise<{ bytes: Uint8Array; contentType: string } | null> {

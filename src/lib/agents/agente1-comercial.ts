@@ -128,11 +128,15 @@ export async function executarAgente1(companyId: string) {
       // funcionando na plataforma mesmo se o PNCP ficar instável depois.
       if (cnpj && ano && sequencial) {
         const arquivos = await buscarArquivosCompra(cnpj, ano, sequencial).catch(() => []);
-        const { edital: docEdital, termoReferencia } = selecionarDocumentosPrincipais(arquivos);
+        const { edital: docEdital, termoReferencia, anexosPrecos } = selecionarDocumentosPrincipais(arquivos);
 
-        const candidatos: { doc: NonNullable<typeof docEdital>; categoria: "EDITAL" | "TERMO_REFERENCIA" }[] = [];
+        const candidatos: { doc: NonNullable<typeof docEdital>; categoria: "EDITAL" | "TERMO_REFERENCIA" | "ANEXO_PRECOS" }[] = [];
         if (docEdital) candidatos.push({ doc: docEdital, categoria: "EDITAL" });
         if (termoReferencia) candidatos.push({ doc: termoReferencia, categoria: "TERMO_REFERENCIA" });
+        // Anexos sem TR definido costumam ser onde a tabela de itens/preços realmente
+        // está — sem baixar isso, o Agente Financeiro nunca teria como ler os valores
+        // reais e cairia sempre na estimativa.
+        for (const doc of anexosPrecos) candidatos.push({ doc, categoria: "ANEXO_PRECOS" });
 
         for (const { doc, categoria } of candidatos) {
           const arquivo = await baixarArquivoPncp(doc.url).catch(() => null);

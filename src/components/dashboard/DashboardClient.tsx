@@ -316,7 +316,11 @@ export function DashboardClient() {
                     className="inline-flex items-center gap-1.5 text-xs font-medium text-brand hover:underline"
                   >
                     <Download className="h-3 w-3" />
-                    {doc.categoria === "TERMO_REFERENCIA" ? "Baixar termo de referência" : "Baixar edital"}
+                    {doc.categoria === "TERMO_REFERENCIA"
+                      ? "Baixar termo de referência"
+                      : doc.categoria === "ANEXO_PRECOS"
+                        ? "Baixar anexo de preços"
+                        : "Baixar edital"}
                   </a>
                 ))}
               </div>
