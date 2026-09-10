@@ -1,6 +1,5 @@
 import { prisma } from "@/lib/prisma";
 import { askJSON } from "@/lib/anthropic";
-import { buscarDetalheCompra, parseItemUrl } from "@/lib/agents/pncp";
 import { obterTextoCompletoEdital } from "@/lib/agents/pdf-extract";
 import { withAgentRun, logAudit } from "@/lib/agents/run-tracker";
 
@@ -18,16 +17,9 @@ export async function executarAgente2(editalId: string) {
   return withAgentRun(editalId, "agente2-analista", async () => {
     const edital = await prisma.edital.findUniqueOrThrow({ where: { id: editalId } });
 
-    // Editais captados manualmente não têm link do PNCP — a consulta de detalhe só
-    // existe para os que vieram da busca automática.
-    const detalhe = edital.linkPortal
-      ? await (async () => {
-          const pathname = new URL(edital.linkPortal).pathname.replace(/^\/app/, "");
-          const { cnpj, ano, sequencial } = parseItemUrl(pathname);
-          return cnpj && ano && sequencial ? await buscarDetalheCompra(cnpj, ano, sequencial).catch(() => null) : null;
-        })()
-      : null;
-
+    // Não busca mais o detalhe da contratação no PNCP aqui: o valor já está gravado no
+    // edital e o texto completo do PDF (abaixo) cobre objeto/informação complementar
+    // com muito mais precisão — a chamada extra ao PNCP só somava latência.
     const { textoEdital, textoTermoReferencia, temTextoCompleto } =
       await obterTextoCompletoEdital(editalId);
 
@@ -36,11 +28,8 @@ Título: ${edital.titulo}
 Órgão: ${edital.orgaoNome} (${edital.orgaoCnpj})
 Modalidade: ${edital.modalidade ?? "não informado"}
 UF/Município: ${edital.uf ?? "?"}/${edital.municipio ?? "?"}
-Valor estimado: ${edital.valorGlobal ?? detalhe?.valorTotalEstimado ?? "não informado"}
+Valor estimado: ${edital.valorGlobal ?? "não informado"}
 Descrição/objeto (busca PNCP): ${edital.descricao}
-Objeto detalhado (consulta PNCP): ${detalhe?.objetoCompra ?? "não disponível"}
-Informação complementar: ${detalhe?.informacaoComplementar ?? "não disponível"}
-Amparo legal: ${detalhe?.amparoLegal?.nome ?? detalhe?.amparoLegal?.descricao ?? "não informado"}
 Data de abertura da proposta: ${edital.dataAberturaProposta?.toISOString() ?? "não informado"}
 Data de encerramento da proposta: ${edital.dataEncerramentoProposta?.toISOString() ?? "não informado"}
 ${textoEdital ? `\n=== TEXTO COMPLETO DO EDITAL (extraído do PDF oficial) ===\n${textoEdital}` : ""}

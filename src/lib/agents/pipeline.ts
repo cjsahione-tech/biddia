@@ -3,6 +3,7 @@ import { executarAgente2 } from "@/lib/agents/agente2-analista";
 import { executarAgente3 } from "@/lib/agents/agente3-financeiro";
 import { executarAgente4 } from "@/lib/agents/agente4-advogado";
 import { baixarDocumentosPendentes } from "@/lib/agents/agente1-comercial";
+import { prewarmTextoDocumentos } from "@/lib/agents/pdf-extract";
 import { logAudit } from "@/lib/agents/run-tracker";
 
 /**
@@ -17,6 +18,9 @@ export async function executarPipelineCompleto(editalId: string) {
   // aqui garante que o conteúdo esteja em mãos antes de os agentes lerem, sem cada um
   // rebaixar o mesmo arquivo do PNCP.
   await baixarDocumentosPendentes([editalId]);
+  // Extrai o texto de todos os PDFs uma única vez; os 3 agentes abaixo leem do cache
+  // em vez de reprocessar o mesmo arquivo cada um.
+  await prewarmTextoDocumentos(editalId);
 
   const etapasParalelas: Array<[string, () => Promise<unknown>]> = [
     ["Agente Analista", () => executarAgente2(editalId)],
@@ -46,10 +50,11 @@ export function dispararPipeline(editalId: string, req: Request) {
   const origin = new URL(req.url).origin;
 
   after(async () => {
-    // Não espera o lote paralelo além de 45s: se algum agente estiver demorando muito
-    // (edital grande), ainda assim dispara a continuação dentro do teto de 60s da
-    // Vercel — o Auditor, na segunda chamada, re-executa o que não tiver terminado.
-    const timeout = new Promise((resolve) => setTimeout(resolve, 45_000));
+    // Espera o lote paralelo até 52s: se algum agente estiver demorando muito (edital
+    // grande), ainda assim dispara a continuação dentro do teto de 60s da Vercel — o
+    // Auditor, na segunda chamada, aguarda um agente ainda em execução antes de decidir
+    // reexecutá-lo.
+    const timeout = new Promise((resolve) => setTimeout(resolve, 52_000));
     try {
       await Promise.race([executarPipelineCompleto(editalId), timeout]);
     } catch (err) {

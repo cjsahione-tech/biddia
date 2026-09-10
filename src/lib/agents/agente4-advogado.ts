@@ -83,26 +83,26 @@ Cada "paragrafos" deve ter de 2 a 4 parágrafos curtos e objetivos (sem usar mar
 
     const todosAnexos = [...result.anexosPadrao, ...(result.anexosEspecificosDoEdital ?? [])];
 
-    const criados = [];
-    for (const anexo of todosAnexos) {
-      const bytes = await gerarPdfTimbrado({
-        company: edital.company,
-        titulo: anexo.nome,
-        paragrafos: anexo.paragrafos,
-        rodapeExtra: `Documento gerado automaticamente pelo Agente Advogado para o edital "${edital.titulo}" — ${edital.orgaoNome}. Revise antes do envio.`,
-      });
-
-      const doc = await prisma.document.create({
-        data: {
-          editalId,
-          nome: anexo.nome,
-          tipo: "ANEXO_GERADO",
-          status: "GERADO",
-          conteudoBase64: bytesToDataUrl(bytes),
-        },
-      });
-      criados.push(doc);
-    }
+    // Gera os PDFs e grava em paralelo — são independentes entre si.
+    const criados = await Promise.all(
+      todosAnexos.map(async (anexo) => {
+        const bytes = await gerarPdfTimbrado({
+          company: edital.company,
+          titulo: anexo.nome,
+          paragrafos: anexo.paragrafos,
+          rodapeExtra: `Documento gerado automaticamente pelo Agente Advogado para o edital "${edital.titulo}" — ${edital.orgaoNome}. Revise antes do envio.`,
+        });
+        return prisma.document.create({
+          data: {
+            editalId,
+            nome: anexo.nome,
+            tipo: "ANEXO_GERADO",
+            status: "GERADO",
+            conteudoBase64: bytesToDataUrl(bytes),
+          },
+        });
+      })
+    );
 
     const qtdEspecificos = result.anexosEspecificosDoEdital?.length ?? 0;
     await logAudit(

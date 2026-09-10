@@ -10,6 +10,8 @@ import { executarAgente5 } from "@/lib/agents/agente5-secretario";
  * ao encontrar uma etapa ausente ou com erro, aciona novamente o agente responsável
  * como resolução imediata, registrando tudo em log de auditoria.
  */
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 export async function executarAgente6(editalId: string) {
   return withAgentRun(editalId, "agente6-auditor", async () => {
     const acoes: string[] = [];
@@ -17,11 +19,32 @@ export async function executarAgente6(editalId: string) {
 
     const checar = async (
       nomeEtapa: string,
+      agentKey: string,
       existe: () => Promise<boolean>,
       corrigir: () => Promise<unknown>
     ) => {
-      const ok = await existe();
-      if (ok) return;
+      if (await existe()) return;
+
+      // O resultado pode estar só a segundos de aparecer (o agente terminou a invocação
+      // anterior bem em cima do limite). Se há uma execução recente ainda marcada como
+      // RUNNING, dá uma janela curta antes de gastar uma nova execução refazendo tudo.
+      const rodandoRecente = await prisma.agentRun.findFirst({
+        where: {
+          editalId,
+          agentKey,
+          status: "RUNNING",
+          startedAt: { gt: new Date(Date.now() - 55_000) },
+        },
+      });
+      if (rodandoRecente) {
+        for (let i = 0; i < 2; i++) {
+          await sleep(6_000);
+          if (await existe()) {
+            acoes.push(`${nomeEtapa}: concluído pelo agente que já estava em execução.`);
+            return;
+          }
+        }
+      }
 
       severidadeFinal = "ALERTA";
       acoes.push(`${nomeEtapa} ausente — reexecutando o agente responsável.`);
@@ -37,24 +60,28 @@ export async function executarAgente6(editalId: string) {
 
     await checar(
       "Análise do edital (Agente Analista)",
+      "agente2-analista",
       async () => !!(await prisma.analysis.findUnique({ where: { editalId } })),
       () => executarAgente2(editalId)
     );
 
     await checar(
       "Proposta financeira (Agente Financeiro)",
+      "agente3-financeiro",
       async () => !!(await prisma.proposal.findUnique({ where: { editalId } })),
       () => executarAgente3(editalId)
     );
 
     await checar(
       "Anexos jurídicos (Agente Advogado)",
-      async () => (await prisma.document.count({ where: { editalId } })) > 0,
+      "agente4-advogado",
+      async () => (await prisma.document.count({ where: { editalId, tipo: "ANEXO_GERADO" } })) > 0,
       () => executarAgente4(editalId)
     );
 
     await checar(
       "Checklist de documentos (Agente Secretário)",
+      "agente5-secretario",
       async () => (await prisma.checklistItem.count({ where: { editalId } })) > 0,
       () => executarAgente5(editalId)
     );

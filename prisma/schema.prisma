@@ -163,6 +163,9 @@ model Document {
   status           DocumentStatus @default(PENDENTE)
   conteudoBase64   String?
   origemUrl        String?
+  // Texto do PDF extraído uma única vez e reaproveitado pelos agentes Analista,
+  // Financeiro e Advogado — evita reprocessar o mesmo PDF 3x por edital.
+  textoExtraido    String?
   validade         DateTime?
 
   createdAt        DateTime       @default(now())

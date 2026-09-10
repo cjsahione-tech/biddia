@@ -111,21 +111,14 @@ export function selecionarTrechoRelevante(
 }
 
 /**
- * Extrai o texto de um documento já baixado (ou, na falta de cópia local, tenta
- * buscar direto na fonte oficial como último recurso). Retorna null se não houver
- * como obter texto (arquivo indisponível, PDF só de imagem sem OCR, etc.).
- *
- * Quando `palavrasChave` é informado, documentos maiores que o limite são cortados de
- * forma inteligente (ver `selecionarTrechoRelevante`) em vez de perder tudo que vem
- * depois do início — importante para quem lê especificamente atrás de uma tabela de
- * itens/preços, que raramente está nas primeiras páginas.
+ * Texto BRUTO (sem corte) de um documento. Reaproveita `doc.textoExtraido` se já foi
+ * extraído antes; senão extrai do PDF (cópia local ou, em último caso, baixando da
+ * fonte) e grava o resultado para as próximas leituras não reprocessarem o mesmo PDF.
  */
-export async function extrairTextoDocumento(
-  doc: DocumentRow,
-  opts?: { palavrasChave?: string[] }
-): Promise<string | null> {
-  let bytes: Uint8Array | null = null;
+export async function obterTextoBrutoDocumento(doc: DocumentRow): Promise<string | null> {
+  if (doc.textoExtraido) return doc.textoExtraido;
 
+  let bytes: Uint8Array | null = null;
   if (doc.conteudoBase64) {
     bytes = base64ParaBytes(doc.conteudoBase64);
   } else if (doc.origemUrl) {
@@ -134,16 +127,31 @@ export async function extrairTextoDocumento(
       return null;
     });
     if (arquivo) bytes = arquivo.bytes;
-    console.log(`[pdf-extract] ${doc.nome}: baixado ao vivo =`, !!arquivo, arquivo?.bytes.length);
   }
-
-  if (!bytes) {
-    console.log(`[pdf-extract] ${doc.nome}: sem bytes disponíveis`);
-    return null;
-  }
+  if (!bytes) return null;
 
   const texto = await extrairTextoPdf(bytes);
-  console.log(`[pdf-extract] ${doc.nome}: texto extraído =`, texto?.length ?? 0, "chars");
+  if (!texto) return null;
+
+  await prisma.document
+    .update({ where: { id: doc.id }, data: { textoExtraido: texto } })
+    .catch((err) => console.error(`Falha ao cachear texto do documento ${doc.id}:`, err));
+
+  return texto;
+}
+
+/**
+ * Extrai + já entrega o texto no tamanho certo para enviar ao modelo. Quando
+ * `palavrasChave` é informado, documentos maiores que o limite são cortados de forma
+ * inteligente (ver `selecionarTrechoRelevante`) em vez de perder tudo que vem depois
+ * do início — importante para quem lê especificamente atrás de uma tabela de
+ * itens/preços, que raramente está nas primeiras páginas.
+ */
+export async function extrairTextoDocumento(
+  doc: DocumentRow,
+  opts?: { palavrasChave?: string[] }
+): Promise<string | null> {
+  const texto = await obterTextoBrutoDocumento(doc);
   if (!texto) return null;
   if (texto.length <= MAX_CHARS_POR_DOCUMENTO) return texto;
 
@@ -151,6 +159,23 @@ export async function extrairTextoDocumento(
     return selecionarTrechoRelevante(texto, { tamanhoMax: MAX_CHARS_POR_DOCUMENTO, palavrasChave: opts.palavrasChave });
   }
   return `${texto.slice(0, MAX_CHARS_POR_DOCUMENTO)}\n\n[...texto truncado — documento maior que o limite considerado...]`;
+}
+
+/**
+ * Extrai e cacheia o texto de todos os PDFs de um edital de uma vez. Chamado no início
+ * do pipeline para que os agentes Analista/Financeiro/Advogado (que rodam em paralelo)
+ * não disputem a extração do mesmo arquivo — cada um lê direto do cache.
+ */
+export async function prewarmTextoDocumentos(editalId: string): Promise<void> {
+  const docs = await prisma.document.findMany({
+    where: {
+      editalId,
+      tipo: { in: ["DOCUMENTO_PNCP", "DOCUMENTO_USUARIO"] },
+      textoExtraido: null,
+    },
+  });
+  if (docs.length === 0) return;
+  await Promise.all(docs.map((doc) => obterTextoBrutoDocumento(doc)));
 }
 
 export type TextoEdital = {
