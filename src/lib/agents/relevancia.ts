@@ -1,4 +1,4 @@
-import { askJSON, isAIConfigured } from "@/lib/anthropic";
+import { askJSON, isAIConfigured, MODELO_HAIKU } from "@/lib/anthropic";
 import { classificarTipoObjeto, type TipoObjeto } from "@/lib/agents/classificador-objeto";
 
 export type ClassificacaoEdital = {
@@ -70,7 +70,7 @@ avalie duas coisas. A pergunta-guia é sempre: "a EMPRESA descrita seria a CONTR
 Responda em JSON, um item por licitação, na mesma ordem:
 { "itens": [ { "numeroControle": string (copie exatamente o valor entre colchetes), "relevante": boolean, "tipoObjeto": "SERVICO" | "BEM" | "AMBOS" | "INDEFINIDO" } ] }`,
     `Objeto social da empresa: ${objetoSocial}\n\nLicitações:\n${lista}`,
-    { model: "claude-haiku-4-5-20251001", maxTokens: 2000 }
+    { model: MODELO_HAIKU, maxTokens: 2000 }
   );
 
   const mapa = new Map<string, ClassificacaoEdital>();

@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { askJSON } from "@/lib/anthropic";
+import { askJSON, MODELO_HAIKU } from "@/lib/anthropic";
 import { obterTextoCompletoEdital } from "@/lib/agents/pdf-extract";
 import { withAgentRun, logAudit } from "@/lib/agents/run-tracker";
 import { gerarPdfTimbrado, bytesToDataUrl } from "@/lib/agents/pdf";
@@ -78,7 +78,7 @@ Responda em JSON:
 }
 Cada "paragrafos" deve ter de 2 a 4 parágrafos curtos e objetivos (sem usar marcações markdown).`,
       contexto,
-      { maxTokens: 6000 }
+      { model: MODELO_HAIKU, maxTokens: 5000 }
     );
 
     const todosAnexos = [...result.anexosPadrao, ...(result.anexosEspecificosDoEdital ?? [])];

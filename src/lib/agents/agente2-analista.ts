@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { askJSON } from "@/lib/anthropic";
+import { askJSON, MODELO_HAIKU } from "@/lib/anthropic";
 import { obterTextoCompletoEdital } from "@/lib/agents/pdf-extract";
 import { withAgentRun, logAudit } from "@/lib/agents/run-tracker";
 
@@ -63,7 +63,7 @@ Retorne um objeto JSON com exatamente estas chaves:
   "parecer": string (parecer final em 2-3 frases: vale a pena avaliar participar, e por quê)
 }`,
       contexto,
-      { maxTokens: 6000 }
+      { model: MODELO_HAIKU, maxTokens: 5000 }
     );
 
     await prisma.analysis.upsert({

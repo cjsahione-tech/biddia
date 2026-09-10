@@ -1,7 +1,14 @@
 import { prisma } from "@/lib/prisma";
-import { askJSON } from "@/lib/anthropic";
+import { askJSON, MODELO_HAIKU, MODELO_SONNET } from "@/lib/anthropic";
 import { obterTextoCompletoEdital } from "@/lib/agents/pdf-extract";
 import { withAgentRun, logAudit } from "@/lib/agents/run-tracker";
+
+// Quanto de saída reservar na chamada de IA, em função de quantos itens se espera —
+// reservar 16k tokens para um edital de 20 itens só fazia a chamada disputar cota de
+// tokens/minuto à toa e demorar mais. ~70 tokens por item + folga.
+function maxTokensParaItens(qtdItens: number, teto = 16_000): number {
+  return Math.min(teto, Math.max(3_000, Math.round(qtdItens * 70 + 2_000)));
+}
 
 type ItemProposta = {
   descricao: string;
@@ -16,9 +23,18 @@ type FinanceiroResult = {
   observacoes: string;
 };
 
-type VerificacaoResult = {
-  itensCorrigidos: ItemProposta[];
-  divergenciasEncontradas: string[];
+// A revisão devolve só o que está ERRADO (um "diff"), não a lista inteira de novo —
+// resposta muito menor, muito mais rápida, e sem risco de a revisão truncar a lista.
+type RevisaoDiff = {
+  correcoes: {
+    indice: number;
+    descricao?: string;
+    unidade?: string;
+    quantidade?: number;
+    valorUnitario?: number;
+  }[];
+  itensFaltantes: ItemProposta[];
+  indicesParaRemover: number[];
 };
 
 // Palavras-chave usadas para não perder a tabela de itens/preços quando o texto do
@@ -115,7 +131,12 @@ Se este trecho não contiver nenhuma linha de tabela reconhecível, devolva "ite
 
   for (let tentativa = 0; tentativa < 2; tentativa++) {
     try {
-      const resultado = await askJSON<{ itens: ItemProposta[] }>(prompt, contexto, { maxTokens: 8000 });
+      // Bloco pequeno e delimitado — Haiku transcreve com fidelidade, é bem mais
+      // rápido, e não consome a cota de Sonnet (que fica reservada para o resto).
+      const resultado = await askJSON<{ itens: ItemProposta[] }>(prompt, contexto, {
+        model: MODELO_HAIKU,
+        maxTokens: 8000,
+      });
       return resultado.itens ?? [];
     } catch (err) {
       console.error(`[agente3-financeiro] falha ao extrair bloco ${indice + 1}/${total} (tentativa ${tentativa + 1}):`, err);
@@ -221,7 +242,14 @@ Gere quantos itens o edital realmente listar (não há limite artificial de quan
 baixo); se não houver uma lista real, gere entre 2 e 20 itens plausíveis. Use números puros (sem "R$" ou
 separadores de milhar) em quantidade e valorUnitario.`;
 
-      result = await askJSON<FinanceiroResult>(promptExtracao(), contexto, { maxTokens: 16000 });
+      // Transcrever uma tabela é tarefa mecânica: Haiku dá conta (é o mesmo modelo que
+      // já cuida da extração em blocos das tabelas grandes) e é bem mais rápido. A
+      // revisão em diff logo abaixo é a rede de segurança para os números. Se a lista
+      // vier curta demais, a retentativa mais abaixo sobe para o Sonnet.
+      result = await askJSON<FinanceiroResult>(promptExtracao(), contexto, {
+        model: temTextoCompleto ? MODELO_HAIKU : MODELO_SONNET,
+        maxTokens: maxTokensParaItens(Math.max(itensEsperados, 20)),
+      });
 
       // Checagem de completude: mesmo abaixo do limiar de divisão, o modelo pode ter
       // "resumido" em vez de transcrever tudo — tenta de novo UMA vez apontando o total
@@ -238,7 +266,7 @@ parece conter aproximadamente ${itensEsperados} linhas de tabela (cada linha com
 separado). Releia o texto do início ao fim da tabela e devolva a lista COMPLETA — não pare antes do fim.`
             ),
             contexto,
-            { maxTokens: 16000 }
+            { model: MODELO_SONNET, maxTokens: maxTokensParaItens(itensEsperados, 24_000) }
           );
           if (retentativa.itens.length > result.itens.length) result = retentativa;
         } catch (err) {
@@ -247,49 +275,68 @@ separado). Releia o texto do início ao fim da tabela e devolva a lista COMPLETA
       }
     }
 
-    // Segunda passada de revisão: só roda no caminho não-dividido e para listas de
-    // tamanho moderado — é ela mesma uma chamada que precisa reler a lista inteira
-    // contra o texto-fonte, então corre o mesmo risco de demorar demais em tabelas
-    // grandes (que já passaram pela extração em blocos, mais confiável para esse caso).
+    // Segunda passada de revisão: confere a lista extraída contra o texto-fonte e
+    // devolve só um "diff" (o que corrigir/adicionar/remover) — rápido e sem risco de
+    // truncar a lista. Roda no caminho não-dividido, para listas de tamanho moderado.
     let itensFinais = result.itens;
     let observacoesFinais = result.observacoes;
-    const LIMITE_ITENS_PARA_REVISAO = 45;
+    const LIMITE_ITENS_PARA_REVISAO = 60;
     if (!dividido && result.itensEncontradosNoTexto && result.itens.length > 0 && result.itens.length <= LIMITE_ITENS_PARA_REVISAO) {
       try {
-        const verificacao = await askJSON<VerificacaoResult>(
+        const listaIndexada = result.itens
+          .map((it, i) => `[${i}] ${it.descricao} | ${it.unidade} | qtd ${it.quantidade} | unit ${it.valorUnitario}`)
+          .join("\n");
+
+        const diff = await askJSON<RevisaoDiff>(
           `Você é um revisor financeiro rigoroso. Abaixo estão (1) trechos do edital/TR com a tabela de itens e (2)
-uma lista de itens que outro agente extraiu deles. Confira CADA item da lista contra o texto-fonte:
-- Corrija quantidade, unidade, descrição ou valor unitário que não baterem exatamente com o texto.
-- Remova da lista qualquer item que não exista de fato no texto-fonte.
-- Adicione qualquer item da tabela real que ficou faltando na lista.
-A lista de entrada já tem ${result.itens.length} itens — sua resposta deve ter pelo menos esse tanto (só menos se
-algum item realmente não existir no texto-fonte). Se a lista já estiver correta, devolva-a exatamente como está,
-por completo.
+uma lista de itens JÁ extraída, com índices [0..${result.itens.length - 1}]. Confira a lista contra o texto-fonte
+e devolva SOMENTE o que precisa mudar — não repita a lista inteira:
+- "correcoes": para cada item cujo texto/quantidade/unidade/valor unitário não bate com a fonte, um objeto com o
+  "indice" e SÓ os campos a corrigir.
+- "itensFaltantes": itens que existem na tabela do texto mas não estão na lista.
+- "indicesParaRemover": índices de itens que NÃO existem de fato no texto-fonte.
+Se estiver tudo certo, devolva as três listas vazias.
 
 ${INSTRUCAO_FORMATO_NUMERICO}
 
 Responda em JSON:
 {
-  "itensCorrigidos": [{ "descricao": string, "unidade": string, "quantidade": number, "valorUnitario": number }],
-  "divergenciasEncontradas": string[] (uma frase curta por correção feita; lista vazia se nada precisou de ajuste)
+  "correcoes": [{ "indice": number, "descricao"?: string, "unidade"?: string, "quantidade"?: number, "valorUnitario"?: number }],
+  "itensFaltantes": [{ "descricao": string, "unidade": string, "quantidade": number, "valorUnitario": number }],
+  "indicesParaRemover": [number]
 }`,
-          `=== TEXTO-FONTE ===\n${textoAnexosPrecos ?? ""}\n${textoTermoReferencia ?? ""}\n${textoEdital ?? ""}\n\n=== LISTA A CONFERIR (${result.itens.length} itens) ===\n${JSON.stringify(result.itens)}`,
-          { maxTokens: 16000 }
+          `=== TEXTO-FONTE ===\n${textoAnexosPrecos ?? ""}\n${textoTermoReferencia ?? ""}\n${textoEdital ?? ""}\n\n=== LISTA EXTRAÍDA (${result.itens.length} itens) ===\n${listaIndexada}`,
+          // Conferência mecânica e resposta pequena (só o diff) — Haiku dá conta e é rápido.
+          { model: MODELO_HAIKU, maxTokens: 4_000 }
         );
 
-        // Só aceita a revisão se ela não tiver encolhido a lista de forma suspeita — uma
-        // queda grande de itens é sinal mais provável de a própria revisão ter cortado
-        // pela metade do que de terem sido descobertos vários itens inventados.
-        const encolheuDemais = verificacao.itensCorrigidos?.length < result.itens.length * 0.9;
-        if (verificacao.itensCorrigidos?.length > 0 && !encolheuDemais) {
-          itensFinais = verificacao.itensCorrigidos;
-          if (verificacao.divergenciasEncontradas?.length > 0) {
-            observacoesFinais = `${result.observacoes}\n\nRevisão automática ajustou: ${verificacao.divergenciasEncontradas.join("; ")}.`;
-          }
-        } else if (encolheuDemais) {
-          console.warn(
-            `[agente3-financeiro] edital ${editalId}: revisão devolveu ${verificacao.itensCorrigidos?.length ?? 0} itens (entrada tinha ${result.itens.length}) — descartada por segurança, mantida a lista original.`
-          );
+        const ajustes: string[] = [];
+        const revisados = result.itens.map((item, i) => {
+          const c = diff.correcoes?.find((x) => x.indice === i);
+          if (!c) return item;
+          ajustes.push(`item "${item.descricao}" ajustado`);
+          return {
+            descricao: c.descricao ?? item.descricao,
+            unidade: c.unidade ?? item.unidade,
+            quantidade: typeof c.quantidade === "number" ? c.quantidade : item.quantidade,
+            valorUnitario: typeof c.valorUnitario === "number" ? c.valorUnitario : item.valorUnitario,
+          };
+        });
+
+        const remover = new Set(diff.indicesParaRemover ?? []);
+        const faltantes = (diff.itensFaltantes ?? []).filter(
+          (f) => f && f.descricao && typeof f.quantidade === "number" && typeof f.valorUnitario === "number"
+        );
+        // Trava de segurança: nunca deixa a revisão apagar mais de 20% da lista.
+        const podeRemover = remover.size <= result.itens.length * 0.2;
+        itensFinais = [...revisados.filter((_, i) => !(podeRemover && remover.has(i))), ...faltantes];
+
+        if (ajustes.length + faltantes.length + (podeRemover ? remover.size : 0) > 0) {
+          const partes = [];
+          if (ajustes.length) partes.push(`${ajustes.length} item(ns) corrigido(s)`);
+          if (faltantes.length) partes.push(`${faltantes.length} item(ns) que faltavam adicionado(s)`);
+          if (podeRemover && remover.size) partes.push(`${remover.size} item(ns) inexistente(s) removido(s)`);
+          observacoesFinais = `${result.observacoes}\n\nRevisão automática: ${partes.join(", ")}.`;
         }
       } catch (err) {
         // A revisão é um reforço de qualidade, não um requisito — se falhar, segue com

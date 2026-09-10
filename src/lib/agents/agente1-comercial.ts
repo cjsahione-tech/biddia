@@ -14,7 +14,7 @@ import {
 } from "@/lib/agents/pncp";
 import { classificarTipoObjeto, empresaAtende, type TipoObjeto } from "@/lib/agents/classificador-objeto";
 import { classificarEditaisEmLote } from "@/lib/agents/relevancia";
-import { askJSON } from "@/lib/anthropic";
+import { askJSON, MODELO_HAIKU } from "@/lib/anthropic";
 import { extrairTextoPdf, base64ParaBytes } from "@/lib/agents/pdf-extract";
 import { logAudit } from "@/lib/agents/run-tracker";
 import { mapComLimite } from "@/lib/concorrencia";
@@ -296,7 +296,7 @@ Retorne um objeto JSON com exatamente estas chaves:
   "dataEncerramentoProposta": string ou null (data-limite para envio de propostas, em ISO 8601, se encontrada)
 }`,
       texto,
-      { maxTokens: 1500 }
+      { model: MODELO_HAIKU, maxTokens: 1500 }
     );
   } catch (err) {
     console.error("Falha ao extrair dados estruturados do edital enviado manualmente:", err);
