@@ -24,9 +24,15 @@ export async function executarAgente4(editalId: string) {
     const { textoEdital, textoTermoReferencia, temTextoCompleto } =
       await obterTextoCompletoEdital(editalId);
 
+    const identificacaoEdital =
+      edital.fonte === "PNCP"
+        ? `Número de controle PNCP: ${edital.numeroControlePNCP}`
+        : `Este edital foi enviado manualmente pelo usuário (sem número de controle do PNCP) — identifique o
+número do edital/pregão pelo próprio texto abaixo, se ele aparecer lá.`;
+
     const contexto = `
 Edital: ${edital.titulo}
-Número de controle PNCP: ${edital.numeroControlePNCP}
+${identificacaoEdital}
 Órgão licitante: ${edital.orgaoNome} (CNPJ ${edital.orgaoCnpj})
 Modalidade: ${edital.modalidade ?? "não informado"}
 Objeto (resumo do analista): ${edital.analysis?.resumoObjeto ?? edital.descricao}
@@ -62,7 +68,8 @@ Gere EXATAMENTE estes 4 documentos padrão em "anexosPadrao", nesta ordem:
 
 ${instrucaoEspecificos}
 
-Cada documento deve ser formal, em primeira pessoa da empresa, citar o número de controle PNCP e o órgão licitante,
+Cada documento deve ser formal, em primeira pessoa da empresa, identificar o edital (pelo número de controle PNCP
+ou, na ausência dele, pelo número do edital/pregão encontrado no texto, ou pelo título) e o órgão licitante,
 e terminar afirmando estar ciente das penalidades legais em caso de declaração falsa.
 Responda em JSON:
 {
@@ -82,7 +89,7 @@ Cada "paragrafos" deve ter de 2 a 4 parágrafos curtos e objetivos (sem usar mar
         company: edital.company,
         titulo: anexo.nome,
         paragrafos: anexo.paragrafos,
-        rodapeExtra: `Documento gerado automaticamente pelo Agente Advogado para o edital ${edital.numeroControlePNCP} (${edital.orgaoNome}). Revise antes do envio.`,
+        rodapeExtra: `Documento gerado automaticamente pelo Agente Advogado para o edital "${edital.titulo}" — ${edital.orgaoNome}. Revise antes do envio.`,
       });
 
       const doc = await prisma.document.create({

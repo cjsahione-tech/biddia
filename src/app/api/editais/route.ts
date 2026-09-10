@@ -19,7 +19,7 @@ export async function GET(req: Request) {
       analysis: true,
       proposal: true,
       documents: {
-        where: { tipo: "DOCUMENTO_PNCP" },
+        where: { tipo: { in: ["DOCUMENTO_PNCP", "DOCUMENTO_USUARIO"] } },
         select: { id: true, nome: true, categoria: true },
       },
       _count: { select: { documents: true, checklistItems: true } },

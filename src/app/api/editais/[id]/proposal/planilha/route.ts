@@ -48,7 +48,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   sheet.getCell("A2").font = { size: 11, color: { argb: "FF555555" } };
 
   sheet.mergeCells("A3:G3");
-  sheet.getCell("A3").value = `${edital.orgaoNome} — ${edital.numeroControlePNCP}`;
+  sheet.getCell("A3").value =
+    edital.fonte === "PNCP" ? `${edital.orgaoNome} — ${edital.numeroControlePNCP}` : edital.orgaoNome;
   sheet.getCell("A3").font = { size: 10, color: { argb: "FF888888" } };
 
   sheet.addRow([]);

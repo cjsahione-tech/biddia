@@ -79,7 +79,9 @@ export function EditalDetailClient({ editalId }: { editalId: string }) {
             <span className="rounded-full bg-brand-light px-2.5 py-0.5 text-xs font-medium text-brand">
               {edital.modalidade ?? "Modalidade não informada"}
             </span>
-            <span className="text-xs text-muted">{edital.numeroControlePNCP}</span>
+            <span className="text-xs text-muted">
+              {edital.fonte === "MANUAL" ? "Adicionado manualmente" : edital.numeroControlePNCP}
+            </span>
           </div>
           <h1 className="mt-2 text-2xl font-semibold text-foreground">{edital.titulo}</h1>
           <p className="mt-1 text-sm text-muted">
@@ -93,14 +95,16 @@ export function EditalDetailClient({ editalId }: { editalId: string }) {
             {formatValorEdital(edital.valorGlobal, edital.orcamentoSigiloso)}
           </p>
           <p className="mt-1 text-xs text-muted">Encerra {formatDate(edital.dataEncerramentoProposta)}</p>
-          <a
-            href={edital.linkPortal}
-            target="_blank"
-            rel="noreferrer"
-            className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-brand hover:underline"
-          >
-            Ver no PNCP <ExternalLink className="h-3 w-3" />
-          </a>
+          {edital.linkPortal && (
+            <a
+              href={edital.linkPortal}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-brand hover:underline"
+            >
+              Ver no PNCP <ExternalLink className="h-3 w-3" />
+            </a>
+          )}
         </div>
       </div>
 

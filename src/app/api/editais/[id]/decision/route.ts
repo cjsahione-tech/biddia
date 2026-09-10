@@ -1,8 +1,8 @@
-import { NextResponse, after } from "next/server";
+import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireCompany } from "@/lib/api-utils";
-import { executarPipelineCompleto } from "@/lib/agents/pipeline";
+import { dispararPipeline } from "@/lib/agents/pipeline";
 
 const schema = z.object({ decision: z.enum(["APROVADO", "REPROVADO"]) });
 
@@ -29,34 +29,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   });
 
   if (parsed.data.decision === "APROVADO") {
-    const cookie = req.headers.get("cookie") ?? "";
-    const origin = new URL(req.url).origin;
-
-    // Usa after() (em vez de uma Promise solta) porque é a forma que o Next.js garante
-    // que o trabalho realmente termina — tanto em dev quanto em produção na Vercel.
-    after(async () => {
-      // Não espera o lote paralelo além de 45s: se algum agente estiver demorando muito
-      // (edital grande), ainda assim dispara a continuação dentro do teto de 60s da
-      // Vercel — o Auditor, na segunda chamada, re-executa o que não tiver terminado.
-      const timeout = new Promise((resolve) => setTimeout(resolve, 45_000));
-      try {
-        await Promise.race([executarPipelineCompleto(id), timeout]);
-      } catch (err) {
-        console.error(`Falha no pipeline do edital ${id}:`, err);
-      }
-
-      // Dispara a continuação (Secretário → Auditor) como uma nova chamada HTTP, para
-      // que ela ganhe seu próprio orçamento de execução em vez de disputar o que sobrou
-      // desta.
-      try {
-        await fetch(`${origin}/api/editais/${id}/continuar-pipeline`, {
-          method: "POST",
-          headers: { cookie },
-        });
-      } catch (err) {
-        console.error(`Falha ao disparar a continuação do pipeline do edital ${id}:`, err);
-      }
-    });
+    dispararPipeline(id, req);
   }
 
   return NextResponse.json({ edital: updated });

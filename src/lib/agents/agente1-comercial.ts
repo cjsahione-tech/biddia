@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import {
   searchEditaisPorPalavraChave,
@@ -8,8 +9,11 @@ import {
   baixarArquivoPncp,
   parseItemUrl,
 } from "@/lib/agents/pncp";
-import { classificarTipoObjeto, empresaAtende } from "@/lib/agents/classificador-objeto";
+import { classificarTipoObjeto, empresaAtende, type TipoObjeto } from "@/lib/agents/classificador-objeto";
 import { editalERelevante } from "@/lib/agents/relevancia";
+import { askJSON } from "@/lib/anthropic";
+import { extrairTextoPdf, base64ParaBytes } from "@/lib/agents/pdf-extract";
+import { logAudit } from "@/lib/agents/run-tracker";
 
 /**
  * Agente Comercial: varre o PNCP de forma autônoma usando as palavras-chave
@@ -169,4 +173,136 @@ export async function executarAgente1(companyId: string) {
   if (falhas > 0) partes.push(`${falhas} palavra-chave indisponível no PNCP no momento.`);
 
   return { novos, analisados, descartadosPerfil, descartadosRelevancia, mensagem: partes.join(" ") };
+}
+
+type DadosExtraidosDoPdf = {
+  titulo: string | null;
+  descricao: string | null;
+  orgaoNome: string | null;
+  orgaoCnpj: string | null;
+  municipio: string | null;
+  uf: string | null;
+  modalidade: string | null;
+  tipoObjeto: TipoObjeto;
+  valorGlobal: number | null;
+  orcamentoSigiloso: boolean;
+  dataEncerramentoProposta: string | null;
+};
+
+const DADOS_VAZIOS: DadosExtraidosDoPdf = {
+  titulo: null,
+  descricao: null,
+  orgaoNome: null,
+  orgaoCnpj: null,
+  municipio: null,
+  uf: null,
+  modalidade: null,
+  tipoObjeto: null,
+  valorGlobal: null,
+  orcamentoSigiloso: false,
+  dataEncerramentoProposta: null,
+};
+
+async function extrairDadosDoEdital(texto: string): Promise<DadosExtraidosDoPdf> {
+  try {
+    return await askJSON<DadosExtraidosDoPdf>(
+      `Você lê o texto extraído de um PDF de edital/aviso de licitação pública brasileira e extrai dados
+estruturados dele. Use APENAS o que estiver explícito no texto — quando um dado não aparecer, retorne null
+para ele em vez de adivinhar.
+
+Retorne um objeto JSON com exatamente estas chaves:
+{
+  "titulo": string ou null (título/objeto resumido da licitação, ex: "Pregão Eletrônico nº 12/2026 — Aquisição de..."),
+  "descricao": string ou null (descrição do objeto em 1-2 frases),
+  "orgaoNome": string ou null (nome do órgão/entidade licitante),
+  "orgaoCnpj": string ou null (CNPJ do órgão licitante, só dígitos e pontuação como aparecer no texto),
+  "municipio": string ou null,
+  "uf": string ou null (sigla de 2 letras),
+  "modalidade": string ou null (ex: "Pregão Eletrônico", "Concorrência", "Dispensa de Licitação"),
+  "tipoObjeto": "SERVICO" | "BEM" | null (se o objeto principal é contratação de serviço ou aquisição de bem/insumo; null se não der para saber ou for misto),
+  "valorGlobal": number ou null (valor total estimado em reais, sem "R$" nem separadores; null se sigiloso ou não informado),
+  "orcamentoSigiloso": boolean (true se o texto disser explicitamente que o orçamento é sigiloso),
+  "dataEncerramentoProposta": string ou null (data-limite para envio de propostas, em ISO 8601, se encontrada)
+}`,
+      texto,
+      { maxTokens: 1500 }
+    );
+  } catch (err) {
+    console.error("Falha ao extrair dados estruturados do edital enviado manualmente:", err);
+    return DADOS_VAZIOS;
+  }
+}
+
+/**
+ * Captação manual: o usuário já encontrou o edital por conta própria (em qualquer
+ * portal) e envia o PDF direto pela plataforma. O Agente Comercial extrai o texto e os
+ * dados estruturados do próprio arquivo — sem depender do PNCP — e aprova o edital na
+ * hora, já que a escolha de participar foi feita pelo usuário ao enviar o documento.
+ * A partir daí o restante do pipeline (Analista, Financeiro, Advogado, Secretário,
+ * Auditor) roda automaticamente, do mesmo jeito que roda para um edital aprovado vindo
+ * da busca automática.
+ */
+export async function capturarEditalManual(
+  companyId: string,
+  input: { nomeArquivo: string; arquivoBase64: string }
+) {
+  const company = await prisma.company.findUniqueOrThrow({ where: { id: companyId } });
+
+  const bytes = base64ParaBytes(input.arquivoBase64);
+  const texto = await extrairTextoPdf(bytes);
+  if (!texto) {
+    throw new Error(
+      "Não foi possível ler texto neste PDF. Verifique se não é um arquivo digitalizado apenas como imagem (sem texto selecionável)."
+    );
+  }
+
+  const dados = await extrairDadosDoEdital(texto.slice(0, 35_000));
+  const tituloFallback = input.nomeArquivo.replace(/\.pdf$/i, "").trim() || "Edital enviado manualmente";
+  const titulo = dados.titulo?.trim() || tituloFallback;
+  const descricao = dados.descricao?.trim() || "Edital enviado manualmente pelo usuário — objeto ainda não identificado automaticamente.";
+
+  const edital = await prisma.edital.create({
+    data: {
+      companyId: company.id,
+      fonte: "MANUAL",
+      // Não existe número de controle PNCP para um edital captado manualmente; gera um
+      // identificador interno só para satisfazer a chave única da tabela.
+      numeroControlePNCP: `MANUAL-${randomUUID()}`,
+      titulo,
+      descricao,
+      tipoObjeto: dados.tipoObjeto ?? classificarTipoObjeto(titulo, descricao),
+      orgaoNome: dados.orgaoNome?.trim() || "Não informado no PDF enviado",
+      orgaoCnpj: dados.orgaoCnpj?.trim() || "Não informado",
+      municipio: dados.municipio?.trim() || null,
+      uf: dados.uf?.trim() || null,
+      modalidade: dados.modalidade?.trim() || null,
+      dataEncerramentoProposta: dados.dataEncerramentoProposta ? new Date(dados.dataEncerramentoProposta) : null,
+      valorGlobal: dados.orcamentoSigiloso ? null : dados.valorGlobal,
+      orcamentoSigiloso: dados.orcamentoSigiloso,
+      linkPortal: "",
+      status: "APROVADO",
+      decidedAt: new Date(),
+    },
+  });
+
+  await prisma.document.create({
+    data: {
+      editalId: edital.id,
+      nome: input.nomeArquivo || "Edital.pdf",
+      tipo: "DOCUMENTO_USUARIO",
+      categoria: "EDITAL",
+      status: "DISPONIVEL",
+      conteudoBase64: input.arquivoBase64,
+    },
+  });
+
+  await logAudit(
+    edital.id,
+    "Agente Comercial",
+    "Captação manual",
+    "OK",
+    `Edital adicionado manualmente pelo usuário a partir do arquivo "${input.nomeArquivo}". Aprovado automaticamente — o restante do pipeline (análise, proposta, anexos, checklist e auditoria) foi disparado em seguida.`
+  );
+
+  return edital;
 }

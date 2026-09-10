@@ -18,12 +18,15 @@ export async function executarAgente2(editalId: string) {
   return withAgentRun(editalId, "agente2-analista", async () => {
     const edital = await prisma.edital.findUniqueOrThrow({ where: { id: editalId } });
 
-    const pathname = new URL(edital.linkPortal).pathname.replace(/^\/app/, "");
-    const { cnpj, ano, sequencial } = parseItemUrl(pathname);
-    const detalhe =
-      cnpj && ano && sequencial
-        ? await buscarDetalheCompra(cnpj, ano, sequencial).catch(() => null)
-        : null;
+    // Editais captados manualmente não têm link do PNCP — a consulta de detalhe só
+    // existe para os que vieram da busca automática.
+    const detalhe = edital.linkPortal
+      ? await (async () => {
+          const pathname = new URL(edital.linkPortal).pathname.replace(/^\/app/, "");
+          const { cnpj, ano, sequencial } = parseItemUrl(pathname);
+          return cnpj && ano && sequencial ? await buscarDetalheCompra(cnpj, ano, sequencial).catch(() => null) : null;
+        })()
+      : null;
 
     const { textoEdital, textoTermoReferencia, temTextoCompleto } =
       await obterTextoCompletoEdital(editalId);

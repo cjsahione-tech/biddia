@@ -7,9 +7,11 @@ import type { Document as DocumentRow } from "@prisma/client";
 // mesmo em editais muito longos (dezenas de páginas). Mantido moderado (não maior)
 // porque a Vercel no plano gratuito corta a execução em 60s, e um texto muito grande
 // deixa a resposta do modelo lenta o bastante para estourar esse limite.
-const MAX_CHARS_POR_DOCUMENTO = 35_000;
+export const MAX_CHARS_POR_DOCUMENTO = 35_000;
 
-async function extrairTextoPdf(bytes: Uint8Array): Promise<string | null> {
+// Exportado para uso fora deste módulo (ex: extrair dados estruturados de um PDF
+// recém enviado pelo usuário, antes mesmo de haver um Document salvo).
+export async function extrairTextoPdf(bytes: Uint8Array): Promise<string | null> {
   try {
     const pdf = await getDocumentProxy(bytes);
     const { text } = await extractText(pdf, { mergePages: true });
@@ -20,7 +22,7 @@ async function extrairTextoPdf(bytes: Uint8Array): Promise<string | null> {
   }
 }
 
-function base64ParaBytes(dataUrl: string): Uint8Array {
+export function base64ParaBytes(dataUrl: string): Uint8Array {
   const base64 = dataUrl.split(",")[1] ?? dataUrl;
   return new Uint8Array(Buffer.from(base64, "base64"));
 }
@@ -70,8 +72,10 @@ export type TextoEdital = {
  * trabalharem só com o resumo curto vindo da busca do PNCP.
  */
 export async function obterTextoCompletoEdital(editalId: string): Promise<TextoEdital> {
+  // Inclui tanto os documentos baixados do PNCP quanto os enviados manualmente
+  // pelo usuário na captação — ambos são a fonte do texto real do edital/TR.
   const documentos = await prisma.document.findMany({
-    where: { editalId, tipo: "DOCUMENTO_PNCP" },
+    where: { editalId, tipo: { in: ["DOCUMENTO_PNCP", "DOCUMENTO_USUARIO"] } },
   });
 
   const docEdital = documentos.find((d) => d.categoria === "EDITAL") ?? null;

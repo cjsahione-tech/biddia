@@ -41,7 +41,8 @@ function DocumentRow({ editalId, doc }: { editalId: string; doc: DocumentItem })
 
 export function DocumentsTab({ editalId, documents }: { editalId: string; documents: DocumentItem[] }) {
   const oficiais = documents.filter((d) => d.tipo === "DOCUMENTO_PNCP");
-  const preparados = documents.filter((d) => d.tipo !== "DOCUMENTO_PNCP");
+  const enviados = documents.filter((d) => d.tipo === "DOCUMENTO_USUARIO");
+  const gerados = documents.filter((d) => d.tipo === "ANEXO_GERADO");
 
   if (documents.length === 0) {
     return (
@@ -68,11 +69,25 @@ export function DocumentsTab({ editalId, documents }: { editalId: string; docume
         </div>
       )}
 
-      {preparados.length > 0 && (
+      {enviados.length > 0 && (
+        <div>
+          <h4 className="text-sm font-semibold text-foreground">Enviados por você</h4>
+          <p className="mt-1 text-xs text-muted">
+            Documentos enviados manualmente — é neles que os agentes leram o edital.
+          </p>
+          <div className="mt-3 space-y-3">
+            {enviados.map((doc) => (
+              <DocumentRow key={doc.id} editalId={editalId} doc={doc} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {gerados.length > 0 && (
         <div>
           <h4 className="text-sm font-semibold text-foreground">Anexos preparados pela Bidd.IA</h4>
           <div className="mt-3 space-y-3">
-            {preparados.map((doc) => (
+            {gerados.map((doc) => (
               <DocumentRow key={doc.id} editalId={editalId} doc={doc} />
             ))}
           </div>

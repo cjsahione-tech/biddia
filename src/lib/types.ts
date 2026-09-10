@@ -1,5 +1,6 @@
 export type EditalListItem = {
   id: string;
+  fonte: string;
   titulo: string;
   descricao: string;
   tipoObjeto: "SERVICO" | "BEM" | null;
