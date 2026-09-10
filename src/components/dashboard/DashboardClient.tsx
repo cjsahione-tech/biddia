@@ -25,9 +25,10 @@ import type { EditalListItem } from "@/lib/types";
 // antes de tentar enviar.
 const TAMANHO_MAXIMO_PDF = 3.5 * 1024 * 1024;
 
-const TIPO_OBJETO_LABEL: Record<"SERVICO" | "BEM", string> = {
+const TIPO_OBJETO_LABEL: Record<"SERVICO" | "BEM" | "AMBOS", string> = {
   SERVICO: "Serviço",
   BEM: "Bem/Insumo",
+  AMBOS: "Serviço + Bem",
 };
 
 const TABS = [

@@ -32,7 +32,7 @@ export function AppShell({
       <aside className="flex w-64 shrink-0 flex-col border-r border-border bg-surface/50">
         <div className="px-6 py-6">
           <Link href="/dashboard" className="text-lg font-semibold tracking-tight text-foreground">
-            Licit<span className="text-brand">ax</span>
+            Bidd<span className="text-brand">.IA</span>
           </Link>
         </div>
 

@@ -2,6 +2,7 @@ import { after } from "next/server";
 import { executarAgente2 } from "@/lib/agents/agente2-analista";
 import { executarAgente3 } from "@/lib/agents/agente3-financeiro";
 import { executarAgente4 } from "@/lib/agents/agente4-advogado";
+import { baixarDocumentosPendentes } from "@/lib/agents/agente1-comercial";
 import { logAudit } from "@/lib/agents/run-tracker";
 
 /**
@@ -12,6 +13,11 @@ import { logAudit } from "@/lib/agents/run-tracker";
  * execução da Vercel.
  */
 export async function executarPipelineCompleto(editalId: string) {
+  // O Agente Comercial só guarda o link dos PDFs na captação e baixa em segundo plano;
+  // aqui garante que o conteúdo esteja em mãos antes de os agentes lerem, sem cada um
+  // rebaixar o mesmo arquivo do PNCP.
+  await baixarDocumentosPendentes([editalId]);
+
   const etapasParalelas: Array<[string, () => Promise<unknown>]> = [
     ["Agente Analista", () => executarAgente2(editalId)],
     ["Agente Financeiro", () => executarAgente3(editalId)],

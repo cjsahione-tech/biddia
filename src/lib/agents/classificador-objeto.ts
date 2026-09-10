@@ -1,4 +1,4 @@
-export type TipoObjeto = "SERVICO" | "BEM" | null;
+export type TipoObjeto = "SERVICO" | "BEM" | "AMBOS" | null;
 
 const PISTAS_SERVICO = [
   "prestação de serviço",
@@ -60,6 +60,7 @@ export function empresaAtende(
   perfil: { atendeServico: boolean; atendeBem: boolean }
 ): boolean {
   if (!tipoObjeto) return true; // não classificado: não bloqueia nem alerta
+  if (tipoObjeto === "AMBOS") return perfil.atendeServico || perfil.atendeBem;
   if (tipoObjeto === "SERVICO") return perfil.atendeServico;
   return perfil.atendeBem;
 }

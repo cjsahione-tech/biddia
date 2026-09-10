@@ -82,6 +82,7 @@ model Edital {
   modalidade          String?
   situacao            String?
   dataPublicacao      DateTime?
+  dataAtualizacaoPncp DateTime?
   dataAberturaProposta DateTime?
   dataEncerramentoProposta DateTime?
   valorGlobal         Float?

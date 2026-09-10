@@ -1,0 +1,1 @@
+git add -A && git commit -F ./cm-tmp.txt && rm -f ./cm-tmp.txt

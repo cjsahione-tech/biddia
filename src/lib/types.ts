@@ -3,7 +3,7 @@ export type EditalListItem = {
   fonte: string;
   titulo: string;
   descricao: string;
-  tipoObjeto: "SERVICO" | "BEM" | null;
+  tipoObjeto: "SERVICO" | "BEM" | "AMBOS" | null;
   orgaoNome: string;
   municipio: string | null;
   uf: string | null;

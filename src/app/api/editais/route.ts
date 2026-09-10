@@ -14,7 +14,13 @@ export async function GET(req: Request) {
       companyId: company!.id,
       ...(status ? { status: status as "NOVO" | "APROVADO" | "REPROVADO" } : {}),
     },
-    orderBy: { createdAt: "desc" },
+    // Mesma ordem do site do PNCP: última atualização primeiro. Editais sem essa data
+    // (captação manual) caem para o critério de data de publicação e, por fim, de criação.
+    orderBy: [
+      { dataAtualizacaoPncp: { sort: "desc", nulls: "last" } },
+      { dataPublicacao: { sort: "desc", nulls: "last" } },
+      { createdAt: "desc" },
+    ],
     include: {
       analysis: true,
       proposal: true,

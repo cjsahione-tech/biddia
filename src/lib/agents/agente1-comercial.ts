@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { after } from "next/server";
 import { prisma } from "@/lib/prisma";
 import {
   searchEditaisPorPalavraChave,
@@ -8,18 +9,58 @@ import {
   selecionarDocumentosPrincipais,
   baixarArquivoPncp,
   parseItemUrl,
+  type PncpSearchItem,
+  type PncpArquivo,
 } from "@/lib/agents/pncp";
 import { classificarTipoObjeto, empresaAtende, type TipoObjeto } from "@/lib/agents/classificador-objeto";
-import { editalERelevante } from "@/lib/agents/relevancia";
+import { classificarEditaisEmLote } from "@/lib/agents/relevancia";
 import { askJSON } from "@/lib/anthropic";
 import { extrairTextoPdf, base64ParaBytes } from "@/lib/agents/pdf-extract";
 import { logAudit } from "@/lib/agents/run-tracker";
+import { mapComLimite } from "@/lib/concorrencia";
+
+// Quantos editais trazer por palavra-chave, na ordem do PNCP (última atualização
+// primeiro) — o mesmo recorte que o site do PNCP mostra nas primeiras páginas.
+const MAX_POR_PALAVRA_CHAVE = 100;
 
 /**
- * Agente Comercial: varre o PNCP de forma autônoma usando as palavras-chave
- * cadastradas pela empresa e grava apenas os editais com relação direta com o que
- * a empresa realmente oferece — descarta tudo que só bateu na busca por coincidência
- * de palavra, sem relação real com o perfil declarado.
+ * Baixa (em segundo plano) os PDFs de editais já captados que ainda estão só com o
+ * link de origem. Roda depois da resposta da busca, para não deixar o usuário esperando
+ * dezenas de downloads — e também é acionado na aprovação de um edital, garantindo que
+ * o texto esteja disponível para os agentes mesmo se o download em background não tiver
+ * terminado.
+ */
+export async function baixarDocumentosPendentes(editalIds: string[]) {
+  if (editalIds.length === 0) return;
+  const docs = await prisma.document.findMany({
+    where: {
+      editalId: { in: editalIds },
+      tipo: "DOCUMENTO_PNCP",
+      conteudoBase64: null,
+      origemUrl: { not: null },
+    },
+  });
+
+  await mapComLimite(docs, 6, async (doc) => {
+    const arquivo = await baixarArquivoPncp(doc.origemUrl!).catch(() => null);
+    if (!arquivo) return;
+    await prisma.document
+      .update({
+        where: { id: doc.id },
+        data: {
+          conteudoBase64: `data:${arquivo.contentType};base64,${Buffer.from(arquivo.bytes).toString("base64")}`,
+        },
+      })
+      .catch((err) => console.error(`Falha ao salvar PDF baixado do documento ${doc.id}:`, err));
+  });
+}
+
+/**
+ * Agente Comercial: varre o PNCP com as palavras-chave da empresa e replica na
+ * plataforma as oportunidades da busca, na mesma ordem do site do PNCP. Não lista
+ * editais cujo tipo (compra de bem x prestação de serviço) não bate com o que a
+ * empresa declarou atender no cadastro, nem os que a IA considera sem relação direta
+ * com o objeto social.
  */
 export async function executarAgente1(companyId: string) {
   const company = await prisma.company.findUnique({
@@ -31,81 +72,110 @@ export async function executarAgente1(companyId: string) {
     return { novos: 0, analisados: 0, mensagem: "Nenhuma palavra-chave cadastrada." };
   }
 
-  let novos = 0;
-  let analisados = 0;
+  // 1. Busca no PNCP, preservando a ordem de cada busca (última atualização primeiro).
   let falhas = 0;
-  let descartadosPerfil = 0;
-  let descartadosRelevancia = 0;
   const vistos = new Set<string>();
-
+  const candidatos: { item: PncpSearchItem; keyword: string }[] = [];
   for (const kw of company.keywords) {
-    let items;
+    let items: PncpSearchItem[];
     try {
-      items = await searchEditaisPorPalavraChave(kw.term);
+      items = await searchEditaisPorPalavraChave(kw.term, MAX_POR_PALAVRA_CHAVE);
     } catch (err) {
       console.error(`Agente Comercial: falha ao buscar "${kw.term}" no PNCP:`, err);
       falhas++;
       continue;
     }
-
     for (const item of items) {
-      analisados++;
       if (vistos.has(item.numero_controle_pncp)) continue;
       vistos.add(item.numero_controle_pncp);
+      candidatos.push({ item, keyword: kw.term });
+    }
+  }
 
-      const existing = await prisma.edital.findUnique({
+  if (falhas === company.keywords.length) {
+    return {
+      novos: 0,
+      analisados: 0,
+      mensagem: "O PNCP está indisponível no momento. Tente buscar novamente em alguns instantes.",
+    };
+  }
+
+  const analisados = candidatos.length;
+
+  // 2. Descarta os que já estão na plataforma.
+  const jaExistentes = new Set(
+    (
+      await prisma.edital.findMany({
         where: {
-          companyId_numeroControlePNCP: {
-            companyId: company.id,
-            numeroControlePNCP: item.numero_controle_pncp,
-          },
+          companyId: company.id,
+          numeroControlePNCP: { in: candidatos.map((c) => c.item.numero_controle_pncp) },
         },
-      });
-      if (existing) continue;
+        select: { numeroControlePNCP: true },
+      })
+    ).map((e) => e.numeroControlePNCP)
+  );
+  const novosCandidatos = candidatos.filter((c) => !jaExistentes.has(c.item.numero_controle_pncp));
 
-      const descricao = item.description || "(sem descrição disponível)";
-      const tipoObjeto = classificarTipoObjeto(item.title, descricao);
+  // 3. Classifica em lote (relevância + tipo do objeto) com IA.
+  const classificacoes = await classificarEditaisEmLote(
+    company.objetoSocial,
+    novosCandidatos.map((c) => ({
+      numeroControle: c.item.numero_controle_pncp,
+      titulo: c.item.title,
+      descricao: c.item.description || "",
+    }))
+  );
 
-      // Filtro rígido nº 1: o tipo do objeto (serviço x bem/insumo) precisa bater com o
-      // que a empresa declarou que atende. Um objeto não classificado passa (não há
-      // como saber, então não bloqueia por engano).
-      if (!empresaAtende(tipoObjeto, company)) {
-        descartadosPerfil++;
-        continue;
+  // 4. Filtra: precisa ser relevante E do tipo que a empresa atende.
+  let descartadosPerfil = 0;
+  let descartadosRelevancia = 0;
+  const aprovados = novosCandidatos.filter((c) => {
+    const cl = classificacoes.get(c.item.numero_controle_pncp);
+    if (!cl) return true;
+    if (!cl.relevante) {
+      descartadosRelevancia++;
+      return false;
+    }
+    if (!empresaAtende(cl.tipoObjeto, company)) {
+      descartadosPerfil++;
+      return false;
+    }
+    return true;
+  });
+
+  // 5. Para os aprovados: busca valor/sigilo e a lista de arquivos, e cria o edital +
+  // os registros de documento (o download dos PDFs em si fica para o passo 6).
+  const criadosIds: string[] = [];
+  await mapComLimite(aprovados, 8, async (c) => {
+    const item = c.item;
+    const cl = classificacoes.get(item.numero_controle_pncp);
+    const descricao = item.description || "(sem descrição disponível)";
+    const { cnpj, ano, sequencial } = parseItemUrl(item.item_url);
+
+    let valorGlobal: number | null = item.valor_global;
+    let orcamentoSigiloso = false;
+    let arquivos: PncpArquivo[] = [];
+    if (cnpj && ano && sequencial) {
+      const [detalhe, arqs] = await Promise.all([
+        buscarDetalheCompra(cnpj, ano, sequencial).catch(() => null),
+        buscarArquivosCompra(cnpj, ano, sequencial).catch(() => [] as PncpArquivo[]),
+      ]);
+      arquivos = arqs;
+      if (detalhe) {
+        orcamentoSigiloso = !!detalhe.indicadorOrcamentoSigiloso;
+        if (!orcamentoSigiloso && detalhe.valorTotalEstimado != null) valorGlobal = detalhe.valorTotalEstimado;
+        if (orcamentoSigiloso) valorGlobal = null;
       }
+    }
 
-      // Filtro rígido nº 2: relação semântica real com o objeto social da empresa,
-      // não só a mesma área genérica. Só roda para quem já passou no filtro acima,
-      // para não gastar chamadas de IA com editais já descartados.
-      const relevante = await editalERelevante(company.objetoSocial, item.title, descricao);
-      if (!relevante) {
-        descartadosRelevancia++;
-        continue;
-      }
-
-      // A busca por palavra-chave nem sempre traz o valor; o detalhe da contratação
-      // é a fonte confiável do valor estimado e de eventual sigilo orçamentário.
-      let valorGlobal = item.valor_global;
-      let orcamentoSigiloso = false;
-      const { cnpj, ano, sequencial } = parseItemUrl(item.item_url);
-      if (cnpj && ano && sequencial) {
-        const detalhe = await buscarDetalheCompra(cnpj, ano, sequencial).catch(() => null);
-        if (detalhe) {
-          orcamentoSigiloso = !!detalhe.indicadorOrcamentoSigiloso;
-          if (!orcamentoSigiloso && detalhe.valorTotalEstimado != null) {
-            valorGlobal = detalhe.valorTotalEstimado;
-          }
-          if (orcamentoSigiloso) valorGlobal = null;
-        }
-      }
-
-      const edital = await prisma.edital.create({
+    const edital = await prisma.edital
+      .create({
         data: {
           companyId: company.id,
           numeroControlePNCP: item.numero_controle_pncp,
           titulo: item.title,
           descricao,
-          tipoObjeto,
+          tipoObjeto: cl?.tipoObjeto ?? classificarTipoObjeto(item.title, descricao),
           orgaoNome: item.orgao_nome,
           orgaoCnpj: item.orgao_cnpj,
           municipio: item.municipio_nome,
@@ -113,70 +183,67 @@ export async function executarAgente1(companyId: string) {
           modalidade: item.modalidade_licitacao_nome,
           situacao: item.situacao_nome,
           dataPublicacao: item.data_publicacao_pncp ? new Date(item.data_publicacao_pncp) : null,
+          dataAtualizacaoPncp: item.data_atualizacao_pncp ? new Date(item.data_atualizacao_pncp) : null,
           dataAberturaProposta: item.data_inicio_vigencia ? new Date(item.data_inicio_vigencia) : null,
           dataEncerramentoProposta: item.data_fim_vigencia ? new Date(item.data_fim_vigencia) : null,
           valorGlobal,
           orcamentoSigiloso,
           linkPortal: linkPortalCompra(item.item_url),
-          keywordMatched: kw.term,
+          keywordMatched: c.keyword,
+        },
+      })
+      .catch((err) => {
+        // Corrida rara: dois cliques em "Buscar" quase juntos podem tentar criar o
+        // mesmo edital — a chave única cuida disso, aqui só ignoramos.
+        console.error(`Falha ao criar edital ${item.numero_controle_pncp}:`, err);
+        return null;
+      });
+    if (!edital) return;
+    criadosIds.push(edital.id);
+
+    const { edital: docEdital, termoReferencia, anexosPrecos } = selecionarDocumentosPrincipais(arquivos);
+    const docs: { doc: PncpArquivo; categoria: "EDITAL" | "TERMO_REFERENCIA" | "ANEXO_PRECOS" }[] = [];
+    if (docEdital) docs.push({ doc: docEdital, categoria: "EDITAL" });
+    if (termoReferencia) docs.push({ doc: termoReferencia, categoria: "TERMO_REFERENCIA" });
+    for (const d of anexosPrecos) docs.push({ doc: d, categoria: "ANEXO_PRECOS" });
+
+    for (const { doc, categoria } of docs) {
+      await prisma.document.create({
+        data: {
+          editalId: edital.id,
+          nome: doc.titulo,
+          tipo: "DOCUMENTO_PNCP",
+          categoria,
+          status: "DISPONIVEL",
+          origemUrl: doc.url,
+          conteudoBase64: null,
         },
       });
-      novos++;
-
-      // Baixa o edital (ou aviso equivalente) e o termo de referência agora, enquanto o
-      // PNCP está respondendo, em vez de só guardar o link — assim o download continua
-      // funcionando na plataforma mesmo se o PNCP ficar instável depois.
-      if (cnpj && ano && sequencial) {
-        const arquivos = await buscarArquivosCompra(cnpj, ano, sequencial).catch(() => []);
-        const { edital: docEdital, termoReferencia, anexosPrecos } = selecionarDocumentosPrincipais(arquivos);
-
-        const candidatos: { doc: NonNullable<typeof docEdital>; categoria: "EDITAL" | "TERMO_REFERENCIA" | "ANEXO_PRECOS" }[] = [];
-        if (docEdital) candidatos.push({ doc: docEdital, categoria: "EDITAL" });
-        if (termoReferencia) candidatos.push({ doc: termoReferencia, categoria: "TERMO_REFERENCIA" });
-        // Anexos sem TR definido costumam ser onde a tabela de itens/preços realmente
-        // está — sem baixar isso, o Agente Financeiro nunca teria como ler os valores
-        // reais e cairia sempre na estimativa.
-        for (const doc of anexosPrecos) candidatos.push({ doc, categoria: "ANEXO_PRECOS" });
-
-        for (const { doc, categoria } of candidatos) {
-          const arquivo = await baixarArquivoPncp(doc.url).catch(() => null);
-          await prisma.document.create({
-            data: {
-              editalId: edital.id,
-              nome: doc.titulo,
-              tipo: "DOCUMENTO_PNCP",
-              categoria,
-              // Se o download imediato falhar (PNCP instável no momento), guarda a
-              // origem para o usuário tentar baixar depois pela própria plataforma.
-              status: "DISPONIVEL",
-              origemUrl: doc.url,
-              conteudoBase64: arquivo
-                ? `data:${arquivo.contentType};base64,${Buffer.from(arquivo.bytes).toString("base64")}`
-                : null,
-            },
-          });
-        }
-      }
     }
+  });
+
+  // 6. Baixa os PDFs em segundo plano — o usuário já vê os editais na lista sem esperar.
+  if (criadosIds.length > 0) {
+    const ids = [...criadosIds];
+    after(() => baixarDocumentosPendentes(ids));
   }
 
-  if (falhas === company.keywords.length) {
-    return {
-      novos: 0,
-      analisados,
-      mensagem: "O PNCP está indisponível no momento. Tente buscar novamente em alguns instantes.",
-    };
-  }
-
-  const partes = [`${novos} novo(s) edital(is) encontrado(s) com relação direta ao seu perfil.`];
-  if (descartadosPerfil + descartadosRelevancia > 0) {
+  const partes = [`${criadosIds.length} novo(s) edital(is) captado(s) do PNCP.`];
+  const descartados = descartadosPerfil + descartadosRelevancia;
+  if (descartados > 0) {
     partes.push(
-      `${descartadosPerfil + descartadosRelevancia} descartado(s) por não corresponderem ao que a empresa oferece.`
+      `${descartados} não listado(s): ${descartadosPerfil} fora do tipo que a empresa atende, ${descartadosRelevancia} sem relação direta com o objeto social.`
     );
   }
   if (falhas > 0) partes.push(`${falhas} palavra-chave indisponível no PNCP no momento.`);
 
-  return { novos, analisados, descartadosPerfil, descartadosRelevancia, mensagem: partes.join(" ") };
+  return {
+    novos: criadosIds.length,
+    analisados,
+    descartadosPerfil,
+    descartadosRelevancia,
+    mensagem: partes.join(" "),
+  };
 }
 
 type DadosExtraidosDoPdf = {

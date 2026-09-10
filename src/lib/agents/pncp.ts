@@ -25,6 +25,7 @@ export type PncpSearchItem = {
   modalidade_licitacao_nome: string | null;
   situacao_nome: string | null;
   data_publicacao_pncp: string | null;
+  data_atualizacao_pncp: string | null;
   data_inicio_vigencia: string | null;
   data_fim_vigencia: string | null;
   valor_global: number | null;
@@ -54,17 +55,19 @@ async function fetchComTimeout(url: string, timeoutMs = 10_000): Promise<Respons
   }
 }
 
+// O PNCP aceita até 100 itens por página numa única chamada — o suficiente para trazer
+// "as 100 mais recentes" sem paginar. `ordenacao=-data` ordena por data de última
+// atualização (desc), que é exatamente a ordem que o site do PNCP mostra.
 export async function searchEditaisPorPalavraChave(
   termo: string,
-  pagina = 1,
-  tamPagina = 15
+  maxResultados = 100
 ): Promise<PncpSearchItem[]> {
   const url = new URL(SEARCH_BASE);
   url.searchParams.set("q", termo);
   url.searchParams.set("tipos_documento", "edital");
   url.searchParams.set("ordenacao", "-data");
-  url.searchParams.set("pagina", String(pagina));
-  url.searchParams.set("tam_pagina", String(tamPagina));
+  url.searchParams.set("pagina", "1");
+  url.searchParams.set("tam_pagina", String(Math.min(Math.max(maxResultados, 1), 100)));
   url.searchParams.set("status", "recebendo_proposta");
 
   // O PNCP tem instabilidades intermitentes (502/503, ou a conexão trava sem
