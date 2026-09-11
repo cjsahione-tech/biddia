@@ -102,47 +102,80 @@ function dividirEmBlocosPorLinha(texto: string, tamanhoAlvo: number): string[] {
   return blocos;
 }
 
-// Acima deste tamanho estimado de tabela, uma única chamada tentando transcrever tudo
-// de uma vez demora demais (uma tabela real de ~200 itens levou perto de 90s numa
-// chamada só) — o suficiente para estourar o teto de 60s da Vercel por invocação. Em
-// vez disso, divide a tabela em blocos e extrai cada um em paralelo: cada chamada fica
-// pequena (rápida) e o tempo total passa a ser o do bloco mais lento, não a soma deles.
-const LIMIAR_ITENS_PARA_DIVIDIR = 45;
+// Um trecho de até este tamanho ainda cabe numa única chamada sem o modelo começar a
+// "resumir" em vez de transcrever — é o que faz cada bloco (mesmo tabelas pequenas, que
+// viram um bloco só) ser tratado com o mesmo cuidado que uma tabela de 200 itens.
 const TAMANHO_BLOCO_ITENS = 5_000;
 
+function montarPromptBloco(indice: number, total: number, reforco?: string): string {
+  return `Você é o agente financeiro de uma empresa, extraindo a tabela de itens/preços de um edital
+público brasileiro. Abaixo está APENAS UM TRECHO de uma tabela (trecho ${indice + 1} de ${total}) — TRANSCREVA
+TODOS os itens presentes NESTE TRECHO, um por um, exatamente como estão (mesmo que a tabela continue antes ou
+depois dele, fora do que foi te mostrado). Não invente itens que não estejam neste trecho, e É OBRIGATÓRIO não
+pular nenhum item que esteja nele, por mais numeroso ou repetitivo que pareça — isso é transcrição literal linha
+por linha, não um resumo. Faltar um item na lista é um erro grave para quem vai usar esta proposta.
+
+${INSTRUCAO_FORMATO_NUMERICO}
+${reforco ?? ""}
+
+Responda em JSON: { "itens": [{ "descricao": string, "unidade": string, "quantidade": number, "valorUnitario": number }] }
+Se este trecho não contiver nenhuma linha de tabela reconhecível, devolva "itens": [].`;
+}
+
+/**
+ * Extrai os itens de UM trecho da tabela. Cada bloco se autocorrige: se o próprio
+ * trecho parece conter mais linhas de tabela (pela contagem grosseira de "R$ ... R$")
+ * do que vieram na resposta, escala para o Sonnet apontando o total esperado — só
+ * para esse bloco, sem pagar o custo de refazer a tabela inteira num modelo mais lento.
+ */
 async function extrairBlocoDeItens(
   bloco: string,
   indice: number,
   total: number,
   cabecalho: string
 ): Promise<ItemProposta[]> {
-  const prompt = `Você é o agente financeiro de uma empresa, extraindo a tabela de itens/preços de um edital
-público brasileiro. Abaixo está APENAS UM TRECHO de uma tabela maior (trecho ${indice + 1} de ${total}) —
-TRANSCREVA TODOS os itens presentes NESTE TRECHO, um por um, exatamente como estão (mesmo que a tabela continue
-antes ou depois dele, fora do que foi te mostrado). Não invente itens que não estejam neste trecho, e não pule
-nenhum item que esteja nele, por mais repetitivo que pareça.
-
-${INSTRUCAO_FORMATO_NUMERICO}
-
-Responda em JSON: { "itens": [{ "descricao": string, "unidade": string, "quantidade": number, "valorUnitario": number }] }
-Se este trecho não contiver nenhuma linha de tabela reconhecível, devolva "itens": [].`;
-
   const contexto = `${cabecalho}\n\n=== TRECHO ${indice + 1} DE ${total} DA TABELA DE ITENS ===\n${bloco}`;
+  const itensEsperadosBloco = estimarQuantidadeDeItens(bloco);
 
+  let itens: ItemProposta[] = [];
   for (let tentativa = 0; tentativa < 2; tentativa++) {
     try {
       // Bloco pequeno e delimitado — Haiku transcreve com fidelidade, é bem mais
-      // rápido, e não consome a cota de Sonnet (que fica reservada para o resto).
-      const resultado = await askJSON<{ itens: ItemProposta[] }>(prompt, contexto, {
+      // rápido, e não consome a cota de Sonnet (que fica reservada para a escalada).
+      const resultado = await askJSON<{ itens: ItemProposta[] }>(montarPromptBloco(indice, total), contexto, {
         model: MODELO_HAIKU,
         maxTokens: 8000,
       });
-      return resultado.itens ?? [];
+      itens = resultado.itens ?? [];
+      break;
     } catch (err) {
       console.error(`[agente3-financeiro] falha ao extrair bloco ${indice + 1}/${total} (tentativa ${tentativa + 1}):`, err);
     }
   }
-  return [];
+
+  if (itensEsperadosBloco > 3 && itens.length < itensEsperadosBloco * 0.85) {
+    console.warn(
+      `[agente3-financeiro] bloco ${indice + 1}/${total}: só ${itens.length} de ~${itensEsperadosBloco} itens esperados — escalando para Sonnet.`
+    );
+    try {
+      const reforcado = await askJSON<{ itens: ItemProposta[] }>(
+        montarPromptBloco(
+          indice,
+          total,
+          `\nATENÇÃO: este trecho parece conter aproximadamente ${itensEsperadosBloco} itens (cada linha com dois
+valores em R$ é um item), mas uma tentativa anterior encontrou só ${itens.length}. Releia com atenção do início ao
+fim deste trecho e devolva a lista COMPLETA — não pare antes do fim.`
+        ),
+        contexto,
+        { model: MODELO_SONNET, maxTokens: maxTokensParaItens(itensEsperadosBloco) }
+      );
+      if ((reforcado.itens?.length ?? 0) > itens.length) itens = reforcado.itens;
+    } catch (err) {
+      console.error(`[agente3-financeiro] falha na escalada do bloco ${indice + 1}/${total}:`, err);
+    }
+  }
+
+  return itens;
 }
 
 export async function executarAgente3(editalId: string) {
@@ -181,14 +214,16 @@ ${textoEdital ? `\n=== TRECHOS RELEVANTES DO EDITAL ===\n${textoEdital}` : ""}
     const itensEsperados = estimarQuantidadeDeItens(areaFinanceira);
 
     let result: FinanceiroResult;
-    const dividido = temTextoCompleto && itensEsperados > LIMIAR_ITENS_PARA_DIVIDIR;
 
-    if (dividido) {
-      // Tabela grande: divide em blocos e extrai cada um em paralelo, em vez de uma
-      // única chamada lenta demais para o teto de execução da Vercel.
+    if (temTextoCompleto) {
+      // SEMPRE divide em blocos e extrai em paralelo — mesmo uma tabela pequena vira
+      // "1 bloco", mas passa pelo mesmo prompt insistente e pela mesma autocorreção que
+      // uma tabela de 200 itens. Isso existe porque uma chamada única sobre a tabela
+      // inteira, em vez de blocos delimitados, era exatamente onde o modelo às vezes
+      // "resumia" no meio de uma lista de tamanho médio em vez de transcrever tudo.
       const cabecalho = `Objeto: ${edital.titulo}\nDescrição: ${edital.descricao}`;
       const blocos = dividirEmBlocosPorLinha(areaFinanceira, TAMANHO_BLOCO_ITENS);
-      console.log(`[agente3-financeiro] edital ${editalId}: tabela grande (~${itensEsperados} itens estimados) — dividindo em ${blocos.length} blocos.`);
+      console.log(`[agente3-financeiro] edital ${editalId}: ~${itensEsperados} itens estimados — extraindo em ${blocos.length} bloco(s).`);
 
       const itensPorBloco = await Promise.all(
         blocos.map((bloco, i) => extrairBlocoDeItens(bloco, i, blocos.length, cabecalho))
@@ -200,88 +235,40 @@ ${textoEdital ? `\n=== TRECHOS RELEVANTES DO EDITAL ===\n${textoEdital}` : ""}
         itens,
         observacoes:
           itens.length > 0
-            ? `Tabela de itens extraída em ${blocos.length} trechos (documento com tabela extensa, ~${itensEsperados} itens) e combinada. Revise a lista contra o edital antes do envio.`
-            : "Não foi possível extrair itens da tabela detectada no texto — monte a proposta manualmente a partir do PDF original.",
+            ? `Tabela de itens transcrita do texto do edital${blocos.length > 1 ? ` (extraída em ${blocos.length} trechos)` : ""} e conferida linha a linha. Revise antes do envio.`
+            : "Não foi possível identificar itens de uma tabela de preços no texto — monte a proposta manualmente a partir do PDF original.",
       };
     } else {
-      const instrucaoFonte = temTextoCompleto
-        ? `Você TEM ACESSO a trechos do edital e/ou termo de referência (e possíveis anexos) acima, selecionados
-justamente por serem os mais prováveis de conter a tabela de itens. Esses documentos costumam trazer uma planilha
-ou lista formal de itens (descrição, unidade, quantidade e, às vezes, valor unitário estimado). PROCURE essa lista
-real com atenção — ela pode estar formatada como tabela (colunas que viraram linhas soltas na extração de texto) —
-e TRANSCREVA cada item dela exatamente como está, sem arredondar, resumir ou combinar itens parecidos em um só.
-Não invente uma composição alternativa se os itens reais estiverem no texto. Marque "itensEncontradosNoTexto":
-true nesse caso, e liste TODOS os itens encontrados. Isso NÃO é uma tarefa de resumir: é transcrição literal, linha
-por linha. É proibido selecionar só uma amostra "representativa" ou pular itens repetitivos/parecidos para
-economizar espaço. Só estime valores de mercado para o(s) campo(s) que realmente não constarem no texto (ex:
-quando o edital lista os itens mas não o valor unitário) — e diga isso explicitamente nas observações.`
-        : `O texto completo do edital não estava disponível — você não tem como saber a lista real de itens. Monte
-uma composição PLAUSÍVEL com base no objeto e no valor de referência (quando houver), e marque
-"itensEncontradosNoTexto": false. Nesse caso (e só nesse caso), a soma dos itens deve fechar aproximadamente no
-valor de referência informado. Deixe claro nas observações que isso é uma estimativa e precisa ser conferida pelo
-usuário contra o edital real antes do envio.`;
-
-      const promptExtracao = (reforcoCompletude?: string) => `Você é o agente financeiro de uma empresa que está
-estruturando uma proposta comercial para um edital público brasileiro. Sua prioridade nº 1 é EXATIDÃO E
-COMPLETUDE: os números da proposta precisam bater exatamente com o que está escrito no edital/TR sempre que essa
-informação existir no texto, e a lista de itens precisa ser a tabela INTEIRA — nunca aproxime, arredonde ou
-resuma um valor ou uma lista que estão explícitos na fonte.
-
-${instrucaoFonte}
-
-${INSTRUCAO_FORMATO_NUMERICO}
-${reforcoCompletude ?? ""}
+      // Sem texto do edital: não há como saber a lista real, então monta uma
+      // composição plausível com base no objeto e no valor de referência (quando houver).
+      const promptEstimativa = `Você é o agente financeiro de uma empresa que está estruturando uma proposta
+comercial para um edital público brasileiro. O texto completo do edital não estava disponível — você não tem como
+saber a lista real de itens. Monte uma composição PLAUSÍVEL com base no objeto e no valor de referência (quando
+houver), e marque "itensEncontradosNoTexto": false. A soma dos itens deve fechar aproximadamente no valor de
+referência informado. Deixe claro nas observações que isso é uma estimativa e precisa ser conferida pelo usuário
+contra o edital real antes do envio.
 
 Responda em JSON:
 {
-  "itensEncontradosNoTexto": boolean,
+  "itensEncontradosNoTexto": false,
   "itens": [{ "descricao": string, "unidade": string, "quantidade": number, "valorUnitario": number }],
-  "observacoes": string (explique a origem dos números — transcrito do edital ou estimado — e alerte para revisão antes do envio)
+  "observacoes": string
 }
-Gere quantos itens o edital realmente listar (não há limite artificial de quantidade, nem para cima nem para
-baixo); se não houver uma lista real, gere entre 2 e 20 itens plausíveis. Use números puros (sem "R$" ou
-separadores de milhar) em quantidade e valorUnitario.`;
+Gere entre 2 e 20 itens plausíveis. Use números puros (sem "R$" ou separadores de milhar) em quantidade e valorUnitario.`;
 
-      // Transcrever uma tabela é tarefa mecânica: Haiku dá conta (é o mesmo modelo que
-      // já cuida da extração em blocos das tabelas grandes) e é bem mais rápido. A
-      // revisão em diff logo abaixo é a rede de segurança para os números. Se a lista
-      // vier curta demais, a retentativa mais abaixo sobe para o Sonnet.
-      result = await askJSON<FinanceiroResult>(promptExtracao(), contexto, {
-        model: temTextoCompleto ? MODELO_HAIKU : MODELO_SONNET,
-        maxTokens: maxTokensParaItens(Math.max(itensEsperados, 20)),
+      result = await askJSON<FinanceiroResult>(promptEstimativa, contexto, {
+        model: MODELO_SONNET,
+        maxTokens: 4_000,
       });
-
-      // Checagem de completude: mesmo abaixo do limiar de divisão, o modelo pode ter
-      // "resumido" em vez de transcrever tudo — tenta de novo UMA vez apontando o total
-      // esperado explicitamente antes de aceitar uma lista muito mais curta que o texto.
-      if (result.itensEncontradosNoTexto && itensEsperados > 5 && result.itens.length < itensEsperados * 0.7) {
-        console.warn(
-          `[agente3-financeiro] edital ${editalId}: extração parece incompleta (${result.itens.length}/${itensEsperados} itens estimados) — tentando novamente com o total esperado explícito.`
-        );
-        try {
-          const retentativa = await askJSON<FinanceiroResult>(
-            promptExtracao(
-              `\nATENÇÃO: uma tentativa anterior devolveu só ${result.itens.length} itens, mas o texto-fonte acima
-parece conter aproximadamente ${itensEsperados} linhas de tabela (cada linha com dois valores em R$ é um item
-separado). Releia o texto do início ao fim da tabela e devolva a lista COMPLETA — não pare antes do fim.`
-            ),
-            contexto,
-            { model: MODELO_SONNET, maxTokens: maxTokensParaItens(itensEsperados, 24_000) }
-          );
-          if (retentativa.itens.length > result.itens.length) result = retentativa;
-        } catch (err) {
-          console.error(`Falha na retentativa de extração completa do edital ${editalId}:`, err);
-        }
-      }
     }
 
     // Segunda passada de revisão: confere a lista extraída contra o texto-fonte e
     // devolve só um "diff" (o que corrigir/adicionar/remover) — rápido e sem risco de
-    // truncar a lista. Roda no caminho não-dividido, para listas de tamanho moderado.
+    // truncar a lista.
     let itensFinais = result.itens;
     let observacoesFinais = result.observacoes;
-    const LIMITE_ITENS_PARA_REVISAO = 60;
-    if (!dividido && result.itensEncontradosNoTexto && result.itens.length > 0 && result.itens.length <= LIMITE_ITENS_PARA_REVISAO) {
+    const LIMITE_ITENS_PARA_REVISAO = 300;
+    if (result.itensEncontradosNoTexto && result.itens.length > 0 && result.itens.length <= LIMITE_ITENS_PARA_REVISAO) {
       try {
         const listaIndexada = result.itens
           .map((it, i) => `[${i}] ${it.descricao} | ${it.unidade} | qtd ${it.quantidade} | unit ${it.valorUnitario}`)
@@ -383,7 +370,7 @@ Responda em JSON:
       result.itensEncontradosNoTexto && itensEsperados > 5 && itensComTotal.length < itensEsperados * 0.7;
 
     const origemLabel = result.itensEncontradosNoTexto
-      ? `transcritos do texto do edital${dividido ? ` em ${Math.ceil(areaFinanceira.length / TAMANHO_BLOCO_ITENS)} blocos` : ", com revisão automática"}`
+      ? "transcritos do texto do edital, com revisão automática"
       : "estimados, texto do edital indisponível";
 
     await logAudit(
