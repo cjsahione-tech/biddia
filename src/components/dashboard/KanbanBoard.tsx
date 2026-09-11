@@ -178,6 +178,9 @@ export function KanbanBoard({
           onMoved={async () => {
             await onReload();
           }}
+          onDeleted={(id) => {
+            setEditais((prev) => prev.filter((e) => e.id !== id));
+          }}
         />
       )}
     </>

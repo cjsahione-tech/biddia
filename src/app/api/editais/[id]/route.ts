@@ -52,3 +52,18 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const updated = await prisma.edital.update({ where: { id }, data: parsed.data });
   return NextResponse.json({ edital: updated });
 }
+
+/** Exclui o card definitivamente — junto vão análise, proposta, anexos, checklist e
+ * histórico de auditoria (onDelete: Cascade no schema). Sem confirmação aqui: a tela
+ * já exige uma confirmação explícita antes de chamar isto. */
+export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { company, error } = await requireCompany();
+  if (error) return error;
+  const { id } = await params;
+
+  const edital = await prisma.edital.findFirst({ where: { id, companyId: company!.id } });
+  if (!edital) return NextResponse.json({ error: "Edital não encontrado" }, { status: 404 });
+
+  await prisma.edital.delete({ where: { id } });
+  return NextResponse.json({ ok: true });
+}

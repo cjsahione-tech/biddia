@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Download, ExternalLink, Loader2, Paperclip, Trash2, X } from "lucide-react";
+import { AlertTriangle, Download, ExternalLink, Loader2, Paperclip, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Field, TextArea, TextInput } from "@/components/ui/Field";
 import { formatDate, formatValorEdital } from "@/lib/format";
@@ -17,11 +17,13 @@ export function KanbanCardModal({
   onClose,
   onUpdated,
   onMoved,
+  onDeleted,
 }: {
   editalId: string;
   onClose: () => void;
   onUpdated: (partial: Partial<{ titulo: string; corCard: CorCard | null; notasInternas: string | null; etapaKanban: EtapaKanban; status: "NOVO" | "APROVADO" | "REPROVADO"; _count: { documents: number; checklistItems: number } }>) => void;
   onMoved: () => Promise<void>;
+  onDeleted: (id: string) => void;
 }) {
   const [edital, setEdital] = useState<EditalDetail | null>(null);
   const [titulo, setTitulo] = useState("");
@@ -29,6 +31,8 @@ export function KanbanCardModal({
   const [salvandoCampo, setSalvandoCampo] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [confirmandoExclusao, setConfirmandoExclusao] = useState(false);
+  const [excluindo, setExcluindo] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -143,6 +147,19 @@ export function KanbanCardModal({
           checklistItems: edital?._count?.checklistItems ?? 0,
         },
       });
+    }
+  }
+
+  async function handleExcluir() {
+    setExcluindo(true);
+    try {
+      const res = await fetch(`/api/editais/${editalId}`, { method: "DELETE" });
+      if (res.ok) {
+        onDeleted(editalId);
+        onClose();
+      }
+    } finally {
+      setExcluindo(false);
     }
   }
 
@@ -290,13 +307,40 @@ export function KanbanCardModal({
               </div>
             </div>
 
-            <div className="border-t border-border p-4">
+            <div className="flex items-center justify-between gap-3 border-t border-border p-4">
               <Link
                 href={`/editais/${editalId}`}
                 className="inline-flex items-center gap-1.5 text-sm font-medium text-brand hover:underline"
               >
                 Abrir detalhes completos (análise, proposta, checklist) →
               </Link>
+
+              {!confirmandoExclusao ? (
+                <button
+                  onClick={() => setConfirmandoExclusao(true)}
+                  className="inline-flex shrink-0 items-center gap-1.5 text-xs font-medium text-muted hover:text-danger"
+                >
+                  <Trash2 className="h-3.5 w-3.5" /> Excluir card
+                </button>
+              ) : (
+                <div className="flex shrink-0 items-center gap-2 text-xs">
+                  <span
+                    className="inline-flex items-center gap-1 text-danger"
+                    title="Apaga também análise, proposta, anexos, checklist e histórico deste edital — não dá pra desfazer."
+                  >
+                    <AlertTriangle className="h-3.5 w-3.5" /> Excluir de vez?
+                  </span>
+                  <button
+                    onClick={() => setConfirmandoExclusao(false)}
+                    className="rounded-lg border border-border px-2.5 py-1.5 font-medium text-foreground hover:bg-surface"
+                  >
+                    Cancelar
+                  </button>
+                  <Button variant="danger" onClick={handleExcluir} loading={excluindo} className="px-2.5 py-1.5 text-xs">
+                    Confirmar exclusão
+                  </Button>
+                </div>
+              )}
             </div>
           </>
         )}
