@@ -4,7 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, ExternalLink, Loader2 } from "lucide-react";
 import { formatValorEdital, formatDate } from "@/lib/format";
-import type { EditalDetail } from "@/lib/types";
+import { ETAPAS_KANBAN } from "@/lib/kanban";
+import type { EditalDetail, EtapaKanban } from "@/lib/types";
 import { PipelineStatus } from "@/components/editais/PipelineStatus";
 import { AnalysisTab } from "@/components/editais/tabs/AnalysisTab";
 import { FinanceTab } from "@/components/editais/tabs/FinanceTab";
@@ -23,6 +24,7 @@ const TABS = [
 export function EditalDetailClient({ editalId }: { editalId: string }) {
   const [edital, setEdital] = useState<EditalDetail | null>(null);
   const [tab, setTab] = useState<(typeof TABS)[number]["key"]>("analise");
+  const [movendoEtapa, setMovendoEtapa] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const load = useCallback(async () => {
@@ -30,6 +32,20 @@ export function EditalDetailClient({ editalId }: { editalId: string }) {
     const data = await res.json();
     if (res.ok) setEdital(data.edital);
   }, [editalId]);
+
+  async function moverEtapa(etapaKanban: EtapaKanban) {
+    setMovendoEtapa(true);
+    try {
+      const res = await fetch(`/api/editais/${editalId}/kanban`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ etapaKanban, ordemKanban: Date.now() }),
+      });
+      if (res.ok) await load();
+    } finally {
+      setMovendoEtapa(false);
+    }
+  }
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- busca inicial ao montar a tela
@@ -87,6 +103,31 @@ export function EditalDetailClient({ editalId }: { editalId: string }) {
           <p className="mt-1 text-sm text-muted">
             {edital.orgaoNome} — {edital.municipio ?? "?"}/{edital.uf ?? "?"}
           </p>
+
+          <div className="mt-3 flex items-center gap-2">
+            <label htmlFor="etapaKanban" className="text-xs font-medium text-muted">
+              Etapa
+            </label>
+            <select
+              id="etapaKanban"
+              value={edital.etapaKanban}
+              onChange={(e) => moverEtapa(e.target.value as EtapaKanban)}
+              disabled={movendoEtapa}
+              className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs font-medium text-foreground focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
+            >
+              {ETAPAS_KANBAN.map((et) => (
+                <option key={et.key} value={et.key}>
+                  {et.label}
+                </option>
+              ))}
+            </select>
+            {movendoEtapa && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted" />}
+          </div>
+          {edital.status === "NOVO" && (
+            <p className="mt-1.5 text-xs text-muted">
+              Os agentes de IA começam a analisar assim que este card sai de &ldquo;Oportunidade&rdquo;.
+            </p>
+          )}
         </div>
         <div className="shrink-0 text-right">
           <p
