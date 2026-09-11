@@ -190,6 +190,9 @@ export async function executarAgente1(companyId: string) {
           orcamentoSigiloso,
           linkPortal: linkPortalCompra(item.item_url),
           keywordMatched: c.keyword,
+          // etapaKanban fica no default (Oportunidade); ordemKanban usa o horário para
+          // os cards novos entrarem no fim da coluna, não todos empilhados na posição 0.
+          ordemKanban: Date.now(),
         },
       })
       .catch((err) => {
@@ -353,6 +356,10 @@ export async function capturarEditalManual(
       linkPortal: "",
       status: "APROVADO",
       decidedAt: new Date(),
+      // O pipeline já roda na hora (mais abaixo) — o card entra direto em "Rascunho",
+      // pronto pra revisão, em vez de "Oportunidade" (que é para quem ainda não decidiu).
+      etapaKanban: "RASCUNHO",
+      ordemKanban: Date.now(),
     },
   });
 

@@ -66,6 +66,24 @@ enum EditalStatus {
   REPROVADO
 }
 
+// Etapas do quadro Kanban da aba de editais — mais granulares que o EditalStatus
+// (que continua existindo só para decidir quando disparar o pipeline de agentes).
+// Ordem deliberada, igual ao quadro de referência do usuário.
+enum EtapaKanban {
+  OPORTUNIDADE
+  QUALIFICACAO
+  SEM_PROPOSTAS
+  PRONTA_PARA_ENVIAR
+  ENVIADA_PARA_DISPUTA
+  CLASSIFICACAO
+  ELIMINADA_APOS_CLASSIFICACAO
+  ACEITA
+  RECUSADA_DESCLASSIFICADA
+  EM_CONTRATO
+  FINALIZADA
+  RASCUNHO
+}
+
 model Edital {
   id                  String        @id @default(cuid())
   companyId           String
@@ -93,6 +111,13 @@ model Edital {
 
   status              EditalStatus  @default(NOVO)
   decidedAt           DateTime?
+
+  // Quadro Kanban: etapa/coluna, posição de arraste dentro da coluna, cor do card
+  // (etiqueta livre, estilo Trello) e anotações internas do usuário sobre o card.
+  etapaKanban         EtapaKanban   @default(OPORTUNIDADE)
+  ordemKanban         Float         @default(0)
+  corCard             String?
+  notasInternas       String?
 
   analysis            Analysis?
   proposal            Proposal?

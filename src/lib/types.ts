@@ -1,3 +1,19 @@
+export type EtapaKanban =
+  | "OPORTUNIDADE"
+  | "QUALIFICACAO"
+  | "SEM_PROPOSTAS"
+  | "PRONTA_PARA_ENVIAR"
+  | "ENVIADA_PARA_DISPUTA"
+  | "CLASSIFICACAO"
+  | "ELIMINADA_APOS_CLASSIFICACAO"
+  | "ACEITA"
+  | "RECUSADA_DESCLASSIFICADA"
+  | "EM_CONTRATO"
+  | "FINALIZADA"
+  | "RASCUNHO";
+
+export type CorCard = "azul" | "verde" | "amarelo" | "laranja" | "vermelho" | "roxo" | "rosa" | "cinza";
+
 export type EditalListItem = {
   id: string;
   fonte: string;
@@ -12,6 +28,10 @@ export type EditalListItem = {
   orcamentoSigiloso: boolean;
   dataEncerramentoProposta: string | null;
   status: "NOVO" | "APROVADO" | "REPROVADO";
+  etapaKanban: EtapaKanban;
+  ordemKanban: number;
+  corCard: CorCard | null;
+  notasInternas: string | null;
   keywordMatched: string | null;
   linkPortal: string;
   analysis: { resumoObjeto: string } | null;
@@ -58,7 +78,7 @@ export type AgentRunItem = {
   finishedAt: string | null;
 };
 
-export type EditalDetail = EditalListItem & {
+export type EditalDetail = Omit<EditalListItem, "analysis" | "proposal" | "documents"> & {
   numeroControlePNCP: string;
   orgaoCnpj: string;
   dataPublicacao: string | null;
