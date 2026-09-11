@@ -11,6 +11,12 @@ import { KanbanCardModal } from "@/components/dashboard/KanbanCardModal";
 
 type DragOverPos = "before" | "after";
 
+// "Em aberto" = prazo de proposta ainda não vencido (ou sem prazo informado) — independe
+// da coluna do quadro, é sobre a licitação em si ainda aceitar propostas.
+function estaAberta(edital: EditalListItem): boolean {
+  return !edital.dataEncerramentoProposta || new Date(edital.dataEncerramentoProposta).getTime() >= Date.now();
+}
+
 export function KanbanBoard({
   editais,
   setEditais,
@@ -32,6 +38,13 @@ export function KanbanBoard({
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
   const [confirmandoExclusaoLote, setConfirmandoExclusaoLote] = useState(false);
   const [excluindoLote, setExcluindoLote] = useState(false);
+  const [filtroUf, setFiltroUf] = useState<string | null>(null);
+
+  const contagemAbertasPorUf = editais.reduce<Record<string, number>>((acc, e) => {
+    if (e.uf && estaAberta(e)) acc[e.uf] = (acc[e.uf] ?? 0) + 1;
+    return acc;
+  }, {});
+  const ufsComOportunidades = Object.keys(contagemAbertasPorUf).sort();
 
   function limparDrag() {
     setDraggedId(null);
@@ -43,6 +56,7 @@ export function KanbanBoard({
   function cardsDaColuna(etapa: EtapaKanban, excluirId?: string) {
     return editais
       .filter((e) => e.etapaKanban === etapa && e.id !== excluirId)
+      .filter((e) => !filtroUf || e.uf === filtroUf)
       .sort((a, b) => a.ordemKanban - b.ordemKanban);
   }
 
@@ -163,23 +177,51 @@ export function KanbanBoard({
   return (
     <>
       <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
-        {!modoSelecao ? (
-          <Button variant="secondary" onClick={() => setModoSelecao(true)}>
-            <CheckSquare className="h-4 w-4" /> Selecionar
-          </Button>
-        ) : (
-          <div className="flex flex-wrap items-center gap-3">
-            <span className="text-sm font-medium text-foreground">{selecionados.size} selecionado(s)</span>
-            <button onClick={() => setSelecionados(new Set(editais.map((e) => e.id)))} className="text-xs font-medium text-brand hover:underline">
-              Selecionar tudo
-            </button>
-            {selecionados.size > 0 && (
-              <button onClick={() => setSelecionados(new Set())} className="text-xs font-medium text-muted hover:text-foreground">
-                Limpar seleção
-              </button>
-            )}
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2">
+            <label htmlFor="filtroUf" className="text-xs font-medium text-muted">
+              Estado
+            </label>
+            <select
+              id="filtroUf"
+              value={filtroUf ?? ""}
+              onChange={(e) => setFiltroUf(e.target.value || null)}
+              className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs font-medium text-foreground focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
+            >
+              <option value="">Todos os estados</option>
+              {ufsComOportunidades.map((uf) => (
+                <option key={uf} value={uf}>
+                  {uf} — {contagemAbertasPorUf[uf]} em aberto
+                </option>
+              ))}
+            </select>
           </div>
-        )}
+
+          {!modoSelecao ? (
+            <Button variant="secondary" onClick={() => setModoSelecao(true)}>
+              <CheckSquare className="h-4 w-4" /> Selecionar
+            </Button>
+          ) : (
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="text-sm font-medium text-foreground">{selecionados.size} selecionado(s)</span>
+              <button
+                onClick={() =>
+                  setSelecionados(
+                    new Set(editais.filter((e) => !filtroUf || e.uf === filtroUf).map((e) => e.id))
+                  )
+                }
+                className="text-xs font-medium text-brand hover:underline"
+              >
+                Selecionar tudo
+              </button>
+              {selecionados.size > 0 && (
+                <button onClick={() => setSelecionados(new Set())} className="text-xs font-medium text-muted hover:text-foreground">
+                  Limpar seleção
+                </button>
+              )}
+            </div>
+          )}
+        </div>
 
         {modoSelecao && (
           <div className="flex items-center gap-2">

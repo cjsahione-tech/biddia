@@ -1,4 +1,4 @@
-import { AlertTriangle, Paperclip, StickyNote } from "lucide-react";
+import { AlertTriangle, MapPin, Paperclip, StickyNote } from "lucide-react";
 import { formatValorEdital, formatDate } from "@/lib/format";
 import { faixaCorCard } from "@/lib/kanban";
 import type { EditalListItem } from "@/lib/types";
@@ -71,6 +71,11 @@ export function KanbanCard({
       )}
 
       <div className="flex flex-wrap items-center gap-1 pr-5">
+        {edital.uf && (
+          <span className="inline-flex items-center gap-0.5 rounded-full bg-brand-light px-1.5 py-0.5 text-[10px] font-medium text-brand">
+            <MapPin className="h-2.5 w-2.5" /> {edital.uf}
+          </span>
+        )}
         {edital.fonte === "MANUAL" && (
           <span className="rounded-full bg-surface px-1.5 py-0.5 text-[10px] font-medium text-muted">Manual</span>
         )}
