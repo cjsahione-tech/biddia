@@ -47,6 +47,8 @@ export type ChecklistItem = {
   status: "FALTANTE" | "ENVIADO" | "VENCIDO" | "OK";
   validade: string | null;
   observacao: string | null;
+  anexoDocId: string | null;
+  anexoNome: string | null;
 };
 
 export type DocumentItem = {

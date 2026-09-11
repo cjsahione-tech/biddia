@@ -1,12 +1,14 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutGrid, Building2, LogOut } from "lucide-react";
+import { LayoutGrid, Building2, Bell, LogOut } from "lucide-react";
 
 const NAV = [
   { href: "/dashboard", label: "Editais", icon: LayoutGrid },
   { href: "/empresa", label: "Empresa", icon: Building2 },
+  { href: "/notificacoes", label: "Notificações", icon: Bell },
 ];
 
 export function AppShell({
@@ -20,6 +22,16 @@ export function AppShell({
 }) {
   const pathname = usePathname();
   const router = useRouter();
+  const [totalNotificacoes, setTotalNotificacoes] = useState(0);
+
+  useEffect(() => {
+    fetch("/api/notificacoes")
+      .then((r) => r.json())
+      .then((data) => {
+        if (Array.isArray(data.notificacoes)) setTotalNotificacoes(data.notificacoes.length);
+      })
+      .catch(() => {});
+  }, [pathname]);
 
   async function handleLogout() {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -49,6 +61,11 @@ export function AppShell({
               >
                 <item.icon className="h-4 w-4" />
                 {item.label}
+                {item.href === "/notificacoes" && totalNotificacoes > 0 && (
+                  <span className="ml-auto rounded-full bg-danger px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                    {totalNotificacoes}
+                  </span>
+                )}
               </Link>
             );
           })}

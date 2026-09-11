@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { ArrowLeft, ExternalLink, Loader2 } from "lucide-react";
 import { formatValorEdital, formatDate } from "@/lib/format";
 import { ETAPAS_KANBAN } from "@/lib/kanban";
@@ -22,8 +23,13 @@ const TABS = [
 ] as const;
 
 export function EditalDetailClient({ editalId }: { editalId: string }) {
+  const searchParams = useSearchParams();
+  const tabInicial =
+    (TABS.find((t) => t.key === searchParams.get("tab"))?.key as (typeof TABS)[number]["key"] | undefined) ??
+    "analise";
+
   const [edital, setEdital] = useState<EditalDetail | null>(null);
-  const [tab, setTab] = useState<(typeof TABS)[number]["key"]>("analise");
+  const [tab, setTab] = useState<(typeof TABS)[number]["key"]>(tabInicial);
   const [movendoEtapa, setMovendoEtapa] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
