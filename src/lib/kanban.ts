@@ -44,3 +44,9 @@ export const CORES_CARD: { key: CorCard; label: string; dot: string; faixa: stri
 export function faixaCorCard(cor: CorCard | null): string {
   return CORES_CARD.find((c) => c.key === cor)?.faixa ?? "border-l-transparent";
 }
+
+// Mesma paleta da tarja lateral do card, só que como preenchimento sólido — usada na
+// faixa horizontal fina no topo do modal de detalhes do card.
+export function topoCorCard(cor: CorCard | null): string {
+  return CORES_CARD.find((c) => c.key === cor)?.dot ?? "bg-transparent";
+}

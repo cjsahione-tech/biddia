@@ -6,7 +6,7 @@ import { AlertTriangle, Download, ExternalLink, Loader2, Paperclip, Trash2, X } 
 import { Button } from "@/components/ui/Button";
 import { Field, TextArea, TextInput } from "@/components/ui/Field";
 import { formatDate, formatValorEdital } from "@/lib/format";
-import { CORES_CARD, ETAPAS_KANBAN } from "@/lib/kanban";
+import { CORES_CARD, ETAPAS_KANBAN, topoCorCard } from "@/lib/kanban";
 import type { CorCard, DocumentItem, EditalDetail, EtapaKanban } from "@/lib/types";
 
 // Mesmo teto do upload de PDF/anexo no resto da plataforma.
@@ -166,7 +166,7 @@ export function KanbanCardModal({
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-foreground/40 px-4 py-10" onClick={onClose}>
       <div
-        className="w-full max-w-lg rounded-2xl border border-border bg-background shadow-xl"
+        className="w-full max-w-lg overflow-hidden rounded-2xl border border-border bg-background shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         {!edital ? (
@@ -175,6 +175,8 @@ export function KanbanCardModal({
           </div>
         ) : (
           <>
+            <div className={`h-1.5 w-full ${topoCorCard(edital.corCard)}`} />
+
             <div className="flex items-start justify-between gap-3 border-b border-border p-5">
               <TextInput
                 value={titulo}
@@ -209,6 +211,12 @@ export function KanbanCardModal({
                   </a>
                 )}
               </div>
+
+              <div className="mt-4">
+                <h4 className="text-sm font-medium text-foreground">Objeto</h4>
+                <p className="mt-1 text-sm text-foreground/80">{edital.descricao}</p>
+              </div>
+
               {edital.analysis?.resumoObjeto && (
                 <p className="mt-3 rounded-lg bg-surface p-3 text-sm text-foreground/80">
                   <span className="font-medium text-brand">Análise do agente: </span>
