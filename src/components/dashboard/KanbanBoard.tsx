@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { AlertTriangle, CheckSquare, Trash2, X } from "lucide-react";
+import { Button } from "@/components/ui/Button";
 import { empresaAtende } from "@/lib/agents/classificador-objeto";
 import { ETAPAS_KANBAN } from "@/lib/kanban";
 import type { EditalListItem, EtapaKanban } from "@/lib/types";
@@ -25,6 +27,11 @@ export function KanbanBoard({
   const [dragOverPos, setDragOverPos] = useState<DragOverPos | null>(null);
   const [dragOverColumn, setDragOverColumn] = useState<EtapaKanban | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  const [modoSelecao, setModoSelecao] = useState(false);
+  const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
+  const [confirmandoExclusaoLote, setConfirmandoExclusaoLote] = useState(false);
+  const [excluindoLote, setExcluindoLote] = useState(false);
 
   function limparDrag() {
     setDraggedId(null);
@@ -119,9 +126,94 @@ export function KanbanBoard({
     moverCard(id, etapa, null);
   }
 
+  function sairDoModoSelecao() {
+    setModoSelecao(false);
+    setSelecionados(new Set());
+    setConfirmandoExclusaoLote(false);
+  }
+
+  function alternarSelecionado(id: string) {
+    setSelecionados((prev) => {
+      const novo = new Set(prev);
+      if (novo.has(id)) novo.delete(id);
+      else novo.add(id);
+      return novo;
+    });
+  }
+
+  async function handleExcluirSelecionados() {
+    const ids = Array.from(selecionados);
+    if (ids.length === 0) return;
+    setExcluindoLote(true);
+    try {
+      const res = await fetch("/api/editais/bulk-delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids }),
+      });
+      if (res.ok) {
+        setEditais((prev) => prev.filter((e) => !selecionados.has(e.id)));
+        sairDoModoSelecao();
+      }
+    } finally {
+      setExcluindoLote(false);
+    }
+  }
+
   return (
     <>
-      <div className="mt-6 flex gap-4 overflow-x-auto pb-4">
+      <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
+        {!modoSelecao ? (
+          <Button variant="secondary" onClick={() => setModoSelecao(true)}>
+            <CheckSquare className="h-4 w-4" /> Selecionar
+          </Button>
+        ) : (
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-sm font-medium text-foreground">{selecionados.size} selecionado(s)</span>
+            <button onClick={() => setSelecionados(new Set(editais.map((e) => e.id)))} className="text-xs font-medium text-brand hover:underline">
+              Selecionar tudo
+            </button>
+            {selecionados.size > 0 && (
+              <button onClick={() => setSelecionados(new Set())} className="text-xs font-medium text-muted hover:text-foreground">
+                Limpar seleção
+              </button>
+            )}
+          </div>
+        )}
+
+        {modoSelecao && (
+          <div className="flex items-center gap-2">
+            {!confirmandoExclusaoLote ? (
+              <>
+                <Button variant="secondary" onClick={sairDoModoSelecao}>
+                  <X className="h-4 w-4" /> Cancelar
+                </Button>
+                <Button
+                  variant="danger"
+                  disabled={selecionados.size === 0}
+                  onClick={() => setConfirmandoExclusaoLote(true)}
+                >
+                  <Trash2 className="h-4 w-4" /> Excluir selecionados
+                </Button>
+              </>
+            ) : (
+              <>
+                <span className="inline-flex items-center gap-1.5 text-sm font-medium text-danger">
+                  <AlertTriangle className="h-4 w-4" /> Excluir {selecionados.size} card(s) de vez?
+                </span>
+                <Button variant="secondary" onClick={() => setConfirmandoExclusaoLote(false)}>
+                  Cancelar
+                </Button>
+                <Button variant="danger" loading={excluindoLote} onClick={handleExcluirSelecionados}>
+                  Confirmar exclusão
+                </Button>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="mt-3 flex gap-4 overflow-x-auto pb-4">
         {ETAPAS_KANBAN.map(({ key, label }) => {
           const cards = cardsDaColuna(key);
           return (
@@ -149,7 +241,9 @@ export function KanbanBoard({
                       edital={edital}
                       foraDoPerfil={foraDoPerfil}
                       dragOverPos={dragOverId === edital.id ? dragOverPos : null}
-                      onClick={() => setSelectedId(edital.id)}
+                      modoSelecao={modoSelecao}
+                      selecionado={selecionados.has(edital.id)}
+                      onClick={() => (modoSelecao ? alternarSelecionado(edital.id) : setSelectedId(edital.id))}
                       onDragStart={() => handleDragStart(edital.id)}
                       onDragEnd={limparDrag}
                       onDragOverCard={(e) => handleDragOverCard(e, edital)}

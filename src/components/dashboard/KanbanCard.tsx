@@ -24,6 +24,8 @@ export function KanbanCard({
   onDragEnd,
   onDragOverCard,
   onDropCard,
+  modoSelecao = false,
+  selecionado = false,
 }: {
   edital: EditalListItem;
   foraDoPerfil: boolean;
@@ -33,20 +35,22 @@ export function KanbanCard({
   onDragEnd: () => void;
   onDragOverCard: (e: React.DragEvent) => void;
   onDropCard: (e: React.DragEvent) => void;
+  modoSelecao?: boolean;
+  selecionado?: boolean;
 }) {
   const dias = diasParaEncerrar(edital.dataEncerramentoProposta);
   const prazoUrgente = dias !== null && dias <= 3;
 
   return (
     <div
-      draggable
+      draggable={!modoSelecao}
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
       onDragOver={onDragOverCard}
       onDrop={onDropCard}
       onClick={onClick}
       className={`relative cursor-pointer rounded-lg border border-l-4 bg-background p-3 shadow-sm transition hover:shadow-md ${faixaCorCard(edital.corCard)} ${
-        foraDoPerfil ? "border-warning/40" : "border-border"
+        selecionado ? "border-brand ring-2 ring-brand/40" : foraDoPerfil ? "border-warning/40" : "border-border"
       }`}
     >
       {dragOverPos === "before" && (
@@ -56,7 +60,17 @@ export function KanbanCard({
         <div className="absolute -bottom-1.5 left-0 right-0 h-1 rounded-full bg-brand" />
       )}
 
-      <div className="flex flex-wrap items-center gap-1">
+      {modoSelecao && (
+        <input
+          type="checkbox"
+          checked={selecionado}
+          onChange={onClick}
+          onClick={(e) => e.stopPropagation()}
+          className="absolute right-2 top-2 h-4 w-4 accent-brand"
+        />
+      )}
+
+      <div className="flex flex-wrap items-center gap-1 pr-5">
         {edital.fonte === "MANUAL" && (
           <span className="rounded-full bg-surface px-1.5 py-0.5 text-[10px] font-medium text-muted">Manual</span>
         )}
