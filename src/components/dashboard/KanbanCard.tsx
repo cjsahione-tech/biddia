@@ -1,4 +1,5 @@
-import { AlertTriangle, MapPin, Paperclip, StickyNote } from "lucide-react";
+import { useState } from "react";
+import { AlertTriangle, ChevronDown, ChevronUp, MapPin, Paperclip, StickyNote } from "lucide-react";
 import { formatValorEdital, formatDate } from "@/lib/format";
 import { faixaCorCard } from "@/lib/kanban";
 import type { EditalListItem } from "@/lib/types";
@@ -40,6 +41,7 @@ export function KanbanCard({
 }) {
   const dias = diasParaEncerrar(edital.dataEncerramentoProposta);
   const prazoUrgente = dias !== null && dias <= 3;
+  const [expandido, setExpandido] = useState(false);
 
   return (
     <div
@@ -68,6 +70,19 @@ export function KanbanCard({
           onClick={(e) => e.stopPropagation()}
           className="absolute right-2 top-2 h-4 w-4 accent-brand"
         />
+      )}
+
+      {!modoSelecao && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            setExpandido((v) => !v);
+          }}
+          title={expandido ? "Recolher" : "Expandir para ver mais detalhes"}
+          className="absolute right-2 top-2 rounded p-0.5 text-muted hover:bg-surface hover:text-foreground"
+        >
+          {expandido ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+        </button>
       )}
 
       <div className="flex flex-wrap items-center gap-1 pr-5">
@@ -106,6 +121,20 @@ export function KanbanCard({
           </p>
         )}
       </div>
+
+      {expandido && (
+        <div className="mt-2 space-y-1.5 border-t border-border pt-2 text-xs">
+          <p className="text-foreground/80">
+            <span className="font-medium text-foreground">Objeto: </span>
+            {edital.descricao}
+          </p>
+          <p className="text-muted">
+            {edital.orgaoNome} — {edital.municipio ?? "?"}/{edital.uf ?? "?"}
+          </p>
+          {edital.modalidade && <p className="text-muted">Modalidade: {edital.modalidade}</p>}
+          {edital.keywordMatched && <p className="text-muted">Palavra-chave: {edital.keywordMatched}</p>}
+        </div>
+      )}
 
       {((edital._count?.documents ?? 0) > 0 || edital.notasInternas) && (
         <div className="mt-2 flex items-center gap-3 border-t border-border pt-2 text-[11px] text-muted">
