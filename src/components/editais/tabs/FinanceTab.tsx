@@ -4,6 +4,7 @@ import { formatBRL } from "@/lib/format";
 import { parseItens, aplicarDesconto } from "@/lib/proposal";
 import { Button } from "@/components/ui/Button";
 import { FonteBadge } from "@/components/ui/FonteBadge";
+import { AgentChat } from "@/components/editais/AgentChat";
 import type { EditalDetail } from "@/lib/types";
 
 export function FinanceTab({ edital, onUpdate }: { edital: EditalDetail; onUpdate: () => void }) {
@@ -15,9 +16,12 @@ export function FinanceTab({ edital, onUpdate }: { edital: EditalDetail; onUpdat
 
   if (!proposal) {
     return (
-      <p className="py-12 text-center text-sm text-muted">
-        O Agente Financeiro ainda não montou a proposta para este edital.
-      </p>
+      <div className="space-y-6">
+        <p className="py-12 text-center text-sm text-muted">
+          O Agente Financeiro ainda não montou a proposta para este edital.
+        </p>
+        <AgentChat editalId={edital.id} agentKey="agente3-financeiro" agentLabel="Agente Financeiro" onCorrected={onUpdate} />
+      </div>
     );
   }
 
@@ -160,6 +164,8 @@ export function FinanceTab({ edital, onUpdate }: { edital: EditalDetail; onUpdat
           <p className="mt-2 text-sm text-foreground/80">{proposal.observacoes}</p>
         </div>
       )}
+
+      <AgentChat editalId={edital.id} agentKey="agente3-financeiro" agentLabel="Agente Financeiro" onCorrected={onUpdate} />
     </div>
   );
 }

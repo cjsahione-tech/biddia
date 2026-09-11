@@ -78,6 +78,15 @@ export type AgentRunItem = {
   finishedAt: string | null;
 };
 
+export type AgentMessageItem = {
+  id: string;
+  role: "user" | "agent";
+  conteudo: string;
+  anexoNome: string | null;
+  anexoDocId: string | null;
+  createdAt: string;
+};
+
 export type EditalDetail = Omit<EditalListItem, "analysis" | "proposal" | "documents"> & {
   numeroControlePNCP: string;
   orgaoCnpj: string;

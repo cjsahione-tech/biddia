@@ -13,7 +13,7 @@ type AnalysisResult = {
   parecer: string;
 };
 
-export async function executarAgente2(editalId: string) {
+export async function executarAgente2(editalId: string, opts?: { notaCorrecao?: string }) {
   return withAgentRun(editalId, "agente2-analista", async () => {
     const edital = await prisma.edital.findUniqueOrThrow({ where: { id: editalId } });
 
@@ -34,6 +34,7 @@ Data de abertura da proposta: ${edital.dataAberturaProposta?.toISOString() ?? "n
 Data de encerramento da proposta: ${edital.dataEncerramentoProposta?.toISOString() ?? "não informado"}
 ${textoEdital ? `\n=== TEXTO COMPLETO DO EDITAL (extraído do PDF oficial) ===\n${textoEdital}` : ""}
 ${textoTermoReferencia ? `\n=== TEXTO COMPLETO DO TERMO DE REFERÊNCIA (extraído do PDF oficial) ===\n${textoTermoReferencia}` : ""}
+${opts?.notaCorrecao ? `\n=== CORREÇÃO PEDIDA PELO USUÁRIO (sobre a sua análise anterior) ===\n${opts.notaCorrecao}\nRefaça a análise levando isso em conta — é prioridade sobre o que você concluiu antes.` : ""}
 `.trim();
 
     const instrucaoFonte = temTextoCompleto
@@ -94,9 +95,9 @@ Retorne um objeto JSON com exatamente estas chaves:
     await logAudit(
       editalId,
       "Agente Analista",
-      "Análise do edital",
+      opts?.notaCorrecao ? "Correção via chat" : "Análise do edital",
       "OK",
-      `Análise concluída ${temTextoCompleto ? "com leitura do texto completo do edital" : "apenas com metadados (texto do edital indisponível)"}: ${result.resumoObjeto}`
+      `Análise ${opts?.notaCorrecao ? "refeita a pedido do usuário" : "concluída"} ${temTextoCompleto ? "com leitura do texto completo do edital" : "apenas com metadados (texto do edital indisponível)"}: ${result.resumoObjeto}`
     );
 
     return result;

@@ -390,3 +390,91 @@ Responda em JSON:
     return { itens: itensComTotal, valorGlobalReferencia: valorReferencia ?? somaItens };
   });
 }
+
+/**
+ * Correção via chat: em vez de refazer a extração inteira (lenta e arriscada para uma
+ * tabela grande), pede só um diff sobre a proposta já montada — igual à revisão
+ * automática do fim de executarAgente3, mas guiado pela observação do usuário.
+ */
+export async function corrigirAgente3ViaChat(editalId: string, notaCorrecao: string): Promise<string> {
+  const proposal = await prisma.proposal.findUnique({ where: { editalId } });
+  if (!proposal) {
+    await executarAgente3(editalId);
+    return "Ainda não havia proposta montada para este edital — gerei a proposta base primeiro. Se o problema continuar, me diga de novo.";
+  }
+
+  const edital = await prisma.edital.findUniqueOrThrow({ where: { id: editalId } });
+  const itensAtuais: ItemProposta[] = JSON.parse(proposal.itensJson);
+  const { textoEdital, textoTermoReferencia, textoAnexosPrecos } = await obterTextoCompletoEdital(editalId, {
+    palavrasChave: PALAVRAS_CHAVE_FINANCEIRO,
+  });
+
+  const listaIndexada = itensAtuais
+    .map((it, i) => `[${i}] ${it.descricao} | ${it.unidade} | qtd ${it.quantidade} | unit ${it.valorUnitario}`)
+    .join("\n");
+
+  const diff = await askJSON<RevisaoDiff>(
+    `Você é o agente financeiro de uma empresa. Abaixo estão (1) trechos do edital/TR com a tabela de itens, (2) a
+lista de itens JÁ na proposta, com índices [0..${itensAtuais.length - 1}], e (3) uma observação do usuário
+apontando um problema nessa lista para você corrigir. Aplique a correção pedida e devolva SOMENTE o que precisa
+mudar — não repita a lista inteira:
+- "correcoes": para cada item que precisa mudar, um objeto com o "indice" e SÓ os campos a corrigir.
+- "itensFaltantes": itens que faltam na lista (inclusive os que o usuário pediu para adicionar).
+- "indicesParaRemover": índices de itens que devem sair da lista.
+
+${INSTRUCAO_FORMATO_NUMERICO}
+
+Responda em JSON:
+{
+  "correcoes": [{ "indice": number, "descricao"?: string, "unidade"?: string, "quantidade"?: number, "valorUnitario"?: number }],
+  "itensFaltantes": [{ "descricao": string, "unidade": string, "quantidade": number, "valorUnitario": number }],
+  "indicesParaRemover": [number]
+}`,
+    `=== TEXTO-FONTE ===\n${textoAnexosPrecos ?? ""}\n${textoTermoReferencia ?? ""}\n${textoEdital ?? ""}\n\n=== LISTA ATUAL DA PROPOSTA (${itensAtuais.length} itens) ===\n${listaIndexada}\n\n=== OBSERVAÇÃO DO USUÁRIO ===\n${notaCorrecao}`,
+    { model: MODELO_HAIKU, maxTokens: 4_000 }
+  );
+
+  const revisados = itensAtuais.map((item, i) => {
+    const c = diff.correcoes?.find((x) => x.indice === i);
+    if (!c) return item;
+    return {
+      descricao: c.descricao ?? item.descricao,
+      unidade: c.unidade ?? item.unidade,
+      quantidade: typeof c.quantidade === "number" ? c.quantidade : item.quantidade,
+      valorUnitario: typeof c.valorUnitario === "number" ? c.valorUnitario : item.valorUnitario,
+    };
+  });
+  const remover = new Set(diff.indicesParaRemover ?? []);
+  const faltantes = (diff.itensFaltantes ?? []).filter(
+    (f) => f && f.descricao && typeof f.quantidade === "number" && typeof f.valorUnitario === "number"
+  );
+  const itensFinais = [...revisados.filter((_, i) => !remover.has(i)), ...faltantes];
+
+  const itensComTotal = itensFinais.map((item) => ({
+    ...item,
+    valorTotal: Number((item.quantidade * item.valorUnitario).toFixed(2)),
+  }));
+  const somaItens = itensComTotal.reduce((acc, i) => acc + i.valorTotal, 0);
+
+  await prisma.proposal.update({
+    where: { editalId },
+    data: {
+      valorGlobalReferencia: edital.valorGlobal ?? somaItens,
+      itensJson: JSON.stringify(itensComTotal),
+      observacoes: `${proposal.observacoes ?? ""}\n\nCorreção via chat: "${notaCorrecao}"`.trim(),
+    },
+  });
+
+  const partes: string[] = [];
+  if (diff.correcoes?.length) partes.push(`${diff.correcoes.length} item(ns) corrigido(s)`);
+  if (faltantes.length) partes.push(`${faltantes.length} item(ns) adicionado(s)`);
+  if (remover.size) partes.push(`${remover.size} item(ns) removido(s)`);
+  const resumo =
+    partes.length > 0
+      ? `Ajustei a proposta: ${partes.join(", ")}.`
+      : "Revisei a proposta, mas não encontrei nada para mudar com base na sua observação — pode detalhar melhor o que está errado?";
+
+  await logAudit(editalId, "Agente Financeiro", "Correção via chat", "OK", `Observação do usuário: "${notaCorrecao}". ${resumo}`);
+
+  return resumo;
+}

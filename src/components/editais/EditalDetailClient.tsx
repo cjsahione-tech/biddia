@@ -172,13 +172,15 @@ export function EditalDetailClient({ editalId }: { editalId: string }) {
       </div>
 
       <div className="mt-6">
-        {tab === "analise" && <AnalysisTab edital={edital} />}
+        {tab === "analise" && <AnalysisTab edital={edital} onUpdate={load} />}
         {tab === "financeiro" && <FinanceTab edital={edital} onUpdate={load} />}
-        {tab === "documentos" && <DocumentsTab editalId={edital.id} documents={edital.documents} />}
+        {tab === "documentos" && (
+          <DocumentsTab editalId={edital.id} documents={edital.documents} onUpdate={load} />
+        )}
         {tab === "checklist" && (
           <ChecklistTab editalId={edital.id} items={edital.checklistItems} onUpdate={load} />
         )}
-        {tab === "auditoria" && <AuditTab logs={edital.auditLogs} />}
+        {tab === "auditoria" && <AuditTab editalId={edital.id} logs={edital.auditLogs} onUpdate={load} />}
       </div>
     </div>
   );

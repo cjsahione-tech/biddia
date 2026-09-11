@@ -1,5 +1,6 @@
 import { CheckCircle2, AlertTriangle, XCircle } from "lucide-react";
 import { formatDateTime } from "@/lib/format";
+import { AgentChat } from "@/components/editais/AgentChat";
 import type { AuditLogItem } from "@/lib/types";
 
 const SEVERITY_CONFIG = {
@@ -8,12 +9,23 @@ const SEVERITY_CONFIG = {
   ERRO: { icon: XCircle, className: "text-danger" },
 };
 
-export function AuditTab({ logs }: { logs: AuditLogItem[] }) {
+export function AuditTab({
+  editalId,
+  logs,
+  onUpdate,
+}: {
+  editalId: string;
+  logs: AuditLogItem[];
+  onUpdate: () => void;
+}) {
   if (logs.length === 0) {
     return (
-      <p className="py-12 text-center text-sm text-muted">
-        O Agente Auditor ainda não avaliou este edital.
-      </p>
+      <div className="space-y-6">
+        <p className="py-12 text-center text-sm text-muted">
+          O Agente Auditor ainda não avaliou este edital.
+        </p>
+        <AgentChat editalId={editalId} agentKey="agente6-auditor" agentLabel="Agente Auditor" onCorrected={onUpdate} />
+      </div>
     );
   }
 
@@ -41,6 +53,8 @@ export function AuditTab({ logs }: { logs: AuditLogItem[] }) {
           </div>
         );
       })}
+
+      <AgentChat editalId={editalId} agentKey="agente6-auditor" agentLabel="Agente Auditor" onCorrected={onUpdate} />
     </div>
   );
 }

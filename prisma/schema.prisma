@@ -126,11 +126,29 @@ model Edital {
   checklistItems      ChecklistItem[]
   auditLogs           AuditLog[]
   agentRuns           AgentRun[]
+  agentMessages       AgentMessage[]
 
   createdAt           DateTime      @default(now())
   updatedAt            DateTime     @updatedAt
 
   @@unique([companyId, numeroControlePNCP])
+}
+
+// Chat de correção por agente: cada aba de agente (Análise, Financeiro, Documentos,
+// Checklist, Auditoria) tem sua própria conversa isolada com o respectivo agente,
+// identificada por agentKey (mesma chave usada em AgentRun/AuditLog).
+model AgentMessage {
+  id         String   @id @default(cuid())
+  editalId   String
+  edital     Edital   @relation(fields: [editalId], references: [id], onDelete: Cascade)
+  agentKey   String
+  role       String   // "user" | "agent"
+  conteudo   String
+  anexoNome  String?
+  anexoDocId String?
+  createdAt  DateTime @default(now())
+
+  @@index([editalId, agentKey])
 }
 
 // Registro de "já visto" — mantém a chave PNCP de um edital excluído pelo usuário para

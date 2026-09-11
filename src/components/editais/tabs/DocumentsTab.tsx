@@ -1,5 +1,6 @@
 import { FileText, Download, Landmark } from "lucide-react";
 import { formatDate } from "@/lib/format";
+import { AgentChat } from "@/components/editais/AgentChat";
 import type { DocumentItem } from "@/lib/types";
 
 function labelDocumento(doc: DocumentItem) {
@@ -39,17 +40,28 @@ function DocumentRow({ editalId, doc }: { editalId: string; doc: DocumentItem })
   );
 }
 
-export function DocumentsTab({ editalId, documents }: { editalId: string; documents: DocumentItem[] }) {
+export function DocumentsTab({
+  editalId,
+  documents,
+  onUpdate,
+}: {
+  editalId: string;
+  documents: DocumentItem[];
+  onUpdate: () => void;
+}) {
   const oficiais = documents.filter((d) => d.tipo === "DOCUMENTO_PNCP");
   const enviados = documents.filter((d) => d.tipo === "DOCUMENTO_USUARIO");
   const gerados = documents.filter((d) => d.tipo === "ANEXO_GERADO");
 
   if (documents.length === 0) {
     return (
-      <p className="py-12 text-center text-sm text-muted">
-        Nenhum documento disponível ainda. O edital e o termo de referência aparecem aqui assim que o
-        Agente Comercial os localizar no PNCP.
-      </p>
+      <div className="space-y-6">
+        <p className="py-12 text-center text-sm text-muted">
+          Nenhum documento disponível ainda. O edital e o termo de referência aparecem aqui assim que o
+          Agente Comercial os localizar no PNCP.
+        </p>
+        <AgentChat editalId={editalId} agentKey="agente4-advogado" agentLabel="Agente Advogado" onCorrected={onUpdate} />
+      </div>
     );
   }
 
@@ -93,6 +105,8 @@ export function DocumentsTab({ editalId, documents }: { editalId: string; docume
           </div>
         </div>
       )}
+
+      <AgentChat editalId={editalId} agentKey="agente4-advogado" agentLabel="Agente Advogado" onCorrected={onUpdate} />
     </div>
   );
 }

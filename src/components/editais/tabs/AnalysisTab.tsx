@@ -1,4 +1,5 @@
 import { FonteBadge } from "@/components/ui/FonteBadge";
+import { AgentChat } from "@/components/editais/AgentChat";
 import type { EditalDetail } from "@/lib/types";
 
 function parseList(json: string | undefined): string[] {
@@ -28,7 +29,7 @@ function Section({ title, items }: { title: string; items: string[] }) {
   );
 }
 
-export function AnalysisTab({ edital }: { edital: EditalDetail }) {
+export function AnalysisTab({ edital, onUpdate }: { edital: EditalDetail; onUpdate: () => void }) {
   const analysis = edital.analysis;
 
   return (
@@ -69,6 +70,8 @@ export function AnalysisTab({ edital }: { edital: EditalDetail }) {
           </div>
         </>
       )}
+
+      <AgentChat editalId={edital.id} agentKey="agente2-analista" agentLabel="Agente Analista" onCorrected={onUpdate} />
     </div>
   );
 }

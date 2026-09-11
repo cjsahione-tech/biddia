@@ -14,7 +14,7 @@ type AdvogadoResult = {
   anexosEspecificosDoEdital: AnexoGerado[];
 };
 
-export async function executarAgente4(editalId: string) {
+export async function executarAgente4(editalId: string, opts?: { notaCorrecao?: string }) {
   return withAgentRun(editalId, "agente4-advogado", async () => {
     const edital = await prisma.edital.findUniqueOrThrow({
       where: { id: editalId },
@@ -44,6 +44,7 @@ Endereço: ${edital.company.logradouro}, ${edital.company.numero}, ${edital.comp
 Sócio/responsável legal: ${edital.company.socioNome} (CPF ${edital.company.socioCpf})
 ${textoEdital ? `\n=== TEXTO COMPLETO DO EDITAL ===\n${textoEdital}` : ""}
 ${textoTermoReferencia ? `\n=== TEXTO COMPLETO DO TERMO DE REFERÊNCIA ===\n${textoTermoReferencia}` : ""}
+${opts?.notaCorrecao ? `\n=== CORREÇÃO PEDIDA PELO USUÁRIO (sobre os anexos gerados antes) ===\n${opts.notaCorrecao}\nRegere os documentos levando isso em conta — é prioridade sobre o que você gerou antes.` : ""}
 `.trim();
 
     const instrucaoEspecificos = temTextoCompleto
@@ -83,6 +84,12 @@ Cada "paragrafos" deve ter de 2 a 4 parágrafos curtos e objetivos (sem usar mar
 
     const todosAnexos = [...result.anexosPadrao, ...(result.anexosEspecificosDoEdital ?? [])];
 
+    // Correção via chat: os anexos antigos ficariam duplicados com os novos se não
+    // fossem removidos antes — aqui é regeração completa, não um adicional.
+    if (opts?.notaCorrecao) {
+      await prisma.document.deleteMany({ where: { editalId, tipo: "ANEXO_GERADO" } });
+    }
+
     // Gera os PDFs e grava em paralelo — são independentes entre si.
     const criados = await Promise.all(
       todosAnexos.map(async (anexo) => {
@@ -108,9 +115,9 @@ Cada "paragrafos" deve ter de 2 a 4 parágrafos curtos e objetivos (sem usar mar
     await logAudit(
       editalId,
       "Agente Advogado",
-      "Geração de anexos",
+      opts?.notaCorrecao ? "Correção via chat" : "Geração de anexos",
       "OK",
-      `${criados.length} anexo(s) timbrado(s) gerado(s) automaticamente (${result.anexosPadrao.length} padrão${qtdEspecificos > 0 ? ` + ${qtdEspecificos} específico(s) identificado(s) no texto do edital` : ""}).`
+      `${criados.length} anexo(s) timbrado(s) ${opts?.notaCorrecao ? "regerado(s) a pedido do usuário" : "gerado(s) automaticamente"} (${result.anexosPadrao.length} padrão${qtdEspecificos > 0 ? ` + ${qtdEspecificos} específico(s) identificado(s) no texto do edital` : ""}).`
     );
 
     return criados;

@@ -1,4 +1,5 @@
 import { CheckCircle2, AlertTriangle, Clock, XCircle } from "lucide-react";
+import { AgentChat } from "@/components/editais/AgentChat";
 import type { ChecklistItem } from "@/lib/types";
 
 const STATUS_CONFIG: Record<
@@ -31,9 +32,12 @@ export function ChecklistTab({
 
   if (items.length === 0) {
     return (
-      <p className="py-12 text-center text-sm text-muted">
-        O Agente Secretário ainda não montou o checklist deste edital.
-      </p>
+      <div className="space-y-6">
+        <p className="py-12 text-center text-sm text-muted">
+          O Agente Secretário ainda não montou o checklist deste edital.
+        </p>
+        <AgentChat editalId={editalId} agentKey="agente5-secretario" agentLabel="Agente Secretário" onCorrected={onUpdate} />
+      </div>
     );
   }
 
@@ -88,6 +92,8 @@ export function ChecklistTab({
           <div className="mt-2 rounded-2xl border border-border px-4">{opcionais.map(renderRow)}</div>
         </div>
       )}
+
+      <AgentChat editalId={editalId} agentKey="agente5-secretario" agentLabel="Agente Secretário" onCorrected={onUpdate} />
     </div>
   );
 }
