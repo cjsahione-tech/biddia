@@ -45,6 +45,7 @@ model Company {
   atendeBem      Boolean   @default(true)
   keywords       Keyword[]
   editais        Edital[]
+  editaisExcluidos EditalExcluido[]
 
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
@@ -128,6 +129,20 @@ model Edital {
 
   createdAt           DateTime      @default(now())
   updatedAt            DateTime     @updatedAt
+
+  @@unique([companyId, numeroControlePNCP])
+}
+
+// Registro de "já visto" — mantém a chave PNCP de um edital excluído pelo usuário para
+// o Agente Comercial nunca mais recapturá-lo numa busca futura (o card em si já foi
+// apagado, então a checagem de duplicidade normal, que olha os editais existentes, não
+// enxerga mais essa chave sem este registro à parte).
+model EditalExcluido {
+  id                 String   @id @default(cuid())
+  companyId          String
+  company            Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  numeroControlePNCP String
+  excluidoEm         DateTime @default(now())
 
   @@unique([companyId, numeroControlePNCP])
 }

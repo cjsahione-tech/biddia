@@ -102,19 +102,29 @@ export async function executarAgente1(companyId: string) {
 
   const analisados = candidatos.length;
 
-  // 2. Descarta os que já estão na plataforma.
-  const jaExistentes = new Set(
-    (
-      await prisma.edital.findMany({
-        where: {
-          companyId: company.id,
-          numeroControlePNCP: { in: candidatos.map((c) => c.item.numero_controle_pncp) },
-        },
-        select: { numeroControlePNCP: true },
-      })
-    ).map((e) => e.numeroControlePNCP)
+  // 2. Descarta os que já estão na plataforma ou que o usuário já excluiu antes (o card
+  // saiu do quadro, mas a chave PNCP fica registrada em EditalExcluido pra não voltar).
+  const [jaExistentesRows, jaExcluidosRows] = await Promise.all([
+    prisma.edital.findMany({
+      where: {
+        companyId: company.id,
+        numeroControlePNCP: { in: candidatos.map((c) => c.item.numero_controle_pncp) },
+      },
+      select: { numeroControlePNCP: true },
+    }),
+    prisma.editalExcluido.findMany({
+      where: {
+        companyId: company.id,
+        numeroControlePNCP: { in: candidatos.map((c) => c.item.numero_controle_pncp) },
+      },
+      select: { numeroControlePNCP: true },
+    }),
+  ]);
+  const jaExistentes = new Set(jaExistentesRows.map((e) => e.numeroControlePNCP));
+  const jaExcluidos = new Set(jaExcluidosRows.map((e) => e.numeroControlePNCP));
+  const novosCandidatos = candidatos.filter(
+    (c) => !jaExistentes.has(c.item.numero_controle_pncp) && !jaExcluidos.has(c.item.numero_controle_pncp)
   );
-  const novosCandidatos = candidatos.filter((c) => !jaExistentes.has(c.item.numero_controle_pncp));
 
   // 3. Classifica em lote (relevância + tipo do objeto) com IA.
   const classificacoes = await classificarEditaisEmLote(

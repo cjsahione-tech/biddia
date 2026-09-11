@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireCompany } from "@/lib/api-utils";
+import { registrarExclusaoPermanente } from "@/lib/agents/editais-excluidos";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { company, error } = await requireCompany();
@@ -65,5 +66,6 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
   if (!edital) return NextResponse.json({ error: "Edital não encontrado" }, { status: 404 });
 
   await prisma.edital.delete({ where: { id } });
+  await registrarExclusaoPermanente([edital]);
   return NextResponse.json({ ok: true });
 }
