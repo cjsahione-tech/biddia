@@ -147,12 +147,6 @@ function ResumoRequisitos({
       ) : (
         <Campo label="Especificação técnica" valor={requisitos.especificacaoTecnica} />
       )}
-
-      <div className="flex justify-end">
-        <Button disabled title="Etapa 3 ainda não implementada">
-          Continuar para Tributos
-        </Button>
-      </div>
     </div>
   );
 }

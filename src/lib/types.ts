@@ -128,6 +128,11 @@ export type EstudoViabilidadeDetail = EstudoViabilidadeItem & {
   edital: EstudoEditalRef | null;
   requisitosJson: string | null;
   requisitosConfirmadoEm: string | null;
+  regimeTributario: "SIMPLES_NACIONAL" | "LUCRO_PRESUMIDO" | "LUCRO_REAL" | null;
+  anexoSimples: "I" | "III" | "IV" | "V" | null;
+  rbt12: number | null;
+  aliquotasJson: string | null;
+  tributosConfirmadoEm: string | null;
 };
 
 export type EditalDetail = Omit<EditalListItem, "analysis" | "proposal" | "documents"> & {

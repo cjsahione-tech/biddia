@@ -42,10 +42,12 @@ export type EtapaEstudoKey = (typeof ETAPAS_ESTUDO)[number]["key"];
 export function etapaAtualDoEstudo(estudo: {
   editalId: string | null;
   requisitosConfirmadoEm: string | null;
+  tributosConfirmadoEm: string | null;
 }): EtapaEstudoKey {
   if (!estudo.editalId) return "edital";
   if (!estudo.requisitosConfirmadoEm) return "requisitos";
-  // Etapa 3 (regime tributário) ainda não tem tela — o estudo com requisitos
-  // confirmados permanece em "requisitos", mostrando o resumo já revisado.
-  return "requisitos";
+  if (!estudo.tributosConfirmadoEm) return "tributos";
+  // Etapa 4 (custos) ainda não tem tela — o estudo com tributos confirmados permanece
+  // em "tributos", mostrando o resumo já revisado.
+  return "tributos";
 }

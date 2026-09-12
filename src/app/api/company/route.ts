@@ -23,6 +23,9 @@ const companySchema = z.object({
   socioCpf: z.string().min(11),
   logoUrl: z.string().optional().nullable(),
   keywords: z.array(z.string().min(2)).optional().default([]),
+  regimeTributarioPadrao: z.enum(["SIMPLES_NACIONAL", "LUCRO_PRESUMIDO", "LUCRO_REAL"]).optional().nullable(),
+  anexoSimplesPadrao: z.enum(["I", "III", "IV", "V"]).optional().nullable(),
+  rbt12Padrao: z.number().min(0).optional().nullable(),
 });
 
 function validarTipoAtuacao(data: { atendeServico?: boolean; atendeBem?: boolean }) {

@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Loader2, Upload, X, Check } from "lucide-react";
+import Link from "next/link";
+import { Loader2, Upload, X, Check, Settings2 } from "lucide-react";
 import { Field, TextInput, TextArea } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
+import { REGIMES_TRIBUTARIOS, ANEXOS_SIMPLES, type RegimeTributario, type AnexoSimples } from "@/lib/tributos";
 
 type Company = {
   objetoSocial: string;
@@ -24,6 +26,9 @@ type Company = {
   socioNome: string;
   socioCpf: string;
   logoUrl: string | null;
+  regimeTributarioPadrao: RegimeTributario | null;
+  anexoSimplesPadrao: AnexoSimples | null;
+  rbt12Padrao: number | null;
   keywords: { id: string; term: string }[];
 };
 
@@ -300,6 +305,66 @@ export function EmpresaClient() {
           <Field label="CPF" htmlFor="socioCpf">
             <TextInput id="socioCpf" value={company.socioCpf} onChange={(e) => set("socioCpf", e.target.value)} />
           </Field>
+        </div>
+
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-sm font-medium text-foreground">Regime tributário padrão</p>
+          <Link
+            href="/empresa/parametros-tributarios"
+            className="inline-flex items-center gap-1.5 text-xs font-medium text-brand hover:underline"
+          >
+            <Settings2 className="h-3.5 w-3.5" /> Parâmetros tributários
+          </Link>
+        </div>
+        <p className="-mt-4 text-xs text-muted">
+          Só pré-preenche um novo estudo de viabilidade — cada estudo pode usar outro regime para simulações, sem
+          alterar este cadastro.
+        </p>
+        <div className="grid grid-cols-3 gap-4">
+          <Field label="Regime" htmlFor="regimeTributarioPadrao">
+            <select
+              id="regimeTributarioPadrao"
+              value={company.regimeTributarioPadrao ?? ""}
+              onChange={(e) => set("regimeTributarioPadrao", (e.target.value || null) as RegimeTributario | null)}
+              className="mt-1.5 block w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
+            >
+              <option value="">Não definido</option>
+              {REGIMES_TRIBUTARIOS.map((r) => (
+                <option key={r.key} value={r.key}>
+                  {r.label}
+                </option>
+              ))}
+            </select>
+          </Field>
+          {company.regimeTributarioPadrao === "SIMPLES_NACIONAL" && (
+            <>
+              <Field label="Anexo" htmlFor="anexoSimplesPadrao">
+                <select
+                  id="anexoSimplesPadrao"
+                  value={company.anexoSimplesPadrao ?? ""}
+                  onChange={(e) => set("anexoSimplesPadrao", (e.target.value || null) as AnexoSimples | null)}
+                  className="mt-1.5 block w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
+                >
+                  <option value="">Selecione</option>
+                  {ANEXOS_SIMPLES.map((a) => (
+                    <option key={a.key} value={a.key}>
+                      {a.label}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="RBT12 (R$)" htmlFor="rbt12Padrao" hint="Faturamento dos últimos 12 meses">
+                <TextInput
+                  id="rbt12Padrao"
+                  type="number"
+                  min={0}
+                  step={0.01}
+                  value={company.rbt12Padrao ?? ""}
+                  onChange={(e) => set("rbt12Padrao", e.target.value ? Number(e.target.value) : null)}
+                />
+              </Field>
+            </>
+          )}
         </div>
 
         {error && <p className="text-sm text-danger">{error}</p>}

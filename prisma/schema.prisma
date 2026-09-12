@@ -48,6 +48,14 @@ model Company {
   editaisExcluidos EditalExcluido[]
   estudosViabilidade EstudoViabilidade[]
 
+  // Regime tributário padrão da empresa — só pré-preenche um novo estudo (Etapa 3);
+  // cada estudo pode sobrescrever para simulações, sem alterar este cadastro.
+  regimeTributarioPadrao RegimeTributario?
+  anexoSimplesPadrao     AnexoSimples?
+  rbt12Padrao            Float?
+  faixasSimples          FaixaSimplesNacional[]
+  parametrosRegime       ParametroTributarioRegime[]
+
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 }
@@ -325,6 +333,68 @@ model EstudoViabilidade {
   requisitosJson         String?
   requisitosConfirmadoEm DateTime?
 
+  // Etapa 3: regime tributário escolhido para ESTE estudo (pode divergir do padrão
+  // cadastrado da empresa — é uma simulação). aliquotasJson é o resultado já resolvido
+  // (snapshot) das alíquotas no momento da confirmação — o cálculo (Etapa 5) lê daqui,
+  // nunca direto da tabela de parâmetros, para não mudar um estudo já confirmado se a
+  // empresa atualizar os parâmetros depois (auditabilidade).
+  regimeTributario     RegimeTributario?
+  anexoSimples         AnexoSimples?
+  rbt12                Float?
+  aliquotasJson        String?
+  tributosConfirmadoEm DateTime?
+
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
+}
+
+enum RegimeTributario {
+  SIMPLES_NACIONAL
+  LUCRO_PRESUMIDO
+  LUCRO_REAL
+}
+
+enum AnexoSimples {
+  I
+  III
+  IV
+  V
+}
+
+// Tabela do Simples Nacional (LC 123/2006) — por empresa e editável (tela de parâmetros
+// tributários), nunca fixa no código. Uma linha por Anexo × Faixa de RBT12.
+model FaixaSimplesNacional {
+  id              String       @id @default(cuid())
+  companyId       String
+  company         Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  anexo           AnexoSimples
+  faixa           Int
+  rbt12Min        Float
+  rbt12Max        Float
+  aliquotaNominal Float
+  parcelaDeduzir  Float
+
+  updatedAt       DateTime     @updatedAt
+
+  @@unique([companyId, anexo, faixa])
+}
+
+// Alíquotas efetivas sobre a receita para Lucro Presumido/Real — uma linha por
+// regime × ramo (ISS para serviço, ICMS para produto). Também editável, nunca fixa.
+model ParametroTributarioRegime {
+  id        String           @id @default(cuid())
+  companyId String
+  company   Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  regime    RegimeTributario
+  ramo      RamoEstudo
+  issOuIcms Float
+  pis       Float
+  cofins    Float
+  irpjCsll  Float
+
+  updatedAt DateTime         @updatedAt
+
+  @@unique([companyId, regime, ramo])
 }
