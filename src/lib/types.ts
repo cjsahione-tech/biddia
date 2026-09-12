@@ -133,6 +133,7 @@ export type EstudoViabilidadeDetail = EstudoViabilidadeItem & {
   rbt12: number | null;
   aliquotasJson: string | null;
   tributosConfirmadoEm: string | null;
+  custosConfirmadoEm: string | null;
 };
 
 export type EditalDetail = Omit<EditalListItem, "analysis" | "proposal" | "documents"> & {

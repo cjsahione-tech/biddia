@@ -94,12 +94,6 @@ function ResumoTributos({ estudo, onEditar }: { estudo: EstudoViabilidadeDetail;
           <p className="mt-0.5 text-xl font-semibold text-brand">{aliquotas.aliquotaTotalEfetiva.toFixed(2)}%</p>
         </div>
       </div>
-
-      <div className="flex justify-end">
-        <Button disabled title="Etapa 4 ainda não implementada">
-          Continuar para Custos
-        </Button>
-      </div>
     </div>
   );
 }

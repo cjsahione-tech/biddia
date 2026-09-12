@@ -344,8 +344,35 @@ model EstudoViabilidade {
   aliquotasJson        String?
   tributosConfirmadoEm DateTime?
 
+  // Etapa 4: custos por item/lote. itensSnapshotJson congela a lista de itens (copiada
+  // de edital.proposal.itensJson) no momento em que a etapa começa — dá uma referência
+  // estável para CustoItemEstudo.itemIndex, mesmo que a Proposal do edital seja
+  // reprocessada depois. parametrosCustoJson guarda os valores usados pelo botão
+  // "aplicar a todos" (não são obrigatórios, só uma conveniência de preenchimento).
+  itensSnapshotJson    String?
+  parametrosCustoJson  String?
+  custosConfirmadoEm   DateTime?
+  custosItens          CustoItemEstudo[]
+
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
+}
+
+// Custos informados pelo usuário para UM item/lote do estudo — todos os campos
+// (diretos e percentuais de BDI/margem) ficam num JSON só, com o formato variando por
+// ramo (ver CustoItemServico/CustoItemProduto em src/lib/estudo-custos.ts), seguindo o
+// mesmo padrão de string JSON usado no resto do módulo.
+model CustoItemEstudo {
+  id         String            @id @default(cuid())
+  estudoId   String
+  estudo     EstudoViabilidade @relation(fields: [estudoId], references: [id], onDelete: Cascade)
+
+  itemIndex  Int
+  custosJson String
+
+  updatedAt  DateTime          @updatedAt
+
+  @@unique([estudoId, itemIndex])
 }
 
 enum RegimeTributario {

@@ -7,6 +7,7 @@ import { EtapaStepper } from "@/components/estudo-viabilidade/EtapaStepper";
 import { EtapaEdital, ResumoEdital } from "@/components/estudo-viabilidade/EtapaEdital";
 import { EtapaRequisitos } from "@/components/estudo-viabilidade/EtapaRequisitos";
 import { EtapaTributos } from "@/components/estudo-viabilidade/EtapaTributos";
+import { EtapaCustos } from "@/components/estudo-viabilidade/EtapaCustos";
 import { RAMO_LABEL, etapaAtualDoEstudo } from "@/lib/estudo-viabilidade";
 import type { EstudoViabilidadeDetail } from "@/lib/types";
 
@@ -66,6 +67,7 @@ export function EstudoDetailClient({ estudoId }: { estudoId: string }) {
             <ResumoEdital estudo={estudo} onTrocar={() => setEstudo({ ...estudo, editalId: null, edital: null })} />
             <EtapaRequisitos estudo={estudo} onUpdated={setEstudo} />
             {estudo.requisitosConfirmadoEm && <EtapaTributos estudo={estudo} onUpdated={setEstudo} />}
+            {estudo.tributosConfirmadoEm && <EtapaCustos estudo={estudo} onUpdated={setEstudo} />}
           </>
         )}
       </div>
