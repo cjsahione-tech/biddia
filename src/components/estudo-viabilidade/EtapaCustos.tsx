@@ -212,12 +212,6 @@ function ResumoCustos({
           Custos informados para {loading ? "..." : qtdItens} item(ns)/lote(s).
         </p>
       </div>
-
-      <div className="flex justify-end">
-        <Button disabled title="Etapa 5 ainda não implementada">
-          Continuar para Cálculo
-        </Button>
-      </div>
     </div>
   );
 }

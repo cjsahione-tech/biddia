@@ -354,6 +354,15 @@ model EstudoViabilidade {
   custosConfirmadoEm   DateTime?
   custosItens          CustoItemEstudo[]
 
+  // Etapa 5: motor de cálculo — puro/isolado em src/lib/calculo-viabilidade.ts, sem
+  // nenhuma dependência de UI ou banco (recebe os dados já resolvidos e devolve o
+  // resultado). resultadoCalculoJson é o snapshot completo (por item + consolidado +
+  // sensibilidade + recomendação) gerado a partir dos dados confirmados nas etapas
+  // anteriores — recalculado sob demanda, nunca editado à mão.
+  margemMinimaAceitavel Float?
+  resultadoCalculoJson  String?
+  calculoConfirmadoEm   DateTime?
+
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
 }

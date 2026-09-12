@@ -44,12 +44,14 @@ export function etapaAtualDoEstudo(estudo: {
   requisitosConfirmadoEm: string | null;
   tributosConfirmadoEm: string | null;
   custosConfirmadoEm: string | null;
+  calculoConfirmadoEm: string | null;
 }): EtapaEstudoKey {
   if (!estudo.editalId) return "edital";
   if (!estudo.requisitosConfirmadoEm) return "requisitos";
   if (!estudo.tributosConfirmadoEm) return "tributos";
   if (!estudo.custosConfirmadoEm) return "custos";
-  // Etapa 5 (cálculo) ainda não tem tela — o estudo com custos confirmados permanece
-  // em "custos", mostrando o resumo já revisado.
-  return "custos";
+  if (!estudo.calculoConfirmadoEm) return "calculo";
+  // Etapa 6 (relatório) ainda não tem tela — o estudo já calculado permanece em
+  // "calculo", mostrando o resultado.
+  return "calculo";
 }
