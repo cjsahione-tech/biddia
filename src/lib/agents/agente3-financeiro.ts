@@ -72,6 +72,15 @@ vírgula separa decimal (ex: "1.234,56" = mil duzentos e trinta e quatro reais e
 1234.56). Não confunda separador de milhar com separador decimal. Na resposta, use sempre notação decimal simples
 (ponto, sem separador de milhar): 1234.56, nunca "1.234,56" nem "1234,56".`;
 
+// Teto de caracteres bem maior que o padrão (MAX_CHARS_POR_DOCUMENTO, 35 mil, pensado
+// pra uma chamada única) — o Financeiro processa o texto em blocos de 5000 caracteres em
+// paralelo, então aguenta um documento bem maior sem custo/latência proibitivos. Editais
+// de dezenas/centenas de páginas frequentemente têm a tabela de itens espalhada por um
+// trecho maior que 35 mil caracteres; cortar antes de dividir em blocos descartava a
+// maior parte da tabela antes mesmo da extração começar — a causa raiz de propostas
+// vindo com só uma fração dos itens reais mesmo em editais grandes.
+const MAX_CHARS_FINANCEIRO = 220_000;
+
 /**
  * Estimativa grosseira de quantas linhas de tabela de itens/preços existem no
  * texto-fonte — conta trechos com dois valores em R$ próximos um do outro (o padrão
@@ -178,6 +187,72 @@ fim deste trecho e devolva a lista COMPLETA — não pare antes do fim.`
   return itens;
 }
 
+/**
+ * Alguns editais (comum em registro de preços) publicam só descrição/unidade/quantidade
+ * na tabela — sem valor unitário de referência, porque é a própria empresa licitante que
+ * propõe o preço. Sem tratar isso, o item fica com valorUnitario nulo/zero e a "proposta"
+ * sai toda R$ 0,00, o que é enganoso. Quando a maioria dos itens está nessa situação,
+ * pede uma estimativa de preço de mercado plausível para preencher a lacuna.
+ */
+async function preencherPrecosFaltantes(
+  edital: { titulo: string; descricao: string },
+  itens: ItemProposta[]
+): Promise<{ itens: ItemProposta[]; qtdEstimados: number }> {
+  const semPreco = itens
+    .map((it, i) => ({ it, i }))
+    .filter(({ it }) => it.valorUnitario == null || Number.isNaN(it.valorUnitario));
+  if (semPreco.length === 0) return { itens, qtdEstimados: 0 };
+
+  const lista = semPreco.map(({ it, i }) => `[${i}] ${it.descricao} | ${it.unidade} | qtd ${it.quantidade}`).join("\n");
+  try {
+    const resultado = await askJSON<{ precos: { indice: number; valorUnitario: number }[] }>(
+      `Você é o agente financeiro de uma empresa respondendo a uma licitação pública brasileira. O edital publicou a
+lista de itens e quantidades estimadas, mas NÃO publicou valores unitários de referência para eles — é a própria
+empresa licitante que precisa propor um preço competitivo por item, dentro da realidade de mercado brasileira atual.
+
+Objeto da licitação: ${edital.titulo} — ${edital.descricao}
+
+Para cada item abaixo, sugira um valor unitário em reais plausível e competitivo, coerente com o que empresas do
+ramo cobrariam por um item/serviço equivalente no Brasil hoje.
+
+${INSTRUCAO_FORMATO_NUMERICO}
+
+Responda em JSON: { "precos": [{ "indice": number, "valorUnitario": number }] }`,
+      lista,
+      { model: MODELO_SONNET, maxTokens: maxTokensParaItens(semPreco.length, 8_000) }
+    );
+    const mapa = new Map((resultado.precos ?? []).map((p) => [p.indice, p.valorUnitario]));
+    const preenchidos = itens.map((it, i) => (mapa.has(i) ? { ...it, valorUnitario: mapa.get(i)! } : it));
+    return { itens: preenchidos, qtdEstimados: mapa.size };
+  } catch (err) {
+    console.error("Falha ao estimar preços de mercado para itens sem valor unitário publicado:", err);
+    return { itens, qtdEstimados: 0 };
+  }
+}
+
+/**
+ * Editais grandes às vezes citam a mesma relação de itens duas vezes no documento (ex:
+ * uma vez na planilha de preços de verdade, outra num anexo/especificação que só lista
+ * os nomes sem valor) — como agora o texto-fonte não é mais cortado antes de dividir em
+ * blocos (ver MAX_CHARS_FINANCEIRO), os dois trechos podem virar itens duplicados.
+ * Agrupa por descrição e mantém a versão com preço válido quando há duplicata.
+ */
+function deduplicarItens(itens: ItemProposta[]): ItemProposta[] {
+  const porDescricao = new Map<string, ItemProposta>();
+  for (const item of itens) {
+    const chave = item.descricao.trim().toLowerCase();
+    const existente = porDescricao.get(chave);
+    if (!existente) {
+      porDescricao.set(chave, item);
+      continue;
+    }
+    const existenteTemPreco = existente.valorUnitario != null && existente.valorUnitario > 0;
+    const novoTemPreco = item.valorUnitario != null && item.valorUnitario > 0;
+    if (!existenteTemPreco && novoTemPreco) porDescricao.set(chave, item);
+  }
+  return Array.from(porDescricao.values());
+}
+
 export async function executarAgente3(editalId: string) {
   return withAgentRun(editalId, "agente3-financeiro", async () => {
     const edital = await prisma.edital.findUniqueOrThrow({ where: { id: editalId } });
@@ -195,7 +270,10 @@ export async function executarAgente3(editalId: string) {
     }
 
     const { textoEdital, textoTermoReferencia, textoAnexosPrecos, temTextoCompleto } =
-      await obterTextoCompletoEdital(editalId, { palavrasChave: PALAVRAS_CHAVE_FINANCEIRO });
+      await obterTextoCompletoEdital(editalId, {
+        palavrasChave: PALAVRAS_CHAVE_FINANCEIRO,
+        tamanhoMax: MAX_CHARS_FINANCEIRO,
+      });
 
     // Anexo de preços primeiro: é o candidato mais provável a conter a tabela de itens
     // de verdade, então entra logo no início do contexto (modelos tendem a dar mais
@@ -228,14 +306,26 @@ ${textoEdital ? `\n=== TRECHOS RELEVANTES DO EDITAL ===\n${textoEdital}` : ""}
       const itensPorBloco = await Promise.all(
         blocos.map((bloco, i) => extrairBlocoDeItens(bloco, i, blocos.length, cabecalho))
       );
-      const itens = itensPorBloco.flat();
+      let itens = deduplicarItens(itensPorBloco.flat());
+
+      // Edital publicou a tabela sem coluna de preço (comum em registro de preços) —
+      // sem isso, todo item ficaria com valorTotal zerado, o que é enganoso.
+      const semPrecoAntes = itens.filter((i) => i.valorUnitario == null).length;
+      let avisoPreco = "";
+      if (itens.length > 0 && semPrecoAntes / itens.length > 0.5) {
+        const { itens: preenchidos, qtdEstimados } = await preencherPrecosFaltantes(edital, itens);
+        itens = preenchidos;
+        if (qtdEstimados > 0) {
+          avisoPreco = ` O edital não publicou valor unitário de referência para ${qtdEstimados} item(ns) — a Bidd.IA sugeriu preços de mercado plausíveis para eles; ajuste antes de enviar a proposta.`;
+        }
+      }
 
       result = {
         itensEncontradosNoTexto: itens.length > 0,
         itens,
         observacoes:
           itens.length > 0
-            ? `Tabela de itens transcrita do texto do edital${blocos.length > 1 ? ` (extraída em ${blocos.length} trechos)` : ""} e conferida linha a linha. Revise antes do envio.`
+            ? `Tabela de itens transcrita do texto do edital${blocos.length > 1 ? ` (extraída em ${blocos.length} trechos)` : ""} e conferida linha a linha. Revise antes do envio.${avisoPreco}`
             : "Não foi possível identificar itens de uma tabela de preços no texto — monte a proposta manualmente a partir do PDF original.",
       };
     } else {
@@ -407,7 +497,30 @@ export async function corrigirAgente3ViaChat(editalId: string, notaCorrecao: str
   const itensAtuais: ItemProposta[] = JSON.parse(proposal.itensJson);
   const { textoEdital, textoTermoReferencia, textoAnexosPrecos } = await obterTextoCompletoEdital(editalId, {
     palavrasChave: PALAVRAS_CHAVE_FINANCEIRO,
+    tamanhoMax: MAX_CHARS_FINANCEIRO,
   });
+
+  // Quando a proposta já está bem abaixo do que o texto-fonte sugere, um diff não dá
+  // conta — o "itensFaltantes" ficaria grande demais pra resposta (estoura o limite de
+  // tokens) e o modelo perde a referência do que já existe, oscilando entre tentativas
+  // (adiciona um lote, remove outro). Nesse caso é mais confiável descartar e reextrair
+  // do zero pelo pipeline com blocos e autocorreção — a mesma rota que já lida bem com
+  // tabelas grandes — em vez de insistir num ajuste incremental.
+  const areaFinanceira = [textoAnexosPrecos, textoTermoReferencia, textoEdital].filter(Boolean).join("\n");
+  const itensEsperados = estimarQuantidadeDeItens(areaFinanceira);
+  if (itensEsperados > 5 && itensAtuais.length < itensEsperados * 0.7) {
+    await executarAgente3(editalId);
+    const refeita = await prisma.proposal.findUnique({ where: { editalId } });
+    const qtdNova = refeita ? (JSON.parse(refeita.itensJson) as ItemProposta[]).length : 0;
+    await logAudit(
+      editalId,
+      "Agente Financeiro",
+      "Correção via chat",
+      "OK",
+      `Observação do usuário: "${notaCorrecao}". Proposta estava bem incompleta (${itensAtuais.length} de ~${itensEsperados} itens esperados) — reextraída do zero, agora com ${qtdNova} item(ns).`
+    );
+    return `A proposta estava bem incompleta (${itensAtuais.length} de ~${itensEsperados} itens esperados pelo texto do edital) — refiz a extração inteira do zero em vez de só corrigir. Agora tem ${qtdNova} item(ns).`;
+  }
 
   const listaIndexada = itensAtuais
     .map((it, i) => `[${i}] ${it.descricao} | ${it.unidade} | qtd ${it.quantidade} | unit ${it.valorUnitario}`)
@@ -431,7 +544,10 @@ Responda em JSON:
   "indicesParaRemover": [number]
 }`,
     `=== TEXTO-FONTE ===\n${textoAnexosPrecos ?? ""}\n${textoTermoReferencia ?? ""}\n${textoEdital ?? ""}\n\n=== LISTA ATUAL DA PROPOSTA (${itensAtuais.length} itens) ===\n${listaIndexada}\n\n=== OBSERVAÇÃO DO USUÁRIO ===\n${notaCorrecao}`,
-    { model: MODELO_HAIKU, maxTokens: 4_000 }
+    // Mesmo abaixo do limiar de reextração total, o diff ainda pode envolver dezenas de
+    // itens (correções + faltantes) — um teto fixo baixo cortava a resposta no meio do
+    // JSON e derrubava a correção inteira por falha de parse.
+    { model: MODELO_HAIKU, maxTokens: maxTokensParaItens(itensAtuais.length, 8_000) }
   );
 
   const revisados = itensAtuais.map((item, i) => {
@@ -448,7 +564,17 @@ Responda em JSON:
   const faltantes = (diff.itensFaltantes ?? []).filter(
     (f) => f && f.descricao && typeof f.quantidade === "number" && typeof f.valorUnitario === "number"
   );
-  const itensFinais = [...revisados.filter((_, i) => !remover.has(i)), ...faltantes];
+  let itensFinais = [...revisados.filter((_, i) => !remover.has(i)), ...faltantes];
+
+  // Mesma checagem de "edital sem coluna de preço" da extração cheia — o usuário pode
+  // estar reportando exatamente esse sintoma (proposta com tudo R$ 0,00) via chat.
+  const semPrecoAntes = itensFinais.filter((i) => i.valorUnitario == null).length;
+  let qtdEstimados = 0;
+  if (itensFinais.length > 0 && semPrecoAntes / itensFinais.length > 0.5) {
+    const preenchido = await preencherPrecosFaltantes(edital, itensFinais);
+    itensFinais = preenchido.itens;
+    qtdEstimados = preenchido.qtdEstimados;
+  }
 
   const itensComTotal = itensFinais.map((item) => ({
     ...item,
@@ -469,6 +595,7 @@ Responda em JSON:
   if (diff.correcoes?.length) partes.push(`${diff.correcoes.length} item(ns) corrigido(s)`);
   if (faltantes.length) partes.push(`${faltantes.length} item(ns) adicionado(s)`);
   if (remover.size) partes.push(`${remover.size} item(ns) removido(s)`);
+  if (qtdEstimados > 0) partes.push(`${qtdEstimados} item(ns) sem preço no edital, com valor de mercado sugerido`);
   const resumo =
     partes.length > 0
       ? `Ajustei a proposta: ${partes.join(", ")}.`

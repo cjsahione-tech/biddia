@@ -149,16 +149,17 @@ export async function obterTextoBrutoDocumento(doc: DocumentRow): Promise<string
  */
 export async function extrairTextoDocumento(
   doc: DocumentRow,
-  opts?: { palavrasChave?: string[] }
+  opts?: { palavrasChave?: string[]; tamanhoMax?: number }
 ): Promise<string | null> {
   const texto = await obterTextoBrutoDocumento(doc);
   if (!texto) return null;
-  if (texto.length <= MAX_CHARS_POR_DOCUMENTO) return texto;
+  const tamanhoMax = opts?.tamanhoMax ?? MAX_CHARS_POR_DOCUMENTO;
+  if (texto.length <= tamanhoMax) return texto;
 
   if (opts?.palavrasChave) {
-    return selecionarTrechoRelevante(texto, { tamanhoMax: MAX_CHARS_POR_DOCUMENTO, palavrasChave: opts.palavrasChave });
+    return selecionarTrechoRelevante(texto, { tamanhoMax, palavrasChave: opts.palavrasChave });
   }
-  return `${texto.slice(0, MAX_CHARS_POR_DOCUMENTO)}\n\n[...texto truncado — documento maior que o limite considerado...]`;
+  return `${texto.slice(0, tamanhoMax)}\n\n[...texto truncado — documento maior que o limite considerado...]`;
 }
 
 /**
@@ -195,10 +196,13 @@ export type TextoEdital = {
  * `palavrasChave`, quando informado, direciona o corte de documentos longos para os
  * trechos mais relevantes à tarefa de quem está chamando (ex: o Agente Financeiro passa
  * termos como "valor unitário"/"quantidade" para não perder a tabela de itens).
+ * `tamanhoMax`, quando informado, substitui o teto padrão — o Agente Financeiro passa um
+ * valor bem maior, já que processa o texto em blocos (ver dividirEmBlocosPorLinha) e não
+ * precisa do teto conservador pensado para uma chamada única.
  */
 export async function obterTextoCompletoEdital(
   editalId: string,
-  opts?: { palavrasChave?: string[] }
+  opts?: { palavrasChave?: string[]; tamanhoMax?: number }
 ): Promise<TextoEdital> {
   // Inclui tanto os documentos baixados do PNCP quanto os enviados manualmente
   // pelo usuário na captação — ambos são a fonte do texto real do edital/TR.
