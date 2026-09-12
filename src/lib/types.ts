@@ -96,6 +96,24 @@ export type EstudoViabilidadeItem = {
   updatedAt: string;
 };
 
+export type EstudoEditalRef = {
+  id: string;
+  titulo: string;
+  orgaoNome: string;
+  municipio: string | null;
+  uf: string | null;
+  modalidade: string | null;
+  valorGlobal: number | null;
+  orcamentoSigiloso: boolean;
+  dataEncerramentoProposta: string | null;
+  proposal: { itensJson: string; valorGlobalReferencia: number } | null;
+};
+
+export type EstudoViabilidadeDetail = EstudoViabilidadeItem & {
+  editalId: string | null;
+  edital: EstudoEditalRef | null;
+};
+
 export type EditalDetail = Omit<EditalListItem, "analysis" | "proposal" | "documents"> & {
   numeroControlePNCP: string;
   orgaoCnpj: string;

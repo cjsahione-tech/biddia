@@ -31,3 +31,17 @@ export const ETAPAS_ESTUDO = [
 ] as const;
 
 export type EtapaEstudoKey = (typeof ETAPAS_ESTUDO)[number]["key"];
+
+/**
+ * Deriva a etapa atual a partir dos dados já preenchidos no estudo, em vez de um campo
+ * separado que poderia dessincronizar (ex: usuário troca o edital depois de já ter
+ * avançado). Cada etapa nova adiciona sua própria condição ANTES do fallback, só
+ * avançando quando a etapa seguinte já tem tela própria pronta para receber o usuário —
+ * senão ele cairia num "chega em breve" sem conseguir revisar o que já preencheu.
+ */
+export function etapaAtualDoEstudo(estudo: { editalId: string | null }): EtapaEstudoKey {
+  if (!estudo.editalId) return "edital";
+  // Etapa 2 (extração de requisitos) ainda não tem tela — o estudo com edital vinculado
+  // permanece em "edital", mostrando o resumo/itens do edital escolhido.
+  return "edital";
+}

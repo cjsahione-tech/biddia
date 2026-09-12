@@ -4,11 +4,12 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import { EtapaStepper } from "@/components/estudo-viabilidade/EtapaStepper";
-import { RAMO_LABEL } from "@/lib/estudo-viabilidade";
-import type { EstudoViabilidadeItem } from "@/lib/types";
+import { EtapaEdital } from "@/components/estudo-viabilidade/EtapaEdital";
+import { RAMO_LABEL, etapaAtualDoEstudo } from "@/lib/estudo-viabilidade";
+import type { EstudoViabilidadeDetail } from "@/lib/types";
 
 export function EstudoDetailClient({ estudoId }: { estudoId: string }) {
-  const [estudo, setEstudo] = useState<EstudoViabilidadeItem | null>(null);
+  const [estudo, setEstudo] = useState<EstudoViabilidadeDetail | null>(null);
 
   useEffect(() => {
     let cancelado = false;
@@ -30,6 +31,8 @@ export function EstudoDetailClient({ estudoId }: { estudoId: string }) {
     );
   }
 
+  const etapa = etapaAtualDoEstudo(estudo);
+
   return (
     <div className="mx-auto max-w-4xl px-8 py-10">
       <Link
@@ -44,15 +47,10 @@ export function EstudoDetailClient({ estudoId }: { estudoId: string }) {
       </h1>
 
       <div className="mt-6">
-        <EtapaStepper atual="edital" />
+        <EtapaStepper atual={etapa} />
       </div>
 
-      <div className="mt-8 rounded-2xl border border-dashed border-border p-10 text-center">
-        <p className="text-sm text-muted">
-          Próxima etapa (seleção do edital) chega em breve. Por enquanto, o ramo escolhido —{" "}
-          <strong className="text-foreground">{RAMO_LABEL[estudo.ramo]}</strong> — já está salvo neste estudo.
-        </p>
-      </div>
+      <div className="mt-8">{etapa === "edital" && <EtapaEdital estudo={estudo} onVinculado={setEstudo} />}</div>
     </div>
   );
 }

@@ -128,6 +128,7 @@ model Edital {
   auditLogs           AuditLog[]
   agentRuns           AgentRun[]
   agentMessages       AgentMessage[]
+  estudosViabilidade  EstudoViabilidade[]
 
   createdAt           DateTime      @default(now())
   updatedAt            DateTime     @updatedAt
@@ -310,6 +311,11 @@ model EstudoViabilidade {
   company   Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   ramo      RamoEstudo
+
+  // Etapa 1: edital de referência do estudo (opcional — nulo enquanto não escolhido, e
+  // pode ficar nulo se o edital de origem for excluído depois, sem apagar o estudo).
+  editalId  String?
+  edital    Edital?    @relation(fields: [editalId], references: [id], onDelete: SetNull)
 
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
