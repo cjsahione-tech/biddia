@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import { EtapaStepper } from "@/components/estudo-viabilidade/EtapaStepper";
-import { EtapaEdital } from "@/components/estudo-viabilidade/EtapaEdital";
+import { EtapaEdital, ResumoEdital } from "@/components/estudo-viabilidade/EtapaEdital";
+import { EtapaRequisitos } from "@/components/estudo-viabilidade/EtapaRequisitos";
 import { RAMO_LABEL, etapaAtualDoEstudo } from "@/lib/estudo-viabilidade";
 import type { EstudoViabilidadeDetail } from "@/lib/types";
 
@@ -50,7 +51,16 @@ export function EstudoDetailClient({ estudoId }: { estudoId: string }) {
         <EtapaStepper atual={etapa} />
       </div>
 
-      <div className="mt-8">{etapa === "edital" && <EtapaEdital estudo={estudo} onVinculado={setEstudo} />}</div>
+      <div className="mt-8 space-y-6">
+        {!estudo.editalId && <EtapaEdital estudoId={estudo.id} onVinculado={setEstudo} />}
+
+        {estudo.editalId && (
+          <>
+            <ResumoEdital estudo={estudo} onTrocar={() => setEstudo({ ...estudo, editalId: null, edital: null })} />
+            {etapa === "requisitos" && <EtapaRequisitos estudo={estudo} onUpdated={setEstudo} />}
+          </>
+        )}
+      </div>
     </div>
   );
 }

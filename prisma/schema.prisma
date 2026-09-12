@@ -317,6 +317,14 @@ model EstudoViabilidade {
   editalId  String?
   edital    Edital?    @relation(fields: [editalId], references: [id], onDelete: SetNull)
 
+  // Etapa 2: requisitos extraídos via IA (JSON.stringify de RequisitosEstudo — mesmo
+  // padrão de string JSON usado em Analysis/Proposal, não um tipo Json nativo).
+  // requisitosConfirmadoEm só é gravado quando o usuário revisa e confirma manualmente
+  // (nunca avança sozinho) — é isso, e não a mera presença do JSON, que marca a etapa
+  // como concluída.
+  requisitosJson         String?
+  requisitosConfirmadoEm DateTime?
+
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
 }

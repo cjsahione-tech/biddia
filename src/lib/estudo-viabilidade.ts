@@ -39,9 +39,13 @@ export type EtapaEstudoKey = (typeof ETAPAS_ESTUDO)[number]["key"];
  * avançando quando a etapa seguinte já tem tela própria pronta para receber o usuário —
  * senão ele cairia num "chega em breve" sem conseguir revisar o que já preencheu.
  */
-export function etapaAtualDoEstudo(estudo: { editalId: string | null }): EtapaEstudoKey {
+export function etapaAtualDoEstudo(estudo: {
+  editalId: string | null;
+  requisitosConfirmadoEm: string | null;
+}): EtapaEstudoKey {
   if (!estudo.editalId) return "edital";
-  // Etapa 2 (extração de requisitos) ainda não tem tela — o estudo com edital vinculado
-  // permanece em "edital", mostrando o resumo/itens do edital escolhido.
-  return "edital";
+  if (!estudo.requisitosConfirmadoEm) return "requisitos";
+  // Etapa 3 (regime tributário) ainda não tem tela — o estudo com requisitos
+  // confirmados permanece em "requisitos", mostrando o resumo já revisado.
+  return "requisitos";
 }

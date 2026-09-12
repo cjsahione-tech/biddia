@@ -109,9 +109,25 @@ export type EstudoEditalRef = {
   proposal: { itensJson: string; valorGlobalReferencia: number } | null;
 };
 
+export type RequisitosEstudo = {
+  objeto: string;
+  criterioJulgamento: string;
+  prazoExecucao: string;
+  localEntrega: string;
+  formaPagamento: string;
+  garantiasExigidas: string;
+  equipeMinima: string[];
+  certificacoesExigidas: string[];
+  especificacaoTecnica: string;
+  prazoEntrega: string;
+  baseadoEmTextoCompleto: boolean;
+};
+
 export type EstudoViabilidadeDetail = EstudoViabilidadeItem & {
   editalId: string | null;
   edital: EstudoEditalRef | null;
+  requisitosJson: string | null;
+  requisitosConfirmadoEm: string | null;
 };
 
 export type EditalDetail = Omit<EditalListItem, "analysis" | "proposal" | "documents"> & {

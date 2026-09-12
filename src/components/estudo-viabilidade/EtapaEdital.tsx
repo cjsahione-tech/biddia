@@ -2,27 +2,15 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Loader2, Search, X } from "lucide-react";
-import { Button } from "@/components/ui/Button";
 import { formatDate, formatValorEdital } from "@/lib/format";
 import { parseItens } from "@/lib/proposal";
 import type { EditalListItem, EstudoViabilidadeDetail } from "@/lib/types";
 
-/** Etapa 1: escolher o edital de referência do estudo, reaproveitando o cadastro de
- * editais já existente (nenhuma tabela nova de editais/itens é criada aqui). */
+/** Etapa 1: busca/seleção do edital de referência do estudo, reaproveitando o cadastro
+ * de editais já existente (nenhuma tabela nova de editais/itens é criada aqui). Só
+ * aparece enquanto nenhum edital foi vinculado ainda — depois disso, quem representa o
+ * edital nas telas seguintes é `ResumoEdital`. */
 export function EtapaEdital({
-  estudo,
-  onVinculado,
-}: {
-  estudo: EstudoViabilidadeDetail;
-  onVinculado: (estudo: EstudoViabilidadeDetail) => void;
-}) {
-  if (estudo.edital) {
-    return <EditalSelecionado estudo={estudo} onTrocar={() => onVinculado({ ...estudo, editalId: null, edital: null })} />;
-  }
-  return <SeletorDeEdital estudoId={estudo.id} onVinculado={onVinculado} />;
-}
-
-function SeletorDeEdital({
   estudoId,
   onVinculado,
 }: {
@@ -133,7 +121,9 @@ function SeletorDeEdital({
   );
 }
 
-function EditalSelecionado({
+/** Contexto persistente do edital vinculado — fica visível em toda etapa seguinte (não
+ * só na Etapa 1), com a opção de trocar a qualquer momento. */
+export function ResumoEdital({
   estudo,
   onTrocar,
 }: {
@@ -144,7 +134,7 @@ function EditalSelecionado({
   const itens = edital.proposal ? parseItens(edital.proposal.itensJson) : [];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="rounded-2xl border border-border bg-surface/50 p-5">
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -178,10 +168,12 @@ function EditalSelecionado({
         </div>
       </div>
 
-      {itens.length > 0 ? (
-        <div>
-          <h4 className="text-sm font-semibold text-foreground">Itens/lotes já identificados</h4>
-          <div className="mt-2 overflow-x-auto rounded-2xl border border-border">
+      {itens.length > 0 && (
+        <details className="rounded-2xl border border-border">
+          <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-foreground">
+            Itens/lotes já identificados ({itens.length})
+          </summary>
+          <div className="overflow-x-auto border-t border-border">
             <table className="w-full text-sm">
               <thead className="bg-surface text-left text-xs font-medium uppercase tracking-wide text-muted">
                 <tr>
@@ -203,19 +195,8 @@ function EditalSelecionado({
               </tbody>
             </table>
           </div>
-        </div>
-      ) : (
-        <p className="rounded-2xl border border-dashed border-border p-5 text-center text-sm text-muted">
-          Este edital ainda não tem itens extraídos pelo Agente Financeiro — a próxima etapa (extração de requisitos
-          via IA) vai identificá-los a partir do texto do edital.
-        </p>
+        </details>
       )}
-
-      <div className="flex justify-end">
-        <Button disabled title="Etapa 2 ainda não implementada">
-          Continuar para Requisitos
-        </Button>
-      </div>
     </div>
   );
 }
