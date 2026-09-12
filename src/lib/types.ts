@@ -89,6 +89,13 @@ export type AgentMessageItem = {
   createdAt: string;
 };
 
+export type EstudoViabilidadeItem = {
+  id: string;
+  ramo: "SERVICO" | "PRODUTO";
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type EditalDetail = Omit<EditalListItem, "analysis" | "proposal" | "documents"> & {
   numeroControlePNCP: string;
   orgaoCnpj: string;

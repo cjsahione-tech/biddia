@@ -46,6 +46,7 @@ model Company {
   keywords       Keyword[]
   editais        Edital[]
   editaisExcluidos EditalExcluido[]
+  estudosViabilidade EstudoViabilidade[]
 
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
@@ -291,4 +292,25 @@ model AgentRun {
 
   startedAt   DateTime       @default(now())
   finishedAt  DateTime?
+}
+
+// ── Estudo de Viabilidade ───────────────────────────────────────────────────
+// Módulo de precificação/decisão de participação em licitação, independente do
+// quadro Kanban de editais — cada estudo é um cálculo (potencialmente uma
+// simulação, não necessariamente ligado a um edital já capturado no sistema).
+
+enum RamoEstudo {
+  SERVICO
+  PRODUTO
+}
+
+model EstudoViabilidade {
+  id        String     @id @default(cuid())
+  companyId String
+  company   Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  ramo      RamoEstudo
+
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
 }
