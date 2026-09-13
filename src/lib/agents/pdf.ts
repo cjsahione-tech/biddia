@@ -160,3 +160,160 @@ export async function gerarPdfTimbrado(opts: {
 export function bytesToDataUrl(bytes: Uint8Array) {
   return `data:application/pdf;base64,${Buffer.from(bytes).toString("base64")}`;
 }
+
+export type SecaoRelatorio =
+  | { tipo: "campos"; titulo: string; campos: { label: string; valor: string }[] }
+  | { tipo: "texto"; titulo: string; texto: string }
+  | { tipo: "tabela"; titulo: string; colunas: { label: string; largura: number }[]; linhas: string[][] };
+
+function truncarParaLargura(texto: string, font: import("pdf-lib").PDFFont, size: number, maxWidth: number): string {
+  if (font.widthOfTextAtSize(texto, size) <= maxWidth) return texto;
+  let resultado = texto;
+  while (resultado.length > 1 && font.widthOfTextAtSize(`${resultado}…`, size) > maxWidth) {
+    resultado = resultado.slice(0, -1);
+  }
+  return `${resultado}…`;
+}
+
+/**
+ * Gera um PDF de relatório (seções de campos/texto/tabela) com o mesmo cabeçalho
+ * timbrado de gerarPdfTimbrado, mas sem bloco de assinatura — é um resumo pra consulta,
+ * não uma declaração assinada. Usado pelo relatório final do Estudo de Viabilidade.
+ */
+export async function gerarPdfRelatorio(opts: {
+  company: Company;
+  titulo: string;
+  subtitulo?: string;
+  secoes: SecaoRelatorio[];
+}): Promise<Uint8Array> {
+  const { company, titulo, subtitulo, secoes } = opts;
+
+  const pdfDoc = await PDFDocument.create();
+  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+
+  let page = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+  let cursorY = PAGE_HEIGHT - MARGIN;
+
+  function novaPaginaSeNecessario(alturaNecessaria: number) {
+    if (cursorY < MARGIN + alturaNecessaria) {
+      page = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+      cursorY = PAGE_HEIGHT - MARGIN;
+    }
+  }
+
+  let logoDims: { width: number; height: number } | null = null;
+  let logoImage: import("pdf-lib").PDFImage | null = null;
+  if (company.logoUrl && company.logoUrl.startsWith("data:image")) {
+    try {
+      const base64 = company.logoUrl.split(",")[1];
+      const bytes = Uint8Array.from(Buffer.from(base64, "base64"));
+      logoImage = company.logoUrl.includes("png") ? await pdfDoc.embedPng(bytes) : await pdfDoc.embedJpg(bytes);
+      const scale = 40 / logoImage.height;
+      logoDims = { width: logoImage.width * scale, height: 40 };
+    } catch {
+      logoImage = null;
+    }
+  }
+  const headerTextX = logoImage ? MARGIN + (logoDims?.width ?? 0) + 12 : MARGIN;
+  if (logoImage && logoDims) {
+    page.drawImage(logoImage, {
+      x: MARGIN,
+      y: cursorY - logoDims.height,
+      width: logoDims.width,
+      height: logoDims.height,
+    });
+  }
+  page.drawText(company.razaoSocial, { x: headerTextX, y: cursorY - 14, size: 12, font: fontBold, color: rgb(0.1, 0.1, 0.1) });
+  page.drawText(`CNPJ: ${company.cnpj}`, { x: headerTextX, y: cursorY - 28, size: 9, font, color: rgb(0.35, 0.35, 0.35) });
+
+  cursorY -= 64;
+  page.drawLine({
+    start: { x: MARGIN, y: cursorY },
+    end: { x: PAGE_WIDTH - MARGIN, y: cursorY },
+    thickness: 1,
+    color: rgb(0.85, 0.85, 0.85),
+  });
+  cursorY -= 30;
+
+  page.drawText(titulo, { x: MARGIN, y: cursorY, size: 15, font: fontBold, color: rgb(0, 0, 0) });
+  cursorY -= 20;
+  if (subtitulo) {
+    page.drawText(subtitulo, { x: MARGIN, y: cursorY, size: 10, font, color: rgb(0.4, 0.4, 0.4) });
+    cursorY -= 24;
+  } else {
+    cursorY -= 6;
+  }
+
+  const maxWidth = PAGE_WIDTH - MARGIN * 2;
+
+  for (const secao of secoes) {
+    novaPaginaSeNecessario(50);
+    cursorY -= 8;
+    page.drawText(secao.titulo, { x: MARGIN, y: cursorY, size: 12, font: fontBold, color: rgb(0.15, 0.15, 0.5) });
+    cursorY -= 18;
+
+    if (secao.tipo === "campos") {
+      for (const campo of secao.campos) {
+        novaPaginaSeNecessario(30);
+        const labelText = `${campo.label}: `;
+        page.drawText(labelText, { x: MARGIN, y: cursorY, size: 9.5, font: fontBold, color: rgb(0.3, 0.3, 0.3) });
+        const labelWidth = fontBold.widthOfTextAtSize(labelText, 9.5);
+        const linhas = wrapText(campo.valor || "—", font, 9.5, maxWidth - labelWidth);
+        page.drawText(linhas[0] ?? "—", { x: MARGIN + labelWidth, y: cursorY, size: 9.5, font, color: rgb(0.1, 0.1, 0.1) });
+        cursorY -= 14;
+        for (const extra of linhas.slice(1)) {
+          novaPaginaSeNecessario(20);
+          page.drawText(extra, { x: MARGIN + labelWidth, y: cursorY, size: 9.5, font, color: rgb(0.1, 0.1, 0.1) });
+          cursorY -= 14;
+        }
+      }
+    } else if (secao.tipo === "texto") {
+      const linhas = wrapText(secao.texto, font, 9.5, maxWidth);
+      for (const linha of linhas) {
+        novaPaginaSeNecessario(20);
+        page.drawText(linha, { x: MARGIN, y: cursorY, size: 9.5, font, color: rgb(0.15, 0.15, 0.15) });
+        cursorY -= 14;
+      }
+    } else {
+      novaPaginaSeNecessario(30);
+      let x = MARGIN;
+      for (const coluna of secao.colunas) {
+        page.drawText(coluna.label, { x, y: cursorY, size: 8.5, font: fontBold, color: rgb(0.3, 0.3, 0.3) });
+        x += coluna.largura;
+      }
+      cursorY -= 12;
+      page.drawLine({
+        start: { x: MARGIN, y: cursorY + 4 },
+        end: { x: PAGE_WIDTH - MARGIN, y: cursorY + 4 },
+        thickness: 0.5,
+        color: rgb(0.85, 0.85, 0.85),
+      });
+      cursorY -= 4;
+
+      for (const linha of secao.linhas) {
+        novaPaginaSeNecessario(18);
+        let xCel = MARGIN;
+        linha.forEach((valor, i) => {
+          const largura = secao.colunas[i]?.largura ?? 60;
+          const textoTruncado = truncarParaLargura(valor, font, 8, largura - 4);
+          page.drawText(textoTruncado, { x: xCel, y: cursorY, size: 8, font, color: rgb(0.15, 0.15, 0.15) });
+          xCel += largura;
+        });
+        cursorY -= 13;
+      }
+    }
+    cursorY -= 12;
+  }
+
+  novaPaginaSeNecessario(20);
+  page.drawText(`Gerado por Bidd.IA em ${new Date().toLocaleDateString("pt-BR")}`, {
+    x: MARGIN,
+    y: cursorY,
+    size: 8,
+    font,
+    color: rgb(0.6, 0.6, 0.6),
+  });
+
+  return pdfDoc.save();
+}

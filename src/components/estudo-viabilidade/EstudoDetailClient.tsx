@@ -9,6 +9,7 @@ import { EtapaRequisitos } from "@/components/estudo-viabilidade/EtapaRequisitos
 import { EtapaTributos } from "@/components/estudo-viabilidade/EtapaTributos";
 import { EtapaCustos } from "@/components/estudo-viabilidade/EtapaCustos";
 import { EtapaCalculo } from "@/components/estudo-viabilidade/EtapaCalculo";
+import { EtapaRelatorio } from "@/components/estudo-viabilidade/EtapaRelatorio";
 import { RAMO_LABEL, etapaAtualDoEstudo } from "@/lib/estudo-viabilidade";
 import type { EstudoViabilidadeDetail } from "@/lib/types";
 
@@ -70,6 +71,7 @@ export function EstudoDetailClient({ estudoId }: { estudoId: string }) {
             {estudo.requisitosConfirmadoEm && <EtapaTributos estudo={estudo} onUpdated={setEstudo} />}
             {estudo.tributosConfirmadoEm && <EtapaCustos estudo={estudo} onUpdated={setEstudo} />}
             {estudo.custosConfirmadoEm && <EtapaCalculo estudo={estudo} onUpdated={setEstudo} />}
+            {estudo.calculoConfirmadoEm && <EtapaRelatorio estudo={estudo} />}
           </>
         )}
       </div>

@@ -51,7 +51,5 @@ export function etapaAtualDoEstudo(estudo: {
   if (!estudo.tributosConfirmadoEm) return "tributos";
   if (!estudo.custosConfirmadoEm) return "custos";
   if (!estudo.calculoConfirmadoEm) return "calculo";
-  // Etapa 6 (relatório) ainda não tem tela — o estudo já calculado permanece em
-  // "calculo", mostrando o resultado.
-  return "calculo";
+  return "relatorio";
 }

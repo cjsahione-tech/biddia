@@ -227,12 +227,6 @@ export function EtapaCalculo({
           </table>
         </div>
       </div>
-
-      <div className="flex justify-end">
-        <Button disabled title="Etapa 6 ainda não implementada">
-          Continuar para Relatório
-        </Button>
-      </div>
     </div>
   );
 }
