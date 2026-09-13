@@ -15,6 +15,18 @@ import {
 
 export const maxDuration = 60;
 
+/** Equipe mínima em texto livre, já extraída na Etapa 2 (Requisitos) — passada como
+ * dica para a extração de cargos reconciliar em vez de reextrair do zero. */
+function equipeMinimaDoEstudo(estudo: { requisitosJson: string | null }): string[] | undefined {
+  if (!estudo.requisitosJson) return undefined;
+  try {
+    const requisitos = JSON.parse(estudo.requisitosJson) as { equipeMinima?: string[] };
+    return requisitos.equipeMinima && requisitos.equipeMinima.length > 0 ? requisitos.equipeMinima : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /** Garante que o estudo (ramo Produto) tenha um snapshot de itens (congelado no momento
  * em que a Etapa 4 começa — não muda mais se a Proposal do edital for reprocessada
  * depois) e uma linha de custo por item, com valores zerados na primeira vez. */
@@ -61,7 +73,7 @@ async function garantirCargosInicializadosServico(estudoId: string) {
 
   if (cargosJson == null) {
     const sugestao = estudo.editalId
-      ? await extrairCargosServico(estudo.editalId).catch((err) => {
+      ? await extrairCargosServico(estudo.editalId, equipeMinimaDoEstudo(estudo)).catch((err) => {
           console.error(`Falha ao extrair cargos do estudo ${estudoId}:`, err);
           return { cargos: [] as { nome: string; quantidade: number }[] };
         })
@@ -135,7 +147,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
 
   let sugestao;
   try {
-    sugestao = await extrairCargosServico(estudo.editalId);
+    sugestao = await extrairCargosServico(estudo.editalId, equipeMinimaDoEstudo(estudo));
   } catch (err) {
     console.error(`Falha ao extrair cargos do estudo ${id}:`, err);
     return NextResponse.json({ error: "Não foi possível extrair os cargos agora. Tente novamente em instantes." }, { status: 502 });
