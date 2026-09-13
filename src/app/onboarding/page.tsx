@@ -10,7 +10,7 @@ export default async function OnboardingPage() {
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col px-6 py-12">
       <span className="text-lg font-semibold tracking-tight text-foreground">
-        Licit<span className="text-brand">ax</span>
+        Bidd<span className="text-brand">.IA</span>
       </span>
       <h1 className="mt-6 text-2xl font-semibold text-foreground">
         Vamos configurar sua empresa
