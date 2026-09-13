@@ -3,9 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { X, Upload, Check, Loader2 } from "lucide-react";
-import { Field, TextInput, TextArea } from "@/components/ui/Field";
+import { Field, TextInput, TextArea, Select } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
 import { buscarEnderecoPorCep } from "@/lib/cep";
+import { SEGMENTOS_LICITANET } from "@/lib/licitanet-segmentos";
 
 const UF_LIST = [
   "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG",
@@ -58,6 +59,7 @@ export function OnboardingWizard() {
   const [atendeBem, setAtendeBem] = useState(true);
   const [keywords, setKeywords] = useState<string[]>([]);
   const [keywordDraft, setKeywordDraft] = useState("");
+  const [licitanetSegmentoId, setLicitanetSegmentoId] = useState<number | null>(null);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -143,7 +145,7 @@ export function OnboardingWizard() {
       const res = await fetch("/api/company", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, keywords, logoUrl, atendeServico, atendeBem }),
+        body: JSON.stringify({ ...form, keywords, logoUrl, atendeServico, atendeBem, licitanetSegmentoId }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -270,6 +272,25 @@ export function OnboardingWizard() {
                 ))}
               </div>
             )}
+          </Field>
+
+          <Field
+            label="Segmento no LicitaNet (opcional)"
+            htmlFor="licitanetSegmento"
+            hint="Além do PNCP, o Agente Comercial também pode buscar editais no portal LicitaNet, filtrados por este segmento."
+          >
+            <Select
+              id="licitanetSegmento"
+              value={licitanetSegmentoId ?? ""}
+              onChange={(e) => setLicitanetSegmentoId(e.target.value ? Number(e.target.value) : null)}
+            >
+              <option value="">Não buscar no LicitaNet</option>
+              {SEGMENTOS_LICITANET.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.nome}
+                </option>
+              ))}
+            </Select>
           </Field>
 
           {error && <p className="text-sm text-danger">{error}</p>}

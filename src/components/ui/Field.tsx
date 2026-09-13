@@ -1,4 +1,4 @@
-import type { InputHTMLAttributes, TextareaHTMLAttributes, ReactNode } from "react";
+import type { InputHTMLAttributes, SelectHTMLAttributes, TextareaHTMLAttributes, ReactNode } from "react";
 
 export function Field({
   label,
@@ -31,4 +31,8 @@ export function TextInput(props: InputHTMLAttributes<HTMLInputElement>) {
 
 export function TextArea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
   return <textarea {...props} className={`${baseInputClass} ${props.className ?? ""}`} />;
+}
+
+export function Select(props: SelectHTMLAttributes<HTMLSelectElement>) {
+  return <select {...props} className={`${baseInputClass} ${props.className ?? ""}`} />;
 }

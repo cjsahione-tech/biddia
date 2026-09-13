@@ -3,10 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Loader2, Upload, X, Check, Settings2 } from "lucide-react";
-import { Field, TextInput, TextArea } from "@/components/ui/Field";
+import { Field, TextInput, TextArea, Select } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
 import { REGIMES_TRIBUTARIOS, ANEXOS_SIMPLES, type RegimeTributario, type AnexoSimples } from "@/lib/tributos";
 import { buscarEnderecoPorCep } from "@/lib/cep";
+import { SEGMENTOS_LICITANET } from "@/lib/licitanet-segmentos";
 
 type Company = {
   objetoSocial: string;
@@ -31,6 +32,7 @@ type Company = {
   anexoSimplesPadrao: AnexoSimples | null;
   rbt12Padrao: number | null;
   keywords: { id: string; term: string }[];
+  licitanetSegmentoId: number | null;
 };
 
 export function EmpresaClient() {
@@ -203,6 +205,27 @@ export function EmpresaClient() {
           {company.keywords.length === 0 && (
             <p className="text-xs text-muted">Nenhuma palavra-chave cadastrada ainda.</p>
           )}
+        </div>
+
+        <div className="mt-6 border-t border-border pt-6">
+          <Field
+            label="Segmento no LicitaNet (opcional)"
+            htmlFor="licitanetSegmento"
+            hint="Além do PNCP, o Agente Comercial também pode buscar editais no portal LicitaNet, filtrados por este segmento."
+          >
+            <Select
+              id="licitanetSegmento"
+              value={company.licitanetSegmentoId ?? ""}
+              onChange={(e) => set("licitanetSegmentoId", e.target.value ? Number(e.target.value) : null)}
+            >
+              <option value="">Não buscar no LicitaNet</option>
+              {SEGMENTOS_LICITANET.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.nome}
+                </option>
+              ))}
+            </Select>
+          </Field>
         </div>
       </section>
 

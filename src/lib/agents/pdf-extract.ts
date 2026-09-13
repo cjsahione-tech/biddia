@@ -171,7 +171,7 @@ export async function prewarmTextoDocumentos(editalId: string): Promise<void> {
   const docs = await prisma.document.findMany({
     where: {
       editalId,
-      tipo: { in: ["DOCUMENTO_PNCP", "DOCUMENTO_USUARIO"] },
+      tipo: { in: ["DOCUMENTO_PNCP", "DOCUMENTO_LICITANET", "DOCUMENTO_USUARIO"] },
       textoExtraido: null,
     },
   });
@@ -207,7 +207,7 @@ export async function obterTextoCompletoEdital(
   // Inclui tanto os documentos baixados do PNCP quanto os enviados manualmente
   // pelo usuário na captação — ambos são a fonte do texto real do edital/TR.
   const documentos = await prisma.document.findMany({
-    where: { editalId, tipo: { in: ["DOCUMENTO_PNCP", "DOCUMENTO_USUARIO"] } },
+    where: { editalId, tipo: { in: ["DOCUMENTO_PNCP", "DOCUMENTO_LICITANET", "DOCUMENTO_USUARIO"] } },
   });
 
   const docEdital = documentos.find((d) => d.categoria === "EDITAL") ?? null;

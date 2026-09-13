@@ -44,6 +44,13 @@ model Company {
   atendeServico  Boolean   @default(true)
   atendeBem      Boolean   @default(true)
   keywords       Keyword[]
+
+  // Segmento da LicitaNet (https://licitanet.com.br) usado pelo Agente Comercial para
+  // buscar também nesse portal, além do PNCP — id/nome vêm da tabela fixa de segmentos
+  // do próprio site (src/lib/licitanet-segmentos.ts), não é uma taxonomia nossa.
+  licitanetSegmentoId   Int?
+  licitanetSegmentoNome String?
+
   editais        Edital[]
   editaisExcluidos EditalExcluido[]
   estudosViabilidade EstudoViabilidade[]
@@ -210,6 +217,7 @@ enum DocumentTipo {
   ANEXO_GERADO
   DOCUMENTO_USUARIO
   DOCUMENTO_PNCP
+  DOCUMENTO_LICITANET
 }
 
 enum DocumentStatus {

@@ -5,12 +5,13 @@ import type { DocumentItem } from "@/lib/types";
 
 function labelDocumento(doc: DocumentItem) {
   if (doc.tipo === "DOCUMENTO_PNCP") return "Publicado pelo órgão no PNCP";
+  if (doc.tipo === "DOCUMENTO_LICITANET") return "Publicado pelo órgão no LicitaNet";
   if (doc.tipo === "ANEXO_GERADO") return "Gerado automaticamente";
   return "Enviado pelo usuário";
 }
 
 function DocumentRow({ editalId, doc }: { editalId: string; doc: DocumentItem }) {
-  const oficial = doc.tipo === "DOCUMENTO_PNCP";
+  const oficial = doc.tipo === "DOCUMENTO_PNCP" || doc.tipo === "DOCUMENTO_LICITANET";
   return (
     <div className="flex items-center justify-between rounded-xl border border-border p-4">
       <div className="flex items-center gap-3 min-w-0">
@@ -49,7 +50,7 @@ export function DocumentsTab({
   documents: DocumentItem[];
   onUpdate: () => void;
 }) {
-  const oficiais = documents.filter((d) => d.tipo === "DOCUMENTO_PNCP");
+  const oficiais = documents.filter((d) => d.tipo === "DOCUMENTO_PNCP" || d.tipo === "DOCUMENTO_LICITANET");
   const enviados = documents.filter((d) => d.tipo === "DOCUMENTO_USUARIO");
   const gerados = documents.filter((d) => d.tipo === "ANEXO_GERADO");
 
@@ -69,9 +70,9 @@ export function DocumentsTab({
     <div className="space-y-8">
       {oficiais.length > 0 && (
         <div>
-          <h4 className="text-sm font-semibold text-foreground">Documentos oficiais (PNCP)</h4>
+          <h4 className="text-sm font-semibold text-foreground">Documentos oficiais</h4>
           <p className="mt-1 text-xs text-muted">
-            Edital e termo de referência publicados pelo órgão, baixados direto da fonte oficial.
+            Edital e termo de referência publicados pelo órgão, baixados direto da fonte oficial (PNCP ou LicitaNet).
           </p>
           <div className="mt-3 space-y-3">
             {oficiais.map((doc) => (

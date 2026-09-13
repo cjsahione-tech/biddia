@@ -12,6 +12,13 @@ import {
   type PncpSearchItem,
   type PncpArquivo,
 } from "@/lib/agents/pncp";
+import {
+  buscarPublicacoesLicitaNet,
+  baixarArquivoLicitaNet,
+  parseDataBr,
+  linkBoletimSegmento,
+  type LicitaNetPublication,
+} from "@/lib/agents/licitanet";
 import { classificarTipoObjeto, empresaAtende, type TipoObjeto } from "@/lib/agents/classificador-objeto";
 import { classificarEditaisEmLote } from "@/lib/agents/relevancia";
 import { askJSON, MODELO_HAIKU } from "@/lib/anthropic";
@@ -19,30 +26,32 @@ import { extrairTextoPdf, base64ParaBytes } from "@/lib/agents/pdf-extract";
 import { logAudit } from "@/lib/agents/run-tracker";
 import { mapComLimite } from "@/lib/concorrencia";
 
-// Quantos editais trazer por palavra-chave, na ordem do PNCP (última atualização
-// primeiro) — o mesmo recorte que o site do PNCP mostra nas primeiras páginas.
+// Quantos editais trazer por palavra-chave (PNCP) ou por segmento (LicitaNet), na ordem
+// de cada fonte — o mesmo recorte que os sites de origem mostram nas primeiras páginas.
 const MAX_POR_PALAVRA_CHAVE = 100;
+const MAX_POR_SEGMENTO_LICITANET = 100;
 
 /**
- * Baixa (em segundo plano) os PDFs de editais já captados que ainda estão só com o
- * link de origem. Roda depois da resposta da busca, para não deixar o usuário esperando
- * dezenas de downloads — e também é acionado na aprovação de um edital, garantindo que
- * o texto esteja disponível para os agentes mesmo se o download em background não tiver
- * terminado.
+ * Baixa (em segundo plano) os PDFs/arquivos de editais já captados que ainda estão só
+ * com o link de origem. Roda depois da resposta da busca, para não deixar o usuário
+ * esperando dezenas de downloads — e também é acionado na aprovação de um edital,
+ * garantindo que o texto esteja disponível para os agentes mesmo se o download em
+ * background não tiver terminado.
  */
 export async function baixarDocumentosPendentes(editalIds: string[]) {
   if (editalIds.length === 0) return;
   const docs = await prisma.document.findMany({
     where: {
       editalId: { in: editalIds },
-      tipo: "DOCUMENTO_PNCP",
+      tipo: { in: ["DOCUMENTO_PNCP", "DOCUMENTO_LICITANET"] },
       conteudoBase64: null,
       origemUrl: { not: null },
     },
   });
 
   await mapComLimite(docs, 6, async (doc) => {
-    const arquivo = await baixarArquivoPncp(doc.origemUrl!).catch(() => null);
+    const baixar = doc.tipo === "DOCUMENTO_LICITANET" ? baixarArquivoLicitaNet : baixarArquivoPncp;
+    const arquivo = await baixar(doc.origemUrl!).catch(() => null);
     if (!arquivo) return;
     await prisma.document
       .update({
@@ -51,15 +60,23 @@ export async function baixarDocumentosPendentes(editalIds: string[]) {
           conteudoBase64: `data:${arquivo.contentType};base64,${Buffer.from(arquivo.bytes).toString("base64")}`,
         },
       })
-      .catch((err) => console.error(`Falha ao salvar PDF baixado do documento ${doc.id}:`, err));
+      .catch((err) => console.error(`Falha ao salvar arquivo baixado do documento ${doc.id}:`, err));
   });
 }
 
+type CandidatoPncp = { fonte: "PNCP"; numeroControle: string; titulo: string; descricao: string; item: PncpSearchItem; keyword: string };
+type CandidatoLicitaNet = { fonte: "LICITANET"; numeroControle: string; titulo: string; descricao: string; item: LicitaNetPublication };
+type Candidato = CandidatoPncp | CandidatoLicitaNet;
+
+function tituloLicitaNet(item: LicitaNetPublication): string {
+  return `${item.disputeModeText ?? "Licitação"} nº ${item.biddingProcess}`;
+}
+
 /**
- * Agente Comercial: varre o PNCP com as palavras-chave da empresa e replica na
- * plataforma as oportunidades da busca, na mesma ordem do site do PNCP. Não lista
- * editais cujo tipo (compra de bem x prestação de serviço) não bate com o que a
- * empresa declarou atender no cadastro, nem os que a IA considera sem relação direta
+ * Agente Comercial: varre o PNCP com as palavras-chave da empresa e o LicitaNet com o
+ * segmento cadastrado da empresa, e replica na plataforma as oportunidades encontradas.
+ * Não lista editais cujo tipo (compra de bem x prestação de serviço) não bate com o que
+ * a empresa declarou atender no cadastro, nem os que a IA considera sem relação direta
  * com o objeto social.
  */
 export async function executarAgente1(companyId: string) {
@@ -68,54 +85,81 @@ export async function executarAgente1(companyId: string) {
     include: { keywords: true },
   });
   if (!company) throw new Error("Empresa não encontrada");
-  if (company.keywords.length === 0) {
-    return { novos: 0, analisados: 0, mensagem: "Nenhuma palavra-chave cadastrada." };
+  if (company.keywords.length === 0 && !company.licitanetSegmentoId) {
+    return {
+      novos: 0,
+      analisados: 0,
+      mensagem: "Nenhuma palavra-chave (PNCP) nem segmento LicitaNet cadastrados.",
+    };
   }
 
-  // 1. Busca no PNCP, preservando a ordem de cada busca (última atualização primeiro).
-  let falhas = 0;
+  // 1a. Busca no PNCP, preservando a ordem de cada busca (última atualização primeiro).
+  let falhasPncp = 0;
   const vistos = new Set<string>();
-  const candidatos: { item: PncpSearchItem; keyword: string }[] = [];
+  const candidatos: Candidato[] = [];
   for (const kw of company.keywords) {
     let items: PncpSearchItem[];
     try {
       items = await searchEditaisPorPalavraChave(kw.term, MAX_POR_PALAVRA_CHAVE);
     } catch (err) {
       console.error(`Agente Comercial: falha ao buscar "${kw.term}" no PNCP:`, err);
-      falhas++;
+      falhasPncp++;
       continue;
     }
     for (const item of items) {
       if (vistos.has(item.numero_controle_pncp)) continue;
       vistos.add(item.numero_controle_pncp);
-      candidatos.push({ item, keyword: kw.term });
+      candidatos.push({
+        fonte: "PNCP",
+        numeroControle: item.numero_controle_pncp,
+        titulo: item.title,
+        descricao: item.description || "",
+        item,
+        keyword: kw.term,
+      });
     }
   }
 
-  if (falhas === company.keywords.length) {
-    return {
-      novos: 0,
-      analisados: 0,
-      mensagem: "O PNCP está indisponível no momento. Tente buscar novamente em alguns instantes.",
-    };
+  // 1b. Busca no LicitaNet pelo segmento cadastrado da empresa — fonte independente do
+  // PNCP, então uma falha aqui não impede o restante da busca (e vice-versa).
+  let falhaLicitaNet: string | null = null;
+  if (company.licitanetSegmentoId) {
+    try {
+      const publicacoes = await buscarPublicacoesLicitaNet(company.licitanetSegmentoId, MAX_POR_SEGMENTO_LICITANET);
+      for (const item of publicacoes) {
+        const numeroControle = `LICITANET-${item.identifier}`;
+        if (vistos.has(numeroControle)) continue;
+        vistos.add(numeroControle);
+        candidatos.push({
+          fonte: "LICITANET",
+          numeroControle,
+          titulo: tituloLicitaNet(item),
+          descricao: item.description || "",
+          item,
+        });
+      }
+    } catch (err) {
+      console.error(`Agente Comercial: falha ao buscar no LicitaNet (segmento ${company.licitanetSegmentoId}):`, err);
+      falhaLicitaNet = err instanceof Error ? err.message : "erro desconhecido";
+    }
   }
 
   const analisados = candidatos.length;
 
   // 2. Descarta os que já estão na plataforma ou que o usuário já excluiu antes (o card
-  // saiu do quadro, mas a chave PNCP fica registrada em EditalExcluido pra não voltar).
+  // saiu do quadro, mas a chave fica registrada em EditalExcluido pra não voltar).
   const [jaExistentesRows, jaExcluidosRows] = await Promise.all([
     prisma.edital.findMany({
       where: {
         companyId: company.id,
-        numeroControlePNCP: { in: candidatos.map((c) => c.item.numero_controle_pncp) },
+        numeroControlePNCP: { in: candidatos.map((c) => c.numeroControle) },
       },
       select: { numeroControlePNCP: true },
     }),
     prisma.editalExcluido.findMany({
       where: {
         companyId: company.id,
-        numeroControlePNCP: { in: candidatos.map((c) => c.item.numero_controle_pncp) },
+        numeroControlePNCP: { in: candidatos.map((c) => c.numeroControle) },
       },
       select: { numeroControlePNCP: true },
     }),
@@ -123,24 +167,21 @@ export async function executarAgente1(companyId: string) {
   const jaExistentes = new Set(jaExistentesRows.map((e) => e.numeroControlePNCP));
   const jaExcluidos = new Set(jaExcluidosRows.map((e) => e.numeroControlePNCP));
   const novosCandidatos = candidatos.filter(
-    (c) => !jaExistentes.has(c.item.numero_controle_pncp) && !jaExcluidos.has(c.item.numero_controle_pncp)
+    (c) => !jaExistentes.has(c.numeroControle) && !jaExcluidos.has(c.numeroControle)
   );
 
-  // 3. Classifica em lote (relevância + tipo do objeto) com IA.
+  // 3. Classifica em lote (relevância + tipo do objeto) com IA — mesmo pipeline para as
+  // duas fontes, já que ambas chegam normalizadas em {numeroControle, titulo, descricao}.
   const classificacoes = await classificarEditaisEmLote(
     company.objetoSocial,
-    novosCandidatos.map((c) => ({
-      numeroControle: c.item.numero_controle_pncp,
-      titulo: c.item.title,
-      descricao: c.item.description || "",
-    }))
+    novosCandidatos.map((c) => ({ numeroControle: c.numeroControle, titulo: c.titulo, descricao: c.descricao }))
   );
 
   // 4. Filtra: precisa ser relevante E do tipo que a empresa atende.
   let descartadosPerfil = 0;
   let descartadosRelevancia = 0;
   const aprovados = novosCandidatos.filter((c) => {
-    const cl = classificacoes.get(c.item.numero_controle_pncp);
+    const cl = classificacoes.get(c.numeroControle);
     if (!cl) return true;
     if (!cl.relevante) {
       descartadosRelevancia++;
@@ -153,102 +194,150 @@ export async function executarAgente1(companyId: string) {
     return true;
   });
 
-  // 5. Para os aprovados: busca valor/sigilo e a lista de arquivos, e cria o edital +
-  // os registros de documento (o download dos PDFs em si fica para o passo 6).
+  // 5. Para os aprovados: monta o edital + os registros de documento (o download dos
+  // arquivos em si fica para o passo 6). PNCP precisa de duas chamadas extras (valor e
+  // lista de arquivos); o LicitaNet já traz tudo na própria busca.
   const criadosIds: string[] = [];
+  let criadosPncp = 0;
+  let criadosLicitaNet = 0;
   await mapComLimite(aprovados, 8, async (c) => {
-    const item = c.item;
-    const cl = classificacoes.get(item.numero_controle_pncp);
-    const descricao = item.description || "(sem descrição disponível)";
-    const { cnpj, ano, sequencial } = parseItemUrl(item.item_url);
+    const cl = classificacoes.get(c.numeroControle);
+    const tipoObjeto = cl?.tipoObjeto ?? classificarTipoObjeto(c.titulo, c.descricao);
 
-    let valorGlobal: number | null = item.valor_global;
-    let orcamentoSigiloso = false;
-    let arquivos: PncpArquivo[] = [];
-    if (cnpj && ano && sequencial) {
-      const [detalhe, arqs] = await Promise.all([
-        buscarDetalheCompra(cnpj, ano, sequencial).catch(() => null),
-        buscarArquivosCompra(cnpj, ano, sequencial).catch(() => [] as PncpArquivo[]),
-      ]);
-      arquivos = arqs;
-      if (detalhe) {
-        orcamentoSigiloso = !!detalhe.indicadorOrcamentoSigiloso;
-        if (!orcamentoSigiloso && detalhe.valorTotalEstimado != null) valorGlobal = detalhe.valorTotalEstimado;
-        if (orcamentoSigiloso) valorGlobal = null;
+    let dadosCriacao: Parameters<typeof prisma.edital.create>[0]["data"];
+    let documentosParaCriar: { nome: string; origemUrl: string; categoria: "EDITAL" | "TERMO_REFERENCIA" | "ANEXO_PRECOS" | null }[];
+
+    if (c.fonte === "PNCP") {
+      const item = c.item;
+      const descricao = item.description || "(sem descrição disponível)";
+      const { cnpj, ano, sequencial } = parseItemUrl(item.item_url);
+
+      let valorGlobal: number | null = item.valor_global;
+      let orcamentoSigiloso = false;
+      let arquivos: PncpArquivo[] = [];
+      if (cnpj && ano && sequencial) {
+        const [detalhe, arqs] = await Promise.all([
+          buscarDetalheCompra(cnpj, ano, sequencial).catch(() => null),
+          buscarArquivosCompra(cnpj, ano, sequencial).catch(() => [] as PncpArquivo[]),
+        ]);
+        arquivos = arqs;
+        if (detalhe) {
+          orcamentoSigiloso = !!detalhe.indicadorOrcamentoSigiloso;
+          if (!orcamentoSigiloso && detalhe.valorTotalEstimado != null) valorGlobal = detalhe.valorTotalEstimado;
+          if (orcamentoSigiloso) valorGlobal = null;
+        }
       }
+
+      const { edital: docEdital, termoReferencia, anexosPrecos } = selecionarDocumentosPrincipais(arquivos);
+      documentosParaCriar = [];
+      if (docEdital) documentosParaCriar.push({ nome: docEdital.titulo, origemUrl: docEdital.url, categoria: "EDITAL" });
+      if (termoReferencia) documentosParaCriar.push({ nome: termoReferencia.titulo, origemUrl: termoReferencia.url, categoria: "TERMO_REFERENCIA" });
+      for (const a of anexosPrecos) documentosParaCriar.push({ nome: a.titulo, origemUrl: a.url, categoria: "ANEXO_PRECOS" });
+
+      dadosCriacao = {
+        companyId: company.id,
+        numeroControlePNCP: item.numero_controle_pncp,
+        titulo: item.title,
+        descricao,
+        tipoObjeto,
+        orgaoNome: item.orgao_nome,
+        orgaoCnpj: item.orgao_cnpj,
+        municipio: item.municipio_nome,
+        uf: item.uf,
+        modalidade: item.modalidade_licitacao_nome,
+        situacao: item.situacao_nome,
+        dataPublicacao: item.data_publicacao_pncp ? new Date(item.data_publicacao_pncp) : null,
+        dataAtualizacaoPncp: item.data_atualizacao_pncp ? new Date(item.data_atualizacao_pncp) : null,
+        dataAberturaProposta: item.data_inicio_vigencia ? new Date(item.data_inicio_vigencia) : null,
+        dataEncerramentoProposta: item.data_fim_vigencia ? new Date(item.data_fim_vigencia) : null,
+        valorGlobal,
+        orcamentoSigiloso,
+        linkPortal: linkPortalCompra(item.item_url),
+        keywordMatched: c.keyword,
+        ordemKanban: Date.now(),
+      };
+    } else {
+      const item = c.item;
+      documentosParaCriar = [
+        ...item.notices.map((n) => ({ nome: n.name, origemUrl: n.link, categoria: "EDITAL" as const })),
+        ...item.files.map((f) => ({ nome: f.name, origemUrl: f.link, categoria: null })),
+      ];
+
+      dadosCriacao = {
+        companyId: company.id,
+        fonte: "LICITANET",
+        numeroControlePNCP: c.numeroControle,
+        titulo: c.titulo,
+        descricao: c.descricao || "(sem descrição disponível)",
+        tipoObjeto,
+        orgaoNome: item.buyer.trim(),
+        orgaoCnpj: item.document,
+        municipio: item.city,
+        uf: item.uf,
+        modalidade: item.disputeModeText,
+        situacao: item.status,
+        dataPublicacao: parseDataBr(item.datPublication),
+        dataAberturaProposta: parseDataBr(item.datStartSession),
+        dataEncerramentoProposta: parseDataBr(item.datFinishSession),
+        // O LicitaNet não expõe valor estimado na listagem do boletim — fica nulo (a UI
+        // já trata como "Não informado") em vez de inventar um número.
+        valorGlobal: null,
+        orcamentoSigiloso: false,
+        linkPortal: linkBoletimSegmento(company.licitanetSegmentoId!),
+        keywordMatched: company.licitanetSegmentoNome,
+        ordemKanban: Date.now(),
+      };
     }
 
     const edital = await prisma.edital
-      .create({
-        data: {
-          companyId: company.id,
-          numeroControlePNCP: item.numero_controle_pncp,
-          titulo: item.title,
-          descricao,
-          tipoObjeto: cl?.tipoObjeto ?? classificarTipoObjeto(item.title, descricao),
-          orgaoNome: item.orgao_nome,
-          orgaoCnpj: item.orgao_cnpj,
-          municipio: item.municipio_nome,
-          uf: item.uf,
-          modalidade: item.modalidade_licitacao_nome,
-          situacao: item.situacao_nome,
-          dataPublicacao: item.data_publicacao_pncp ? new Date(item.data_publicacao_pncp) : null,
-          dataAtualizacaoPncp: item.data_atualizacao_pncp ? new Date(item.data_atualizacao_pncp) : null,
-          dataAberturaProposta: item.data_inicio_vigencia ? new Date(item.data_inicio_vigencia) : null,
-          dataEncerramentoProposta: item.data_fim_vigencia ? new Date(item.data_fim_vigencia) : null,
-          valorGlobal,
-          orcamentoSigiloso,
-          linkPortal: linkPortalCompra(item.item_url),
-          keywordMatched: c.keyword,
-          // etapaKanban fica no default (Oportunidade); ordemKanban usa o horário para
-          // os cards novos entrarem no fim da coluna, não todos empilhados na posição 0.
-          ordemKanban: Date.now(),
-        },
-      })
+      .create({ data: dadosCriacao })
       .catch((err) => {
         // Corrida rara: dois cliques em "Buscar" quase juntos podem tentar criar o
         // mesmo edital — a chave única cuida disso, aqui só ignoramos.
-        console.error(`Falha ao criar edital ${item.numero_controle_pncp}:`, err);
+        console.error(`Falha ao criar edital ${c.numeroControle}:`, err);
         return null;
       });
     if (!edital) return;
     criadosIds.push(edital.id);
+    if (c.fonte === "PNCP") criadosPncp++;
+    else criadosLicitaNet++;
 
-    const { edital: docEdital, termoReferencia, anexosPrecos } = selecionarDocumentosPrincipais(arquivos);
-    const docs: { doc: PncpArquivo; categoria: "EDITAL" | "TERMO_REFERENCIA" | "ANEXO_PRECOS" }[] = [];
-    if (docEdital) docs.push({ doc: docEdital, categoria: "EDITAL" });
-    if (termoReferencia) docs.push({ doc: termoReferencia, categoria: "TERMO_REFERENCIA" });
-    for (const d of anexosPrecos) docs.push({ doc: d, categoria: "ANEXO_PRECOS" });
-
-    for (const { doc, categoria } of docs) {
+    for (const doc of documentosParaCriar) {
       await prisma.document.create({
         data: {
           editalId: edital.id,
-          nome: doc.titulo,
-          tipo: "DOCUMENTO_PNCP",
-          categoria,
+          nome: doc.nome,
+          tipo: c.fonte === "PNCP" ? "DOCUMENTO_PNCP" : "DOCUMENTO_LICITANET",
+          categoria: doc.categoria,
           status: "DISPONIVEL",
-          origemUrl: doc.url,
+          origemUrl: doc.origemUrl,
           conteudoBase64: null,
         },
       });
     }
   });
 
-  // 6. Baixa os PDFs em segundo plano — o usuário já vê os editais na lista sem esperar.
+  // 6. Baixa os arquivos em segundo plano — o usuário já vê os editais na lista sem
+  // esperar.
   if (criadosIds.length > 0) {
     const ids = [...criadosIds];
     after(() => baixarDocumentosPendentes(ids));
   }
 
-  const partes = [`${criadosIds.length} novo(s) edital(is) captado(s) do PNCP.`];
+  const partes = [`${criadosIds.length} novo(s) edital(is) captado(s)`];
+  if (company.keywords.length > 0 && company.licitanetSegmentoId) {
+    partes[0] += ` (${criadosPncp} do PNCP, ${criadosLicitaNet} do LicitaNet).`;
+  } else {
+    partes[0] += ".";
+  }
   const descartados = descartadosPerfil + descartadosRelevancia;
   if (descartados > 0) {
     partes.push(
       `${descartados} não listado(s): ${descartadosPerfil} fora do tipo que a empresa atende, ${descartadosRelevancia} sem relação direta com o objeto social.`
     );
   }
-  if (falhas > 0) partes.push(`${falhas} palavra-chave indisponível no PNCP no momento.`);
+  if (falhasPncp > 0) partes.push(`${falhasPncp} palavra-chave indisponível no PNCP no momento.`);
+  if (falhaLicitaNet) partes.push(`LicitaNet indisponível no momento (${falhaLicitaNet}).`);
 
   return {
     novos: criadosIds.length,

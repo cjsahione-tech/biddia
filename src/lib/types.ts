@@ -54,7 +54,7 @@ export type ChecklistItem = {
 export type DocumentItem = {
   id: string;
   nome: string;
-  tipo: "ANEXO_GERADO" | "DOCUMENTO_USUARIO" | "DOCUMENTO_PNCP";
+  tipo: "ANEXO_GERADO" | "DOCUMENTO_USUARIO" | "DOCUMENTO_PNCP" | "DOCUMENTO_LICITANET";
   categoria: "EDITAL" | "TERMO_REFERENCIA" | "ANEXO_PRECOS" | null;
   status: "PENDENTE" | "GERADO" | "ENVIADO" | "VENCIDO" | "DISPONIVEL";
   validade: string | null;

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireCompany } from "@/lib/api-utils";
 import { baixarArquivoPncp } from "@/lib/agents/pncp";
+import { baixarArquivoLicitaNet } from "@/lib/agents/licitanet";
 
 function respondFromDataUrl(dataUrl: string, filename: string) {
   const [meta, base64] = dataUrl.split(",");
@@ -33,17 +34,20 @@ export async function GET(
   // Caminho rápido: o Agente Comercial já baixou este arquivo (edital/TR do PNCP, ou
   // anexo gerado) no momento da captura. Serve direto do banco, sem depender do PNCP
   // estar no ar agora.
+  const oficial = doc.tipo === "DOCUMENTO_PNCP" || doc.tipo === "DOCUMENTO_LICITANET";
   if (doc.conteudoBase64) {
-    return respondFromDataUrl(doc.conteudoBase64, doc.tipo === "DOCUMENTO_PNCP" ? nomeArquivo : `${nomeArquivo}.pdf`);
+    return respondFromDataUrl(doc.conteudoBase64, oficial ? nomeArquivo : `${nomeArquivo}.pdf`);
   }
 
   // Sem cópia local (download imediato falhou na captura, ou é um registro antigo):
   // tenta buscar direto na fonte oficial como último recurso.
-  if (doc.tipo === "DOCUMENTO_PNCP" && doc.origemUrl) {
-    const arquivo = await baixarArquivoPncp(doc.origemUrl);
+  if (oficial && doc.origemUrl) {
+    const baixar = doc.tipo === "DOCUMENTO_LICITANET" ? baixarArquivoLicitaNet : baixarArquivoPncp;
+    const fonte = doc.tipo === "DOCUMENTO_LICITANET" ? "LicitaNet" : "PNCP";
+    const arquivo = await baixar(doc.origemUrl);
     if (!arquivo) {
       return NextResponse.json(
-        { error: "Não foi possível obter o arquivo no PNCP no momento. Tente novamente em instantes." },
+        { error: `Não foi possível obter o arquivo no ${fonte} no momento. Tente novamente em instantes.` },
         { status: 502 }
       );
     }
