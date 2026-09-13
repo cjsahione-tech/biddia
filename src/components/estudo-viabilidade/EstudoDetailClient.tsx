@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft, Check, Loader2, Pencil, X } from "lucide-react";
 import { EtapaStepper } from "@/components/estudo-viabilidade/EtapaStepper";
 import { EtapaEdital, ResumoEdital } from "@/components/estudo-viabilidade/EtapaEdital";
 import { EtapaRequisitos } from "@/components/estudo-viabilidade/EtapaRequisitos";
@@ -15,6 +15,27 @@ import type { EstudoViabilidadeDetail } from "@/lib/types";
 
 export function EstudoDetailClient({ estudoId }: { estudoId: string }) {
   const [estudo, setEstudo] = useState<EstudoViabilidadeDetail | null>(null);
+  const [editandoNome, setEditandoNome] = useState(false);
+  const [nomeEditado, setNomeEditado] = useState("");
+  const [salvandoNome, setSalvandoNome] = useState(false);
+
+  async function salvarNome() {
+    setSalvandoNome(true);
+    try {
+      const res = await fetch(`/api/estudos/${estudoId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nome: nomeEditado.trim() }),
+      });
+      const data = await res.json();
+      if (res.ok && data.estudo) {
+        setEstudo((prev) => (prev ? { ...prev, nome: data.estudo.nome } : prev));
+        setEditandoNome(false);
+      }
+    } finally {
+      setSalvandoNome(false);
+    }
+  }
 
   useEffect(() => {
     let cancelado = false;
@@ -47,9 +68,44 @@ export function EstudoDetailClient({ estudoId }: { estudoId: string }) {
         <ArrowLeft className="h-4 w-4" /> Voltar
       </Link>
 
-      <h1 className="mt-4 text-2xl font-semibold text-foreground">
-        Estudo de Viabilidade — {RAMO_LABEL[estudo.ramo]}
-      </h1>
+      {editandoNome ? (
+        <div className="mt-4 flex items-center gap-2">
+          <input
+            autoFocus
+            value={nomeEditado}
+            onChange={(e) => setNomeEditado(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") salvarNome();
+              if (e.key === "Escape") setEditandoNome(false);
+            }}
+            placeholder={`Estudo de Viabilidade — ${RAMO_LABEL[estudo.ramo]}`}
+            maxLength={120}
+            className="flex-1 rounded-lg border border-border bg-background px-3 py-1.5 text-2xl font-semibold text-foreground focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
+          />
+          <button onClick={salvarNome} disabled={salvandoNome} className="text-accent hover:text-accent/80 disabled:opacity-60" title="Salvar">
+            {salvandoNome ? <Loader2 className="h-5 w-5 animate-spin" /> : <Check className="h-5 w-5" />}
+          </button>
+          <button onClick={() => setEditandoNome(false)} className="text-muted hover:text-foreground" title="Cancelar">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+      ) : (
+        <div className="mt-4 flex items-center gap-2">
+          <h1 className="text-2xl font-semibold text-foreground">
+            {estudo.nome || `Estudo de Viabilidade — ${RAMO_LABEL[estudo.ramo]}`}
+          </h1>
+          <button
+            onClick={() => {
+              setNomeEditado(estudo.nome ?? "");
+              setEditandoNome(true);
+            }}
+            className="text-muted hover:text-foreground"
+            title="Renomear estudo"
+          >
+            <Pencil className="h-4 w-4" />
+          </button>
+        </div>
+      )}
 
       <div className="mt-6">
         <EtapaStepper atual={etapa} />

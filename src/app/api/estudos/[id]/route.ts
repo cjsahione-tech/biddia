@@ -18,12 +18,24 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   return NextResponse.json({ estudo });
 }
 
-const patchSchema = z.object({
-  editalId: z.string().min(1).nullable(),
-});
+const patchSchema = z
+  .object({
+    editalId: z.string().min(1).nullable().optional(),
+    nome: z.string().trim().max(120).nullable().optional(),
+  })
+  .refine((data) => data.editalId !== undefined || data.nome !== undefined, {
+    message: "Informe editalId ou nome",
+  });
 
-/** Etapa 1: vincula (ou desvincula, com editalId: null) o edital de referência do
- * estudo. Confere que o edital pertence à mesma empresa antes de vincular. */
+/**
+ * Duas mutações independentes no mesmo estudo, cada uma só aplicada se a chave
+ * correspondente vier no corpo:
+ * - Etapa 1: vincula (ou desvincula, com editalId: null) o edital de referência —
+ *   confere que o edital pertence à mesma empresa antes de vincular, e trocar o edital
+ *   invalida os requisitos revisados de um edital diferente.
+ * - Nome livre do estudo (mostrado na listagem em vez do rótulo genérico do ramo) —
+ *   string vazia é tratada como "remover o nome" (volta a mostrar o rótulo do ramo).
+ */
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { company, error } = await requireCompany();
   if (error) return error;
@@ -36,23 +48,28 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const parsed = patchSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Dados inválidos" }, { status: 400 });
 
-  if (parsed.data.editalId) {
-    const edital = await prisma.edital.findFirst({
-      where: { id: parsed.data.editalId, companyId: company!.id },
-      select: { id: true },
-    });
-    if (!edital) return NextResponse.json({ error: "Edital não encontrado" }, { status: 404 });
+  const data: { editalId?: string | null; requisitosJson?: null; requisitosConfirmadoEm?: null; nome?: string | null } = {};
+
+  if (parsed.data.editalId !== undefined) {
+    if (parsed.data.editalId) {
+      const edital = await prisma.edital.findFirst({
+        where: { id: parsed.data.editalId, companyId: company!.id },
+        select: { id: true },
+      });
+      if (!edital) return NextResponse.json({ error: "Edital não encontrado" }, { status: 404 });
+    }
+    data.editalId = parsed.data.editalId;
+    if (parsed.data.editalId !== estudo.editalId) {
+      data.requisitosJson = null;
+      data.requisitosConfirmadoEm = null;
+    }
   }
 
-  // Trocar o edital invalida os requisitos revisados de um edital diferente.
-  const requisitosResetados =
-    parsed.data.editalId !== estudo.editalId ? { requisitosJson: null, requisitosConfirmadoEm: null } : {};
+  if (parsed.data.nome !== undefined) {
+    data.nome = parsed.data.nome || null;
+  }
 
-  const updated = await prisma.estudoViabilidade.update({
-    where: { id },
-    data: { editalId: parsed.data.editalId, ...requisitosResetados },
-    include: estudoInclude,
-  });
+  const updated = await prisma.estudoViabilidade.update({ where: { id }, data, include: estudoInclude });
 
   return NextResponse.json({ estudo: updated });
 }

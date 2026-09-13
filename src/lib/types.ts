@@ -92,6 +92,7 @@ export type AgentMessageItem = {
 export type EstudoViabilidadeItem = {
   id: string;
   ramo: "SERVICO" | "PRODUTO";
+  nome: string | null;
   createdAt: string;
   updatedAt: string;
 };

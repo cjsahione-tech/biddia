@@ -319,6 +319,9 @@ model EstudoViabilidade {
   company   Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   ramo      RamoEstudo
+  // Nome livre dado pelo usuário (ex: "HESA — Exames laboratoriais") — opcional; quando
+  // nulo, a UI mostra o rótulo do ramo (RAMO_LABEL) como já fazia antes deste campo existir.
+  nome      String?
 
   // Etapa 1: edital de referência do estudo (opcional — nulo enquanto não escolhido, e
   // pode ficar nulo se o edital de origem for excluído depois, sem apagar o estudo).
