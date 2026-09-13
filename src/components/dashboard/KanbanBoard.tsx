@@ -17,6 +17,13 @@ function estaAberta(edital: EditalListItem): boolean {
   return !edital.dataEncerramentoProposta || new Date(edital.dataEncerramentoProposta).getTime() >= Date.now();
 }
 
+function labelPortal(fonte: string): string {
+  if (fonte === "PNCP") return "PNCP";
+  if (fonte === "LICITANET") return "LicitaNet";
+  if (fonte === "MANUAL") return "Manual";
+  return fonte;
+}
+
 export function KanbanBoard({
   editais,
   setEditais,
@@ -39,12 +46,19 @@ export function KanbanBoard({
   const [confirmandoExclusaoLote, setConfirmandoExclusaoLote] = useState(false);
   const [excluindoLote, setExcluindoLote] = useState(false);
   const [filtroUf, setFiltroUf] = useState<string | null>(null);
+  const [filtroFonte, setFiltroFonte] = useState<string | null>(null);
 
   const contagemAbertasPorUf = editais.reduce<Record<string, number>>((acc, e) => {
     if (e.uf && estaAberta(e)) acc[e.uf] = (acc[e.uf] ?? 0) + 1;
     return acc;
   }, {});
   const ufsComOportunidades = Object.keys(contagemAbertasPorUf).sort();
+
+  const contagemAbertasPorFonte = editais.reduce<Record<string, number>>((acc, e) => {
+    if (estaAberta(e)) acc[e.fonte] = (acc[e.fonte] ?? 0) + 1;
+    return acc;
+  }, {});
+  const fontesComOportunidades = Object.keys(contagemAbertasPorFonte).sort();
 
   function limparDrag() {
     setDraggedId(null);
@@ -57,6 +71,7 @@ export function KanbanBoard({
     return editais
       .filter((e) => e.etapaKanban === etapa && e.id !== excluirId)
       .filter((e) => !filtroUf || e.uf === filtroUf)
+      .filter((e) => !filtroFonte || e.fonte === filtroFonte)
       .sort((a, b) => a.ordemKanban - b.ordemKanban);
   }
 
@@ -197,6 +212,25 @@ export function KanbanBoard({
             </select>
           </div>
 
+          <div className="flex items-center gap-2">
+            <label htmlFor="filtroFonte" className="text-xs font-medium text-muted">
+              Portal
+            </label>
+            <select
+              id="filtroFonte"
+              value={filtroFonte ?? ""}
+              onChange={(e) => setFiltroFonte(e.target.value || null)}
+              className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs font-medium text-foreground focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
+            >
+              <option value="">Todos os portais</option>
+              {fontesComOportunidades.map((fonte) => (
+                <option key={fonte} value={fonte}>
+                  {labelPortal(fonte)} — {contagemAbertasPorFonte[fonte]} em aberto
+                </option>
+              ))}
+            </select>
+          </div>
+
           {!modoSelecao ? (
             <Button variant="secondary" onClick={() => setModoSelecao(true)}>
               <CheckSquare className="h-4 w-4" /> Selecionar
@@ -207,7 +241,12 @@ export function KanbanBoard({
               <button
                 onClick={() =>
                   setSelecionados(
-                    new Set(editais.filter((e) => !filtroUf || e.uf === filtroUf).map((e) => e.id))
+                    new Set(
+                      editais
+                        .filter((e) => !filtroUf || e.uf === filtroUf)
+                        .filter((e) => !filtroFonte || e.fonte === filtroFonte)
+                        .map((e) => e.id)
+                    )
                   )
                 }
                 className="text-xs font-medium text-brand hover:underline"
