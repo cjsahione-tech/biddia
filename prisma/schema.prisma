@@ -344,15 +344,27 @@ model EstudoViabilidade {
   aliquotasJson        String?
   tributosConfirmadoEm DateTime?
 
-  // Etapa 4: custos por item/lote. itensSnapshotJson congela a lista de itens (copiada
-  // de edital.proposal.itensJson) no momento em que a etapa começa — dá uma referência
-  // estável para CustoItemEstudo.itemIndex, mesmo que a Proposal do edital seja
-  // reprocessada depois. parametrosCustoJson guarda os valores usados pelo botão
-  // "aplicar a todos" (não são obrigatórios, só uma conveniência de preenchimento).
+  // Etapa 4 (ramo Produto): custos por item/lote. itensSnapshotJson congela a lista de
+  // itens (copiada de edital.proposal.itensJson) no momento em que a etapa começa — dá
+  // uma referência estável para CustoItemEstudo.itemIndex, mesmo que a Proposal do
+  // edital seja reprocessada depois. parametrosCustoJson guarda os valores usados pelo
+  // botão "aplicar a todos" (não são obrigatórios, só uma conveniência de preenchimento).
   itensSnapshotJson    String?
   parametrosCustoJson  String?
-  custosConfirmadoEm   DateTime?
   custosItens          CustoItemEstudo[]
+
+  // Etapa 4 (ramo Serviço): DRE mensal detalhada — cargosJson é sugerido por IA a partir
+  // do texto do edital (extrairCargosServico) e depois editável pelo usuário; nenhuma
+  // quantidade é assumida sem edital ou edição manual. custosOperacionaisJson é uma
+  // lista livre de linhas nomeadas (aluguel, insumos etc.), sem campos fixos no schema.
+  cargosJson              String?
+  custosOperacionaisJson  String?
+  descontoPercentual      Float?
+  duracaoContratoMeses    Int?
+
+  // Compartilhado pelos dois ramos: só gravado quando o usuário revisa e confirma a
+  // etapa manualmente (nunca avança sozinho).
+  custosConfirmadoEm   DateTime?
 
   // Etapa 5: motor de cálculo — puro/isolado em src/lib/calculo-viabilidade.ts, sem
   // nenhuma dependência de UI ou banco (recebe os dados já resolvidos e devolve o
@@ -429,6 +441,11 @@ model ParametroTributarioRegime {
   pis       Float
   cofins    Float
   irpjCsll  Float
+
+  // Base de presunção do IRPJ usada só para o adicional de 10% sobre o excedente mensal
+  // de R$20.000 (RIR/2018, art. 606) — opcional; nulo = adicional não calculado (nenhuma
+  // suposição de atividade/base é feita sem o usuário configurar).
+  baseCalculoPresumidoPercentual Float?
 
   updatedAt DateTime         @updatedAt
 

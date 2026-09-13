@@ -1,14 +1,14 @@
 /**
- * Motor de cálculo do Estudo de Viabilidade — função pura e isolada da UI/banco (recebe
- * dados já resolvidos, devolve o resultado). Fórmula "por dentro":
+ * Motor de cálculo do Estudo de Viabilidade para o ramo Produto — função pura e isolada
+ * da UI/banco (recebe dados já resolvidos, devolve o resultado). Fórmula "por dentro":
  *
  *   Preço = (Custo Direto + Despesas Indiretas) / (1 − %Tributos_sobre_receita − %Margem_desejada)
  *
  * %Tributos_sobre_receita vem de fora (já resolvido na Etapa 3 a partir dos parâmetros
- * tributários do regime/ramo escolhidos — este módulo não sabe nada sobre alíquotas).
+ * tributários do regime/ramo escolhidos — este módulo não sabe nada sobre alíquotas). O
+ * ramo Serviço usa a DRE mensal em src/lib/calculo-dre-servico.ts, não este módulo.
  */
-import type { RamoEstudo } from "@/lib/estudo-viabilidade";
-import type { CustoItemServico, CustoItemProduto } from "@/lib/estudo-custos";
+import type { CustoItemProduto } from "@/lib/estudo-custos";
 
 export type IndicadorViabilidade = "VIAVEL" | "MARGINAL" | "INVIAVEL";
 
@@ -16,7 +16,7 @@ export type ItemCalculoInput = {
   descricao: string;
   quantidade: number;
   valorTetoEdital: number;
-  custos: CustoItemServico | CustoItemProduto;
+  custos: CustoItemProduto;
 };
 
 export type CenarioSensibilidade = {
@@ -73,34 +73,16 @@ export type ResultadoCalculoViabilidade = {
   margemMinimaAceitavel: number;
 };
 
-function round2(n: number): number {
+export function round2(n: number): number {
   return Math.round((n + Number.EPSILON) * 100) / 100;
 }
 
-function isServico(ramo: RamoEstudo, c: CustoItemServico | CustoItemProduto): c is CustoItemServico {
-  return ramo === "SERVICO" && "quantidadeProfissionais" in c;
+function custoDiretoDoItem(custos: CustoItemProduto, quantidade: number): number {
+  return custos.custoAquisicaoUnitario * quantidade + custos.freteLogistica + custos.icmsStDifal;
 }
 
-function custoDiretoDoItem(ramo: RamoEstudo, custos: CustoItemServico | CustoItemProduto, quantidade: number): number {
-  if (isServico(ramo, custos)) {
-    const maoDeObra = custos.quantidadeProfissionais * custos.salarioBase * (1 + custos.percentualEncargos / 100);
-    return maoDeObra + custos.insumos + custos.equipamentos + custos.deslocamento;
-  }
-  const c = custos as CustoItemProduto;
-  return c.custoAquisicaoUnitario * quantidade + c.freteLogistica + c.icmsStDifal;
-}
-
-function despesasIndiretasDoItem(ramo: RamoEstudo, custos: CustoItemServico | CustoItemProduto, custoDireto: number): number {
-  if (isServico(ramo, custos)) {
-    const percentualIndireto = custos.administracaoCentral + custos.seguroGarantia + custos.risco + custos.despesasFinanceiras;
-    return custoDireto * (percentualIndireto / 100);
-  }
-  const c = custos as CustoItemProduto;
-  return custoDireto * (c.despesasComerciaisAdmin / 100);
-}
-
-function margemDesejadaDoItem(ramo: RamoEstudo, custos: CustoItemServico | CustoItemProduto): number {
-  return isServico(ramo, custos) ? custos.lucroDesejado : (custos as CustoItemProduto).margemLucroDesejada;
+function despesasIndiretasDoItem(custos: CustoItemProduto, custoDireto: number): number {
+  return custoDireto * (custos.despesasComerciaisAdmin / 100);
 }
 
 /** Fórmula "por dentro" — null quando tributos + margem >= 100% da receita (sem solução). */
@@ -110,7 +92,7 @@ function precoPorDentro(custoTotal: number, percentualTributos: number, percentu
   return custoTotal / denominador;
 }
 
-function classificarIndicador(margemLiquidaPercentual: number, margemMinimaAceitavel: number): IndicadorViabilidade {
+export function classificarIndicador(margemLiquidaPercentual: number, margemMinimaAceitavel: number): IndicadorViabilidade {
   if (margemLiquidaPercentual < 0) return "INVIAVEL";
   if (margemLiquidaPercentual < margemMinimaAceitavel) return "MARGINAL";
   return "VIAVEL";
@@ -126,13 +108,12 @@ function margemLiquidaNoTeto(custoTotal: number, valorTeto: number, percentualTr
 
 export function calcularItem(
   input: ItemCalculoInput,
-  ramo: RamoEstudo,
   percentualTributos: number,
   margemMinimaAceitavel: number
 ): ResultadoItemCalculo {
-  const custoDireto = custoDiretoDoItem(ramo, input.custos, input.quantidade);
-  const despesasIndiretas = despesasIndiretasDoItem(ramo, input.custos, custoDireto);
-  const percentualMargemDesejada = margemDesejadaDoItem(ramo, input.custos);
+  const custoDireto = custoDiretoDoItem(input.custos, input.quantidade);
+  const despesasIndiretas = despesasIndiretasDoItem(input.custos, custoDireto);
+  const percentualMargemDesejada = input.custos.margemLucroDesejada;
   const custoTotal = custoDireto + despesasIndiretas;
 
   const precoMinimoViavel = precoPorDentro(custoTotal, percentualTributos, percentualMargemDesejada);
@@ -142,7 +123,7 @@ export function calcularItem(
 
   function cenario(fatorCusto: number): CenarioSensibilidade {
     const cd = custoDireto * fatorCusto;
-    const di = despesasIndiretasDoItem(ramo, input.custos, cd);
+    const di = despesasIndiretasDoItem(input.custos, cd);
     const margem = margemLiquidaNoTeto(cd + di, input.valorTetoEdital, percentualTributos);
     return { margemLiquidaPercentual: margem, indicador: classificarIndicador(margem, margemMinimaAceitavel) };
   }
@@ -216,11 +197,10 @@ export function gerarRecomendacao(consolidado: ResultadoConsolidado, margemMinim
 /** Ponto de entrada único: calcula item a item, consolida e recomenda. */
 export function calcularViabilidade(
   itens: ItemCalculoInput[],
-  ramo: RamoEstudo,
   percentualTributos: number,
   margemMinimaAceitavel: number
 ): ResultadoCalculoViabilidade {
-  const resultadoItens = itens.map((item) => calcularItem(item, ramo, percentualTributos, margemMinimaAceitavel));
+  const resultadoItens = itens.map((item) => calcularItem(item, percentualTributos, margemMinimaAceitavel));
   const consolidado = calcularConsolidado(resultadoItens, percentualTributos, margemMinimaAceitavel);
   const recomendacao = gerarRecomendacao(consolidado, margemMinimaAceitavel);
 

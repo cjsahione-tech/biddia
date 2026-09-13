@@ -90,5 +90,6 @@ export async function resolverAliquotas(params: {
       cofins: parametro.cofins,
       irpjCsll: parametro.irpjCsll,
     },
+    baseCalculoPresumidoPercentual: parametro.baseCalculoPresumidoPercentual,
   };
 }

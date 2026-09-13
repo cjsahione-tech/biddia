@@ -45,6 +45,7 @@ const patchSchema = z.object({
         pis: z.number().min(0).max(100),
         cofins: z.number().min(0).max(100),
         irpjCsll: z.number().min(0).max(100),
+        baseCalculoPresumidoPercentual: z.number().min(0).max(100).nullable().optional(),
       })
     )
     .optional()
@@ -71,7 +72,13 @@ export async function PATCH(req: Request) {
     ...parsed.data.parametrosRegime.map((p) =>
       prisma.parametroTributarioRegime.updateMany({
         where: { id: p.id, companyId: company!.id },
-        data: { issOuIcms: p.issOuIcms, pis: p.pis, cofins: p.cofins, irpjCsll: p.irpjCsll },
+        data: {
+          issOuIcms: p.issOuIcms,
+          pis: p.pis,
+          cofins: p.cofins,
+          irpjCsll: p.irpjCsll,
+          baseCalculoPresumidoPercentual: p.baseCalculoPresumidoPercentual ?? null,
+        },
       })
     ),
   ]);

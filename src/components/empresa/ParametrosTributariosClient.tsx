@@ -24,6 +24,7 @@ type ParametroRegime = {
   pis: number;
   cofins: number;
   irpjCsll: number;
+  baseCalculoPresumidoPercentual: number | null;
 };
 
 function formatRbt12(v: number) {
@@ -52,7 +53,11 @@ export function ParametrosTributariosClient() {
     setFaixasSimples((prev) => prev.map((f) => (f.id === id ? { ...f, [campo]: valor } : f)));
   }
 
-  function setParametro(id: string, campo: "issOuIcms" | "pis" | "cofins" | "irpjCsll", valor: number) {
+  function setParametro(
+    id: string,
+    campo: "issOuIcms" | "pis" | "cofins" | "irpjCsll" | "baseCalculoPresumidoPercentual",
+    valor: number | null
+  ) {
     setParametrosRegime((prev) => prev.map((p) => (p.id === id ? { ...p, [campo]: valor } : p)));
   }
 
@@ -72,6 +77,7 @@ export function ParametrosTributariosClient() {
             pis: p.pis,
             cofins: p.cofins,
             irpjCsll: p.irpjCsll,
+            baseCalculoPresumidoPercentual: p.baseCalculoPresumidoPercentual,
           })),
         }),
       });
@@ -180,6 +186,7 @@ export function ParametrosTributariosClient() {
                     <th className="px-4 py-2.5 text-right">PIS (%)</th>
                     <th className="px-4 py-2.5 text-right">COFINS (%)</th>
                     <th className="px-4 py-2.5 text-right">IRPJ + CSLL (%)</th>
+                    <th className="px-4 py-2.5 text-right">Base presunção IRPJ adic. (%)</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
@@ -222,11 +229,35 @@ export function ParametrosTributariosClient() {
                           className={inputClass}
                         />
                       </td>
+                      <td className="px-4 py-2 text-right">
+                        <input
+                          type="number"
+                          step={0.01}
+                          placeholder="Não aplicável"
+                          value={p.baseCalculoPresumidoPercentual ?? ""}
+                          onChange={(e) =>
+                            setParametro(
+                              p.id,
+                              "baseCalculoPresumidoPercentual",
+                              e.target.value === "" ? null : Number(e.target.value)
+                            )
+                          }
+                          className={inputClass}
+                        />
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
+            {regime === "LUCRO_PRESUMIDO" && (
+              <p className="mt-1.5 text-xs text-muted">
+                &ldquo;Base presunção IRPJ adic.&rdquo; é o % de presunção de lucro da atividade (ex: 8% para equiparação
+                hospitalar, 32% para a maioria dos serviços) — só usado para calcular o IRPJ adicional de 10% sobre o
+                excedente mensal de R$ 20.000 na DRE do Estudo de Viabilidade. Deixe em branco se não souber; a linha
+                simplesmente não aparece no relatório.
+              </p>
+            )}
           </div>
         );
       })}

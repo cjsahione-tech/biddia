@@ -47,6 +47,8 @@ export async function montarRelatorioEstudo(estudoId: string, companyId: string)
       ? (JSON.parse(estudo.itensSnapshotJson) as { descricao: string; unidade: string; quantidade: number }[])
       : [],
     custosItens: custosItens.map((c) => ({ itemIndex: c.itemIndex, custos: JSON.parse(c.custosJson) })),
+    cargos: estudo.cargosJson ? JSON.parse(estudo.cargosJson) : [],
+    custosOperacionais: estudo.custosOperacionaisJson ? JSON.parse(estudo.custosOperacionaisJson) : [],
     resultadoCalculo: estudo.resultadoCalculoJson ? JSON.parse(estudo.resultadoCalculoJson) : null,
   };
 }

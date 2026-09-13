@@ -4,7 +4,9 @@ import { prisma } from "@/lib/prisma";
 import { requireCompany } from "@/lib/api-utils";
 import { carregarEstudoDaEmpresa } from "@/lib/estudo-server";
 import { calcularViabilidade, type ItemCalculoInput } from "@/lib/calculo-viabilidade";
+import { calcularDreServico } from "@/lib/calculo-dre-servico";
 import type { AliquotasResolvidas } from "@/lib/tributos";
+import type { CargoServico, CustoOperacionalLinha } from "@/lib/estudo-custos";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { company, error } = await requireCompany();
@@ -26,10 +28,10 @@ const patchSchema = z.object({
 });
 
 /**
- * Reúne os dados já confirmados nas etapas anteriores (itens+custos da Etapa 4, alíquota
- * resolvida na Etapa 3) e chama o motor de cálculo (função pura em
- * src/lib/calculo-viabilidade.ts) — esta rota só monta o input e persiste o resultado,
- * nenhuma conta é feita aqui.
+ * Reúne os dados já confirmados nas etapas anteriores (Etapa 3: alíquota resolvida;
+ * Etapa 4: custos por item — ramo Produto — ou cargos/custos operacionais/desconto —
+ * ramo Serviço) e chama o motor de cálculo puro correspondente. Esta rota só monta o
+ * input e persiste o resultado, nenhuma conta é feita aqui.
  */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { company, error } = await requireCompany();
@@ -46,7 +48,44 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (!estudo.tributosConfirmadoEm || !estudo.aliquotasJson) {
     return NextResponse.json({ error: "Confirme o regime tributário (Etapa 3) antes de calcular" }, { status: 409 });
   }
-  if (!estudo.custosConfirmadoEm || !estudo.itensSnapshotJson) {
+  if (!estudo.custosConfirmadoEm) {
+    return NextResponse.json({ error: "Confirme os custos (Etapa 4) antes de calcular" }, { status: 409 });
+  }
+
+  const aliquotas = JSON.parse(estudo.aliquotasJson) as AliquotasResolvidas;
+
+  if (estudo.ramo === "SERVICO") {
+    if (!estudo.cargosJson || estudo.descontoPercentual == null || estudo.duracaoContratoMeses == null) {
+      return NextResponse.json({ error: "Confirme os custos (Etapa 4) antes de calcular" }, { status: 409 });
+    }
+    const edital = await prisma.edital.findUnique({ where: { id: estudo.editalId! }, include: { proposal: true } });
+    const valorTetoLote = edital?.valorGlobal ?? edital?.proposal?.valorGlobalReferencia ?? 0;
+
+    const resultado = calcularDreServico({
+      valorTetoLote,
+      descontoPercentual: estudo.descontoPercentual,
+      duracaoContratoMeses: estudo.duracaoContratoMeses,
+      cargos: JSON.parse(estudo.cargosJson) as CargoServico[],
+      custosOperacionais: estudo.custosOperacionaisJson
+        ? (JSON.parse(estudo.custosOperacionaisJson) as CustoOperacionalLinha[])
+        : [],
+      aliquotas,
+      margemMinimaAceitavel: parsed.data.margemMinimaAceitavel,
+    });
+
+    await prisma.estudoViabilidade.update({
+      where: { id },
+      data: {
+        margemMinimaAceitavel: parsed.data.margemMinimaAceitavel,
+        resultadoCalculoJson: JSON.stringify(resultado),
+        calculoConfirmadoEm: new Date(),
+      },
+    });
+
+    return NextResponse.json({ resultado, margemMinimaAceitavel: parsed.data.margemMinimaAceitavel });
+  }
+
+  if (!estudo.itensSnapshotJson) {
     return NextResponse.json({ error: "Confirme os custos (Etapa 4) antes de calcular" }, { status: 409 });
   }
 
@@ -66,13 +105,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     custos: custosPorIndice.get(i),
   }));
 
-  const aliquotas = JSON.parse(estudo.aliquotasJson) as AliquotasResolvidas;
-  const resultado = calcularViabilidade(
-    itensCalculo,
-    estudo.ramo,
-    aliquotas.aliquotaTotalEfetiva,
-    parsed.data.margemMinimaAceitavel
-  );
+  const resultado = calcularViabilidade(itensCalculo, aliquotas.aliquotaTotalEfetiva, parsed.data.margemMinimaAceitavel);
 
   await prisma.estudoViabilidade.update({
     where: { id },

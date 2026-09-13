@@ -104,4 +104,8 @@ export type AliquotasResolvidas = {
   rbt12?: number;
   aliquotaTotalEfetiva: number;
   detalhes: Record<string, number>;
+  // Base de presunção do IRPJ (%), só para o Lucro Presumido calcular o adicional de 10%
+  // sobre o excedente mensal de R$20.000 na DRE do ramo Serviço — null quando a empresa
+  // não configurou (o adicional simplesmente não é exibido, sem suposição de atividade).
+  baseCalculoPresumidoPercentual?: number | null;
 };
