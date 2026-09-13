@@ -10,6 +10,8 @@ import {
   ListChecks,
   ShieldCheck,
   ArrowRight,
+  Wrench,
+  Package,
   type LucideIcon,
 } from "lucide-react";
 
@@ -54,6 +56,25 @@ const AGENTES: { icon: LucideIcon; nome: string; descricao: string; imagens: [st
     descricao:
       "Audita cada etapa do time e corrige imediatamente qualquer falha encontrada no processo.",
     imagens: ["/agentes/auditor-1.png", "/agentes/auditor-2.png"],
+  },
+];
+
+const ESTUDOS_VIABILIDADE: { icon: LucideIcon; eyebrow: string; nome: string; descricao: string; imagens: [string, string] }[] = [
+  {
+    icon: Wrench,
+    eyebrow: "Ramo Serviço",
+    nome: "DRE mensal completa, com equipe sugerida pela IA",
+    descricao:
+      "A IA lê o edital e sugere os cargos e a quantidade de profissionais exigidos — você ajusta salários e custos operacionais, e o sistema monta a DRE: receita, folha de pagamento, impostos abertos por tributo (ISS, PIS, COFINS, IRPJ/CSLL ou Simples Nacional) e o lucro projetado para todo o contrato.",
+    imagens: ["/estudo-viabilidade/servico-1.png", "/estudo-viabilidade/servico-2.png"],
+  },
+  {
+    icon: Package,
+    eyebrow: "Ramo Produto",
+    nome: "Preço mínimo viável, item por item",
+    descricao:
+      "Para cada item do edital, o sistema calcula o preço mínimo que cobre custo de aquisição, frete, tributos do seu regime e a margem que você exige — comparando automaticamente com o valor de referência para apontar quais itens ou lotes realmente valem a pena disputar.",
+    imagens: ["/estudo-viabilidade/produto-1.png", "/estudo-viabilidade/produto-2.png"],
   },
 ];
 
@@ -129,10 +150,35 @@ export default async function LandingPage() {
               <AgentPreviewCard
                 key={agente.nome}
                 icon={<agente.icon className="h-5 w-5" />}
-                index={i}
+                eyebrow={`Agente ${i + 1}`}
                 nome={agente.nome}
                 descricao={agente.descricao}
                 imagens={agente.imagens}
+              />
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="border-t border-border">
+        <div className="mx-auto max-w-6xl px-6 py-20">
+          <h2 className="text-center text-2xl font-semibold text-foreground">
+            Estudo de Viabilidade: saiba antes de participar
+          </h2>
+          <p className="mx-auto mt-3 max-w-2xl text-center text-sm text-muted">
+            Antes de investir tempo numa licitação, simule se ela vale a pena — com uma metodologia própria para cada
+            tipo de objeto, sempre auditável e nunca com alíquotas ou custos fixos no código.
+          </p>
+
+          <div className="mt-12 grid grid-cols-1 gap-5 sm:grid-cols-2">
+            {ESTUDOS_VIABILIDADE.map((estudo) => (
+              <AgentPreviewCard
+                key={estudo.nome}
+                icon={<estudo.icon className="h-5 w-5" />}
+                eyebrow={estudo.eyebrow}
+                nome={estudo.nome}
+                descricao={estudo.descricao}
+                imagens={estudo.imagens}
               />
             ))}
           </div>

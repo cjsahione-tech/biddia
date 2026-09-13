@@ -10,13 +10,13 @@ import { Maximize2, X } from "lucide-react";
  * (função) não pode atravessar a fronteira servidor/cliente como prop. */
 export function AgentPreviewCard({
   icon,
-  index,
+  eyebrow,
   nome,
   descricao,
   imagens,
 }: {
   icon: ReactNode;
-  index: number;
+  eyebrow: string;
   nome: string;
   descricao: string;
   imagens: [string, string];
@@ -39,7 +39,7 @@ export function AgentPreviewCard({
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-light text-brand">
             {icon}
           </div>
-          <span className="text-xs font-semibold text-muted">Agente {index + 1}</span>
+          <span className="text-xs font-semibold text-muted">{eyebrow}</span>
         </div>
         <h3 className="mt-4 text-base font-semibold text-foreground">{nome}</h3>
         <p className="mt-2 text-sm leading-relaxed text-muted">{descricao}</p>
