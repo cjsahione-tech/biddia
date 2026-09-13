@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
@@ -17,35 +18,41 @@ const AGENTES = [
     nome: "Agente Comercial",
     descricao:
       "Varre continuamente os principais portais de licitação do Brasil com base nas suas palavras-chave e traz os editais até você.",
+    imagens: ["/agentes/comercial-1.png", "/agentes/comercial-2.png"],
   },
   {
     icon: ClipboardCheck,
     nome: "Agente Analista",
     descricao:
       "Lê cada edital aprovado e explica objeto, obrigações, habilitação e riscos em linguagem clara.",
+    imagens: ["/agentes/analista-1.png", "/agentes/analista-2.png"],
   },
   {
     icon: Calculator,
     nome: "Agente Financeiro",
     descricao:
       "Monta a composição de itens, quantidades e valores da proposta com base no valor de referência do edital.",
+    imagens: ["/agentes/financeiro-1.png", "/agentes/financeiro-2.png"],
   },
   {
     icon: Scale,
     nome: "Agente Advogado",
     descricao: "Preenche e emite os anexos exigidos, já timbrados com os dados da sua empresa.",
+    imagens: ["/agentes/advogado-1.png", "/agentes/advogado-2.png"],
   },
   {
     icon: ListChecks,
     nome: "Agente Secretário",
     descricao:
       "Mantém o checklist de documentos em dia, avisando sobre validades e pendências de cada edital.",
+    imagens: ["/agentes/secretario-1.png", "/agentes/secretario-2.png"],
   },
   {
     icon: ShieldCheck,
     nome: "Agente Auditor",
     descricao:
       "Audita cada etapa do time e corrige imediatamente qualquer falha encontrada no processo.",
+    imagens: ["/agentes/auditor-1.png", "/agentes/auditor-2.png"],
   },
 ];
 
@@ -120,7 +127,7 @@ export default async function LandingPage() {
             {AGENTES.map((agente, i) => (
               <div
                 key={agente.nome}
-                className="rounded-2xl border border-border bg-background p-6 shadow-sm transition hover:shadow-md"
+                className="group rounded-2xl border border-border bg-background p-6 shadow-sm transition hover:shadow-md"
               >
                 <div className="flex items-center gap-3">
                   <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-light text-brand">
@@ -132,6 +139,28 @@ export default async function LandingPage() {
                 </div>
                 <h3 className="mt-4 text-base font-semibold text-foreground">{agente.nome}</h3>
                 <p className="mt-2 text-sm leading-relaxed text-muted">{agente.descricao}</p>
+
+                <div className="relative mt-4 h-40 overflow-hidden rounded-xl border border-border bg-surface">
+                  <div className="absolute inset-0 z-10 flex items-center justify-center bg-surface px-4 text-center text-xs text-muted transition-opacity duration-300 group-hover:opacity-0">
+                    Passe o mouse para ver a execução real
+                  </div>
+                  <div className="absolute inset-0 [animation-play-state:paused] group-hover:[animation-play-state:running]">
+                    <Image
+                      src={agente.imagens[0]}
+                      alt={`Exemplo real de execução do ${agente.nome}`}
+                      fill
+                      sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
+                      className="object-cover object-top [animation:agente-crossfade-a_5s_ease-in-out_infinite]"
+                    />
+                    <Image
+                      src={agente.imagens[1]}
+                      alt=""
+                      fill
+                      sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
+                      className="object-cover object-top [animation:agente-crossfade-b_5s_ease-in-out_infinite]"
+                    />
+                  </div>
+                </div>
               </div>
             ))}
           </div>
