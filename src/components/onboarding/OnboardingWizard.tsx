@@ -1,10 +1,11 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { X, Upload, Check } from "lucide-react";
+import { X, Upload, Check, Loader2 } from "lucide-react";
 import { Field, TextInput, TextArea } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
+import { buscarEnderecoPorCep } from "@/lib/cep";
 
 const UF_LIST = [
   "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG",
@@ -60,10 +61,44 @@ export function OnboardingWizard() {
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [buscandoCep, setBuscandoCep] = useState(false);
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((f) => ({ ...f, [key]: value }));
   }
+
+  function setCep(value: string) {
+    set("cep", value);
+    // Liga o indicador de "buscando" já no evento de digitação (não dentro do efeito, que
+    // deve só reagir a mudanças já commitadas) assim que o CEP completar 8 dígitos.
+    if (value.replace(/\D/g, "").length === 8) setBuscandoCep(true);
+  }
+
+  // Assim que o CEP tiver os 8 dígitos, busca o endereço na ViaCEP e preenche
+  // logradouro/bairro/cidade/UF automaticamente — o usuário ainda pode corrigir à mão.
+  useEffect(() => {
+    const digitos = form.cep.replace(/\D/g, "");
+    if (digitos.length !== 8) return;
+
+    let cancelado = false;
+    buscarEnderecoPorCep(digitos)
+      .then((endereco) => {
+        if (cancelado || !endereco) return;
+        setForm((f) => ({
+          ...f,
+          logradouro: endereco.logradouro || f.logradouro,
+          bairro: endereco.bairro || f.bairro,
+          cidade: endereco.cidade || f.cidade,
+          uf: endereco.uf || f.uf,
+        }));
+      })
+      .finally(() => {
+        if (!cancelado) setBuscandoCep(false);
+      });
+    return () => {
+      cancelado = true;
+    };
+  }, [form.cep]);
 
   function addKeyword() {
     const term = keywordDraft.trim();
@@ -352,13 +387,19 @@ export function OnboardingWizard() {
                 ))}
               </select>
             </Field>
-            <Field label="CEP" htmlFor="cep">
-              <TextInput
-                id="cep"
-                required
-                value={form.cep}
-                onChange={(e) => set("cep", e.target.value)}
-              />
+            <Field label="CEP" htmlFor="cep" hint={buscandoCep ? "Buscando endereço..." : undefined}>
+              <div className="relative">
+                <TextInput
+                  id="cep"
+                  required
+                  value={form.cep}
+                  onChange={(e) => setCep(e.target.value)}
+                  placeholder="00000-000"
+                />
+                {buscandoCep && (
+                  <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted" />
+                )}
+              </div>
             </Field>
           </div>
 

@@ -6,6 +6,7 @@ import { Loader2, Upload, X, Check, Settings2 } from "lucide-react";
 import { Field, TextInput, TextArea } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
 import { REGIMES_TRIBUTARIOS, ANEXOS_SIMPLES, type RegimeTributario, type AnexoSimples } from "@/lib/tributos";
+import { buscarEnderecoPorCep } from "@/lib/cep";
 
 type Company = {
   objetoSocial: string;
@@ -39,6 +40,7 @@ export function EmpresaClient() {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [keywordDraft, setKeywordDraft] = useState("");
+  const [buscandoCep, setBuscandoCep] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -53,6 +55,43 @@ export function EmpresaClient() {
   function set<K extends keyof Company>(key: K, value: Company[K]) {
     setCompany((c) => (c ? { ...c, [key]: value } : c));
   }
+
+  function setCep(value: string) {
+    set("cep", value);
+    // Liga o indicador de "buscando" já no evento de digitação (não dentro do efeito, que
+    // deve só reagir a mudanças já commitadas) assim que o CEP completar 8 dígitos.
+    if (value.replace(/\D/g, "").length === 8) setBuscandoCep(true);
+  }
+
+  // Assim que o CEP tiver os 8 dígitos, busca o endereço na ViaCEP e preenche
+  // logradouro/bairro/cidade/UF automaticamente — o usuário ainda pode corrigir à mão.
+  useEffect(() => {
+    const digitos = (company?.cep ?? "").replace(/\D/g, "");
+    if (digitos.length !== 8) return;
+
+    let cancelado = false;
+    buscarEnderecoPorCep(digitos)
+      .then((endereco) => {
+        if (cancelado || !endereco) return;
+        setCompany((c) =>
+          c
+            ? {
+                ...c,
+                logradouro: endereco.logradouro || c.logradouro,
+                bairro: endereco.bairro || c.bairro,
+                cidade: endereco.cidade || c.cidade,
+                uf: endereco.uf || c.uf,
+              }
+            : c
+        );
+      })
+      .finally(() => {
+        if (!cancelado) setBuscandoCep(false);
+      });
+    return () => {
+      cancelado = true;
+    };
+  }, [company?.cep]);
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -275,8 +314,13 @@ export function EmpresaClient() {
           <Field label="UF" htmlFor="uf">
             <TextInput id="uf" value={company.uf} onChange={(e) => set("uf", e.target.value.toUpperCase())} />
           </Field>
-          <Field label="CEP" htmlFor="cep">
-            <TextInput id="cep" value={company.cep} onChange={(e) => set("cep", e.target.value)} />
+          <Field label="CEP" htmlFor="cep" hint={buscandoCep ? "Buscando endereço..." : undefined}>
+            <div className="relative">
+              <TextInput id="cep" value={company.cep} onChange={(e) => setCep(e.target.value)} placeholder="00000-000" />
+              {buscandoCep && (
+                <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted" />
+              )}
+            </div>
           </Field>
         </div>
 
