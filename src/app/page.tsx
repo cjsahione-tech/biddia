@@ -1,7 +1,7 @@
-import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
+import { AgentPreviewCard } from "@/components/landing/AgentPreviewCard";
 import {
   Search,
   ClipboardCheck,
@@ -10,9 +10,10 @@ import {
   ListChecks,
   ShieldCheck,
   ArrowRight,
+  type LucideIcon,
 } from "lucide-react";
 
-const AGENTES = [
+const AGENTES: { icon: LucideIcon; nome: string; descricao: string; imagens: [string, string] }[] = [
   {
     icon: Search,
     nome: "Agente Comercial",
@@ -125,43 +126,14 @@ export default async function LandingPage() {
 
           <div className="mt-12 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {AGENTES.map((agente, i) => (
-              <div
+              <AgentPreviewCard
                 key={agente.nome}
-                className="group rounded-2xl border border-border bg-background p-6 shadow-sm transition hover:shadow-md"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-light text-brand">
-                    <agente.icon className="h-5 w-5" />
-                  </div>
-                  <span className="text-xs font-semibold text-muted">
-                    Agente {i + 1}
-                  </span>
-                </div>
-                <h3 className="mt-4 text-base font-semibold text-foreground">{agente.nome}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-muted">{agente.descricao}</p>
-
-                <div className="relative mt-4 h-40 overflow-hidden rounded-xl border border-border bg-surface">
-                  <div className="absolute inset-0 z-10 flex items-center justify-center bg-surface px-4 text-center text-xs text-muted transition-opacity duration-300 group-hover:opacity-0">
-                    Passe o mouse para ver a execução real
-                  </div>
-                  <div className="absolute inset-0 [animation-play-state:paused] group-hover:[animation-play-state:running]">
-                    <Image
-                      src={agente.imagens[0]}
-                      alt={`Exemplo real de execução do ${agente.nome}`}
-                      fill
-                      sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
-                      className="object-cover object-top [animation:agente-crossfade-a_5s_ease-in-out_infinite]"
-                    />
-                    <Image
-                      src={agente.imagens[1]}
-                      alt=""
-                      fill
-                      sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
-                      className="object-cover object-top [animation:agente-crossfade-b_5s_ease-in-out_infinite]"
-                    />
-                  </div>
-                </div>
-              </div>
+                icon={<agente.icon className="h-5 w-5" />}
+                index={i}
+                nome={agente.nome}
+                descricao={agente.descricao}
+                imagens={agente.imagens}
+              />
             ))}
           </div>
         </div>

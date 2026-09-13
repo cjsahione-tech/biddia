@@ -46,8 +46,8 @@ body {
   color: var(--brand);
 }
 
-/* Crossfade em loop entre duas capturas reais, usado no preview em hover dos cards de
-   agente na landing page — só roda (animation-play-state) enquanto o card está hover. */
+/* Crossfade em loop entre duas capturas reais, usado no preview dos cards de agente na
+   landing page — roda continuamente; ver AgentPreviewCard.tsx (clique expande a captura). */
 @keyframes agente-crossfade-a {
   0%, 40% { opacity: 1; }
   50%, 90% { opacity: 0; }
