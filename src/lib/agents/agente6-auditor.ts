@@ -75,7 +75,11 @@ export async function executarAgente6(editalId: string) {
     await checar(
       "Anexos jurídicos (Agente Advogado)",
       "agente4-advogado",
-      async () => (await prisma.document.count({ where: { editalId, tipo: "ANEXO_GERADO" } })) > 0,
+      // Não checa mais "gerou algum documento": um edital sem nenhum modelo de
+      // declaração reproduzível no texto legitimamente não gera anexo nenhum agora —
+      // o que importa é só se o agente já rodou até o fim para este edital.
+      async () =>
+        (await prisma.agentRun.count({ where: { editalId, agentKey: "agente4-advogado", status: "DONE" } })) > 0,
       () => executarAgente4(editalId)
     );
 
