@@ -140,7 +140,7 @@ export async function executarAgente5(editalId: string) {
 
     await logAudit(
       editalId,
-      "Agente Secretário",
+      "Agente Advogado",
       "Checklist de documentos",
       faltantes > 0 ? "ALERTA" : "OK",
       `${criados} item(ns) novo(s) no checklist. ${faltantes} documento(s) obrigatório(s) ainda pendente(s) de envio. ${vencidos} vencido(s).`
@@ -217,7 +217,7 @@ Se não houver nenhuma mudança clara a fazer, devolva "operacoes": [] e expliqu
 
   await logAudit(
     editalId,
-    "Agente Secretário",
+    "Agente Advogado",
     "Correção via chat",
     "OK",
     `Observação do usuário: "${notaCorrecao}". ${resultado.resposta}`

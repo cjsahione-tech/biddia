@@ -184,9 +184,9 @@ export function ChecklistTab({
     return (
       <div className="space-y-6">
         <p className="py-12 text-center text-sm text-muted">
-          O Agente Secretário ainda não montou o checklist deste edital.
+          O Agente Advogado ainda não montou o checklist deste edital.
         </p>
-        <AgentChat editalId={editalId} agentKey="agente5-secretario" agentLabel="Agente Secretário" onCorrected={onUpdate} />
+        <AgentChat editalId={editalId} agentKey="agente5-secretario" agentLabel="Agente Advogado" onCorrected={onUpdate} />
       </div>
     );
   }
@@ -234,7 +234,7 @@ export function ChecklistTab({
         </div>
       ))}
 
-      <AgentChat editalId={editalId} agentKey="agente5-secretario" agentLabel="Agente Secretário" onCorrected={onUpdate} />
+      <AgentChat editalId={editalId} agentKey="agente5-secretario" agentLabel="Agente Advogado" onCorrected={onUpdate} />
     </div>
   );
 }

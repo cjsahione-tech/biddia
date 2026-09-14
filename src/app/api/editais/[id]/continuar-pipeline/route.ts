@@ -24,7 +24,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       await executarAgente5(id);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "erro desconhecido";
-      await logAudit(id, "Agente Secretário", "Execução", "ERRO", `Falha na execução: ${msg}`);
+      await logAudit(id, "Agente Advogado", "Execução", "ERRO", `Falha na execução: ${msg}`);
     }
     try {
       await executarAgente6(id);

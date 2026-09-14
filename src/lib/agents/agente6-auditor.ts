@@ -80,7 +80,7 @@ export async function executarAgente6(editalId: string) {
     );
 
     await checar(
-      "Checklist de documentos (Agente Secretário)",
+      "Checklist de documentos (Agente Advogado)",
       "agente5-secretario",
       async () => (await prisma.checklistItem.count({ where: { editalId } })) > 0,
       () => executarAgente5(editalId)
