@@ -40,11 +40,20 @@ export type EditalListItem = {
   _count: { documents: number; checklistItems: number };
 };
 
+export type HabilitacaoCategoria =
+  | "FISCAL"
+  | "TRABALHISTA"
+  | "ECONOMICO_FINANCEIRA_JURIDICA"
+  | "QUALIFICACAO_TECNICA_EMPRESA"
+  | "QUALIFICACAO_EQUIPE_TECNICA"
+  | "GARANTIA_CONTRATO";
+
 export type ChecklistItem = {
   id: string;
   documentoNome: string;
   obrigatorio: boolean;
   status: "FALTANTE" | "ENVIADO" | "VENCIDO" | "OK";
+  categoria: HabilitacaoCategoria | null;
   validade: string | null;
   observacao: string | null;
   anexoDocId: string | null;

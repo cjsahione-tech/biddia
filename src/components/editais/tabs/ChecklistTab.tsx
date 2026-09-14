@@ -1,8 +1,9 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { CheckCircle2, AlertTriangle, Clock, XCircle, Paperclip, Download, X, Loader2 } from "lucide-react";
+import { CheckCircle2, AlertTriangle, Clock, XCircle, Paperclip, Download, X, Loader2, FolderDown } from "lucide-react";
 import { AgentChat } from "@/components/editais/AgentChat";
+import { ORDEM_CATEGORIAS, LABEL_CATEGORIA, LABEL_OUTROS } from "@/lib/habilitacao-categorias";
 import type { ChecklistItem } from "@/lib/types";
 
 const TAMANHO_MAXIMO_ANEXO = 3.5 * 1024 * 1024;
@@ -81,7 +82,14 @@ function ChecklistRow({
     <div className="border-b border-border py-3 last:border-0">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <p className="text-sm font-medium text-foreground">{item.documentoNome}</p>
+          <p className="text-sm font-medium text-foreground">
+            {item.documentoNome}
+            {item.obrigatorio && (
+              <span className="ml-2 rounded-full bg-muted/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted">
+                Obrigatório
+              </span>
+            )}
+          </p>
           {item.observacao && <p className="text-xs text-muted">{item.observacao}</p>}
         </div>
         <span
@@ -183,29 +191,48 @@ export function ChecklistTab({
     );
   }
 
-  const obrigatorios = items.filter((i) => i.obrigatorio);
-  const opcionais = items.filter((i) => !i.obrigatorio);
+  // Agrupado por categoria de habilitação (Lei 14.133/2021) — só aparece a categoria que
+  // o edital de fato exige; itens sem categoria reconhecida caem em "Outros" no final.
+  const grupos: { label: string; itens: ChecklistItem[] }[] = ORDEM_CATEGORIAS.map((categoria) => ({
+    label: LABEL_CATEGORIA[categoria],
+    itens: items.filter((i) => i.categoria === categoria),
+  })).filter((g) => g.itens.length > 0);
+
+  const semCategoria = items.filter((i) => i.categoria === null);
+  if (semCategoria.length > 0) {
+    grupos.push({ label: LABEL_OUTROS, itens: semCategoria });
+  }
+
+  const temAnexo = items.some((i) => i.anexoDocId);
 
   return (
     <div className="space-y-8">
-      <div>
-        <h4 className="text-sm font-semibold text-foreground">Documentos obrigatórios</h4>
-        <div className="mt-2 rounded-2xl border border-border px-4">
-          {obrigatorios.map((item) => (
-            <ChecklistRow key={item.id} editalId={editalId} item={item} onUpdate={onUpdate} />
-          ))}
-        </div>
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-xs text-muted">
+          Documentos de habilitação agrupados por categoria, conforme exigido neste edital.
+        </p>
+        <a
+          href={temAnexo ? `/api/editais/${editalId}/checklist/download-zip` : undefined}
+          aria-disabled={!temAnexo}
+          title={temAnexo ? "Baixar todos os documentos anexados, organizados por categoria" : "Anexe ao menos um documento para poder baixar a pasta"}
+          className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium ${
+            temAnexo ? "text-foreground hover:bg-surface" : "cursor-not-allowed text-muted/50"
+          }`}
+        >
+          <FolderDown className="h-3.5 w-3.5" /> Baixar pasta completa (.zip)
+        </a>
       </div>
-      {opcionais.length > 0 && (
-        <div>
-          <h4 className="text-sm font-semibold text-foreground">Documentos adicionais</h4>
+
+      {grupos.map((grupo) => (
+        <div key={grupo.label}>
+          <h4 className="text-sm font-semibold text-foreground">{grupo.label}</h4>
           <div className="mt-2 rounded-2xl border border-border px-4">
-            {opcionais.map((item) => (
+            {grupo.itens.map((item) => (
               <ChecklistRow key={item.id} editalId={editalId} item={item} onUpdate={onUpdate} />
             ))}
           </div>
         </div>
-      )}
+      ))}
 
       <AgentChat editalId={editalId} agentKey="agente5-secretario" agentLabel="Agente Secretário" onCorrected={onUpdate} />
     </div>

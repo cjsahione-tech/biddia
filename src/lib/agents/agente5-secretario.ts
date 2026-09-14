@@ -1,4 +1,4 @@
-import type { ChecklistStatus } from "@prisma/client";
+import type { ChecklistStatus, HabilitacaoCategoria } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { askJSON, MODELO_HAIKU } from "@/lib/anthropic";
 import { withAgentRun, logAudit } from "@/lib/agents/run-tracker";
@@ -15,6 +15,55 @@ const CHECKLIST_BASE = [
   "Balanço patrimonial / atestado de capacidade financeira",
   "Atestado(s) de Capacidade Técnica",
 ];
+
+// Categoria fixa dos itens padrão acima — são os mesmos em toda licitação, não dependem
+// do texto do edital, então não precisam passar pela IA de classificação.
+const CATEGORIA_BASE: Record<string, HabilitacaoCategoria> = {
+  "Contrato Social / Estatuto consolidado": "ECONOMICO_FINANCEIRA_JURIDICA",
+  "Cartão CNPJ atualizado": "ECONOMICO_FINANCEIRA_JURIDICA",
+  "Certidão Negativa de Débitos Federais (Receita Federal/PGFN)": "FISCAL",
+  "Certidão Negativa de Débitos Estaduais": "FISCAL",
+  "Certidão Negativa de Débitos Municipais": "FISCAL",
+  "Certificado de Regularidade do FGTS (CRF)": "TRABALHISTA",
+  "Certidão Negativa de Débitos Trabalhistas (CNDT)": "TRABALHISTA",
+  "Balanço patrimonial / atestado de capacidade financeira": "ECONOMICO_FINANCEIRA_JURIDICA",
+  "Atestado(s) de Capacidade Técnica": "QUALIFICACAO_TECNICA_EMPRESA",
+};
+
+/** Classifica os itens de habilitação específicos DESTE edital (extraídos do texto pelo
+ * Agente Analista) nas categorias da Lei 14.133/2021 — só entra uma categoria na lista se
+ * o edital de fato exigir algo nela; itens que não se encaixam claramente ficam sem
+ * categoria (viram "Outros" na tela) em vez de forçados num balde errado. */
+async function classificarCategoriasHabilitacao(itens: string[]): Promise<Map<string, HabilitacaoCategoria>> {
+  const mapa = new Map<string, HabilitacaoCategoria>();
+  if (itens.length === 0) return mapa;
+
+  const result = await askJSON<{
+    classificacoes: { item: string; categoria: HabilitacaoCategoria | null }[];
+  }>(
+    `Classifique cada exigência de habilitação de uma licitação pública brasileira (Lei 14.133/2021) em UMA
+destas categorias:
+- FISCAL: regularidade com Receita Federal, Fazenda Estadual, Fazenda Municipal (tributos)
+- TRABALHISTA: FGTS, débitos trabalhistas (CNDT), regularidade com empregados
+- ECONOMICO_FINANCEIRA_JURIDICA: balanço patrimonial, índices contábeis, capital social, contrato social, regularidade jurídica da empresa
+- QUALIFICACAO_TECNICA_EMPRESA: atestado de capacidade técnica da empresa, registro em conselho/entidade profissional, comprovação de aptidão do licitante
+- QUALIFICACAO_EQUIPE_TECNICA: responsável técnico, registro profissional de membro da equipe, currículo/experiência de profissional nomeado
+- GARANTIA_CONTRATO: garantia de proposta, garantia contratual, seguro-garantia, caução
+
+Se um item não se encaixar claramente em nenhuma categoria, responda "categoria": null — não force uma categoria
+errada só para preencher.
+
+Responda em JSON:
+{ "classificacoes": [ { "item": string (exatamente como veio na lista), "categoria": "FISCAL" | "TRABALHISTA" | "ECONOMICO_FINANCEIRA_JURIDICA" | "QUALIFICACAO_TECNICA_EMPRESA" | "QUALIFICACAO_EQUIPE_TECNICA" | "GARANTIA_CONTRATO" | null } ] }`,
+    itens.map((item, i) => `${i + 1}. ${item}`).join("\n"),
+    { model: MODELO_HAIKU, maxTokens: 2000 }
+  );
+
+  for (const c of result.classificacoes ?? []) {
+    if (c.categoria) mapa.set(c.item, c.categoria);
+  }
+  return mapa;
+}
 
 export async function executarAgente5(editalId: string) {
   return withAgentRun(editalId, "agente5-secretario", async () => {
@@ -36,6 +85,14 @@ export async function executarAgente5(editalId: string) {
 
     const todosItens = Array.from(new Set([...CHECKLIST_BASE, ...habilitacaoEdital]));
 
+    // Só classifica com IA os itens específicos do edital que ainda vão ser criados —
+    // os padrão já têm categoria fixa (CATEGORIA_BASE) e itens que já existem não
+    // precisam ser reclassificados a cada execução.
+    const novosEspecificos = todosItens.filter(
+      (nome) => !existentes.has(nome) && !CHECKLIST_BASE.includes(nome)
+    );
+    const categoriasEspecificas = await classificarCategoriasHabilitacao(novosEspecificos);
+
     let criados = 0;
     for (const nome of todosItens) {
       if (existentes.has(nome)) continue;
@@ -45,6 +102,7 @@ export async function executarAgente5(editalId: string) {
           documentoNome: nome,
           obrigatorio: CHECKLIST_BASE.includes(nome),
           status: "FALTANTE",
+          categoria: CATEGORIA_BASE[nome] ?? categoriasEspecificas.get(nome) ?? null,
         },
       });
       criados++;
