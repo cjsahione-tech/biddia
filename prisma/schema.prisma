@@ -51,6 +51,10 @@ model Company {
   licitanetSegmentoId   Int?
   licitanetSegmentoNome String?
 
+  // Número de WhatsApp para notificações (formato E.164 sem "+", ex: 5511999999999) —
+  // usado pela busca agendada (novos editais) e pelos alertas de prazo do checklist.
+  whatsapp              String?
+
   editais        Edital[]
   editaisExcluidos EditalExcluido[]
   estudosViabilidade EstudoViabilidade[]
@@ -267,6 +271,10 @@ model ChecklistItem {
   observacao    String?
   anexoDocId    String?
   anexoNome     String?
+
+  // Data (sem hora) do último alerta de vencimento enviado por e-mail/WhatsApp para este
+  // item — evita reenviar o mesmo aviso a cada execução do cron (8:30 e 15:30).
+  ultimoAlertaEnviadoEm DateTime?
 
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt

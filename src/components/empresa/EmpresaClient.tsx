@@ -33,6 +33,7 @@ type Company = {
   rbt12Padrao: number | null;
   keywords: { id: string; term: string }[];
   licitanetSegmentoId: number | null;
+  whatsapp: string | null;
 };
 
 export function EmpresaClient() {
@@ -225,6 +226,21 @@ export function EmpresaClient() {
                 </option>
               ))}
             </Select>
+          </Field>
+        </div>
+
+        <div className="mt-6 border-t border-border pt-6">
+          <Field
+            label="WhatsApp para notificações (opcional)"
+            htmlFor="whatsapp"
+            hint="DDD + número, ex: 11999999999. Usado para avisar sobre novos editais encontrados e prazos de documentos vencendo."
+          >
+            <TextInput
+              id="whatsapp"
+              value={company.whatsapp ?? ""}
+              onChange={(e) => set("whatsapp", e.target.value)}
+              placeholder="11999999999"
+            />
           </Field>
         </div>
       </section>

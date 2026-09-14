@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/api-utils";
 import { nomeSegmentoLicitaNet } from "@/lib/licitanet-segmentos";
+import { normalizarWhatsapp } from "@/lib/whatsapp";
 
 const companySchema = z.object({
   objetoSocial: z.string().min(5, "Descreva o objeto da empresa"),
@@ -27,6 +28,14 @@ const companySchema = z.object({
   // Nome não é confiável vindo do cliente — sempre resolvido a partir do id no servidor
   // (ver validarSegmentoLicitaNet), pra nunca dessincronizar da tabela fixa de segmentos.
   licitanetSegmentoId: z.number().int().nullable().optional(),
+  // Usado nas notificações de novos editais e prazos de vencimento (busca agendada) —
+  // normalizado para dígitos com DDI antes de salvar, formato aceito é flexível.
+  whatsapp: z
+    .string()
+    .optional()
+    .nullable()
+    .transform((v) => (v ? normalizarWhatsapp(v) : v))
+    .refine((v) => !v || /^55\d{10,11}$/.test(v), "WhatsApp inválido — informe DDD + número"),
   regimeTributarioPadrao: z.enum(["SIMPLES_NACIONAL", "LUCRO_PRESUMIDO", "LUCRO_REAL"]).optional().nullable(),
   anexoSimplesPadrao: z.enum(["I", "III", "IV", "V"]).optional().nullable(),
   rbt12Padrao: z.number().min(0).optional().nullable(),

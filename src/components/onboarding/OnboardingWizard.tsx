@@ -60,6 +60,7 @@ export function OnboardingWizard() {
   const [keywords, setKeywords] = useState<string[]>([]);
   const [keywordDraft, setKeywordDraft] = useState("");
   const [licitanetSegmentoId, setLicitanetSegmentoId] = useState<number | null>(null);
+  const [whatsapp, setWhatsapp] = useState("");
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -145,7 +146,7 @@ export function OnboardingWizard() {
       const res = await fetch("/api/company", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, keywords, logoUrl, atendeServico, atendeBem, licitanetSegmentoId }),
+        body: JSON.stringify({ ...form, keywords, logoUrl, atendeServico, atendeBem, licitanetSegmentoId, whatsapp }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -291,6 +292,19 @@ export function OnboardingWizard() {
                 </option>
               ))}
             </Select>
+          </Field>
+
+          <Field
+            label="WhatsApp para notificações (opcional)"
+            htmlFor="whatsapp"
+            hint="DDD + número, ex: 11999999999. Usado para avisar sobre novos editais encontrados e prazos de documentos vencendo."
+          >
+            <TextInput
+              id="whatsapp"
+              value={whatsapp}
+              onChange={(e) => setWhatsapp(e.target.value)}
+              placeholder="11999999999"
+            />
           </Field>
 
           {error && <p className="text-sm text-danger">{error}</p>}
