@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { Field, TextArea, TextInput } from "@/components/ui/Field";
 import { formatDate, formatValorEdital } from "@/lib/format";
 import { CORES_CARD, ETAPAS_KANBAN, topoCorCard } from "@/lib/kanban";
+import { labelVerNoPortal } from "@/lib/fonte-edital";
 import type { CorCard, DocumentItem, EditalDetail, EtapaKanban } from "@/lib/types";
 
 // Mesmo teto do upload de PDF/anexo no resto da plataforma.
@@ -207,7 +208,7 @@ export function KanbanCardModal({
                     rel="noreferrer"
                     className="inline-flex items-center gap-1 text-brand hover:underline"
                   >
-                    Ver no PNCP <ExternalLink className="h-3 w-3" />
+                    {labelVerNoPortal(edital.fonte)} <ExternalLink className="h-3 w-3" />
                   </a>
                 )}
               </div>

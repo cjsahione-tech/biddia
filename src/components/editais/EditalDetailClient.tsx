@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { ArrowLeft, ExternalLink, Loader2 } from "lucide-react";
 import { formatValorEdital, formatDate } from "@/lib/format";
 import { ETAPAS_KANBAN } from "@/lib/kanban";
+import { labelVerNoPortal } from "@/lib/fonte-edital";
 import type { EditalDetail, EtapaKanban } from "@/lib/types";
 import { PipelineStatus } from "@/components/editais/PipelineStatus";
 import { AnalysisTab } from "@/components/editais/tabs/AnalysisTab";
@@ -149,7 +150,7 @@ export function EditalDetailClient({ editalId }: { editalId: string }) {
               rel="noreferrer"
               className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-brand hover:underline"
             >
-              Ver no PNCP <ExternalLink className="h-3 w-3" />
+              {labelVerNoPortal(edital.fonte)} <ExternalLink className="h-3 w-3" />
             </a>
           )}
         </div>

@@ -5,6 +5,7 @@ import { AlertTriangle, CheckSquare, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { empresaAtende } from "@/lib/agents/classificador-objeto";
 import { ETAPAS_KANBAN } from "@/lib/kanban";
+import { labelPortal } from "@/lib/fonte-edital";
 import type { EditalListItem, EtapaKanban } from "@/lib/types";
 import { KanbanCard } from "@/components/dashboard/KanbanCard";
 import { KanbanCardModal } from "@/components/dashboard/KanbanCardModal";
@@ -15,13 +16,6 @@ type DragOverPos = "before" | "after";
 // da coluna do quadro, é sobre a licitação em si ainda aceitar propostas.
 function estaAberta(edital: EditalListItem): boolean {
   return !edital.dataEncerramentoProposta || new Date(edital.dataEncerramentoProposta).getTime() >= Date.now();
-}
-
-function labelPortal(fonte: string): string {
-  if (fonte === "PNCP") return "PNCP";
-  if (fonte === "LICITANET") return "LicitaNet";
-  if (fonte === "MANUAL") return "Manual";
-  return fonte;
 }
 
 export function KanbanBoard({
