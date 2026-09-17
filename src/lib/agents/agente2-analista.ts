@@ -3,10 +3,17 @@ import { askJSON, MODELO_HAIKU } from "@/lib/anthropic";
 import { obterTextoCompletoEdital } from "@/lib/agents/pdf-extract";
 import { withAgentRun, logAudit } from "@/lib/agents/run-tracker";
 
+// Cada grupo é uma seção de habilitação/qualificação TAL COMO o próprio edital a
+// organiza (ex: "13.1 Regularidade Fiscal, Trabalhista, Econômico-Financeira e
+// Jurídica" vira um grupo só, com todos os itens 13.1.1-13.1.9 dentro) — o Agente
+// Secretário usa isso para montar as pastas do jeito que o edital já organiza,
+// em vez de reclassificar cada item isoladamente.
+export type GrupoHabilitacao = { categoriaEdital: string; itens: string[] };
+
 type AnalysisResult = {
   resumoObjeto: string;
   obrigacoesContratada: string[];
-  habilitacao: string[];
+  habilitacao: GrupoHabilitacao[];
   requisitosObrigatorios: string[];
   requisitosAdicionais: string[];
   riscos: string[];
@@ -57,14 +64,25 @@ Retorne um objeto JSON com exatamente estas chaves:
 {
   "resumoObjeto": string (1-2 frases explicando o que está sendo licitado),
   "obrigacoesContratada": string[] (principais obrigações da futura contratada),
-  "habilitacao": string[] (documentos/condições de habilitação exigidos, citando o item do edital quando souber),
+  "habilitacao": [ { "categoriaEdital": string, "itens": string[] } ] — agrupe os documentos/condições de
+    habilitação EXATAMENTE como o próprio edital os agrupa em suas seções e subseções (ex: se o edital tem uma
+    seção "13.1 Regularidade Fiscal, Trabalhista, Econômico-Financeira e Jurídica" com os itens 13.1.1 a 13.1.9,
+    coloque TODOS esses itens num único grupo, com "categoriaEdital": "Regularidade Fiscal, Trabalhista,
+    Econômico-Financeira e Jurídica" — não crie subdivisões que o edital não usa). Use o texto do cabeçalho da
+    seção tal como aparece no edital, sem o número da seção (ex: "13.1", "14.") e sem o texto de cada item
+    individual. Se o edital não tiver uma estrutura clara de seções para habilitação, agrupe usando seu próprio
+    julgamento com base nas categorias típicas da Lei 14.133/2021 (regularidade fiscal/trabalhista/econômico-
+    financeira/jurídica, qualificação técnica da empresa, qualificação da equipe técnica, garantia do contrato).
   "requisitosObrigatorios": string[] (requisitos obrigatórios identificados no texto, ou típicos da modalidade se não houver texto),
   "requisitosAdicionais": string[] (requisitos adicionais desejáveis, mas não eliminatórios),
   "riscos": string[] (riscos e pontos de atenção para a empresa concorrente),
   "parecer": string (parecer final em 2-3 frases: vale a pena avaliar participar, e por quê)
 }`,
       contexto,
-      { model: MODELO_HAIKU, maxTokens: 5000 }
+      // 8000 em vez de 5000: a habilitação agora vem agrupada em objetos (categoriaEdital +
+      // itens), bem mais verboso que a lista plana anterior — editais grandes e cheios de
+      // seções de habilitação podiam estourar o teto antigo e truncar o JSON no meio.
+      { model: MODELO_HAIKU, maxTokens: 8000 }
     );
 
     await prisma.analysis.upsert({

@@ -1,0 +1,60 @@
+import { createClient } from "@supabase/supabase-js";
+
+// Bucket privado dedicado a anexos do checklist (certidões, contrato social, alvarás
+// etc.) — existe pra fugir do teto de ~4,5MB de corpo de requisição das funções
+// serverless da Vercel: o navegador envia o arquivo direto pro Storage usando uma URL
+// assinada, sem passar pelo corpo da nossa própria API.
+const BUCKET = "documentos-habilitacao";
+
+let client: ReturnType<typeof createClient> | null = null;
+
+export function isStorageConfigured() {
+  return !!(process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY);
+}
+
+function getClient() {
+  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
+    throw new Error("SUPABASE_URL/SUPABASE_ANON_KEY não configuradas — upload de anexo grande indisponível.");
+  }
+  if (!client) client = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
+  return client;
+}
+
+function sanitizarNomeArquivo(nome: string): string {
+  return nome.replace(/[^a-zA-Z0-9-_.]/g, "_").slice(-150);
+}
+
+/** Monta um caminho único e já escopado por empresa/edital/item — nenhum outro dado
+ * além disso entra na decisão de onde o arquivo fica; a autorização de quem pode pedir
+ * essa URL já foi checada antes, na própria rota da API (requireCompany + dono do item). */
+export function caminhoAnexo(companyId: string, editalId: string, itemId: string, nomeArquivo: string): string {
+  return `${companyId}/${editalId}/${itemId}/${Date.now()}-${sanitizarNomeArquivo(nomeArquivo)}`;
+}
+
+/** Gera uma URL assinada de upload — o navegador faz PUT direto nela, o arquivo nunca
+ * passa pelo corpo da nossa função serverless. Token válido por tempo curto. */
+export async function criarUrlUpload(path: string) {
+  const { data, error } = await getClient().storage.from(BUCKET).createSignedUploadUrl(path);
+  if (error) throw error;
+  return data; // { path, token, signedUrl }
+}
+
+/** URL assinada de download, válida por 5 minutos — gerada sob demanda a cada request
+ * de download, não armazenada. */
+export async function criarUrlDownload(path: string) {
+  const { data, error } = await getClient().storage.from(BUCKET).createSignedUrl(path, 300);
+  if (error) throw error;
+  return data.signedUrl;
+}
+
+export async function apagarAnexo(path: string) {
+  await getClient().storage.from(BUCKET).remove([path]);
+}
+
+/** Baixa os bytes de um anexo direto (sem passar por URL assinada) — usado pelo ZIP da
+ * pasta completa, que precisa do conteúdo de todos os anexos de uma vez no servidor. */
+export async function baixarAnexo(path: string): Promise<Uint8Array> {
+  const { data, error } = await getClient().storage.from(BUCKET).download(path);
+  if (error) throw error;
+  return new Uint8Array(await data.arrayBuffer());
+}

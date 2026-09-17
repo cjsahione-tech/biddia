@@ -6,7 +6,10 @@ import { AgentChat } from "@/components/editais/AgentChat";
 import { ORDEM_CATEGORIAS, LABEL_CATEGORIA, LABEL_OUTROS } from "@/lib/habilitacao-categorias";
 import type { ChecklistItem } from "@/lib/types";
 
-const TAMANHO_MAXIMO_ANEXO = 3.5 * 1024 * 1024;
+// Arquivo vai direto pro Supabase Storage via URL assinada (não passa pelo corpo da
+// nossa função serverless) — o teto real é o do bucket, bem mais folgado que o antigo
+// limite de ~3,5MB de corpo de requisição.
+const TAMANHO_MAXIMO_ANEXO = 25 * 1024 * 1024;
 
 const STATUS_CONFIG: Record<
   ChecklistItem["status"],
@@ -22,9 +25,20 @@ type PatchChecklistItem = Partial<{
   status: ChecklistItem["status"];
   validade: string | null;
   anexoNome: string;
-  anexoBase64: string;
+  anexoStoragePath: string;
   removerAnexo: boolean;
 }>;
+
+/** Sobe o arquivo direto pro Supabase Storage usando a URL assinada retornada por
+ * criarUrlUpload — o token de autorização já vem embutido na própria URL. */
+async function enviarParaStorage(signedUrl: string, file: File) {
+  const res = await fetch(signedUrl, {
+    method: "PUT",
+    headers: { "Content-Type": file.type || "application/octet-stream" },
+    body: file,
+  });
+  if (!res.ok) throw new Error(`Falha no upload para o armazenamento (${res.status}).`);
+}
 
 function ChecklistRow({
   editalId,
@@ -57,22 +71,31 @@ function ChecklistRow({
     if (!file) return;
     setErro(null);
     if (file.size > TAMANHO_MAXIMO_ANEXO) {
-      setErro(`Arquivo muito grande (máx. ${(TAMANHO_MAXIMO_ANEXO / 1024 / 1024).toFixed(1)}MB).`);
+      setErro(`Arquivo muito grande (máx. ${(TAMANHO_MAXIMO_ANEXO / 1024 / 1024).toFixed(0)}MB).`);
       return;
     }
     setUploading(true);
     try {
-      const anexoBase64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = () => reject(reader.error);
-        reader.readAsDataURL(file);
+      const urlRes = await fetch(`/api/editais/${editalId}/checklist/${item.id}/upload-url`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nomeArquivo: file.name, tamanhoBytes: file.size }),
       });
-      const res = await updateItem({ anexoNome: file.name, anexoBase64 });
+      const urlData = await urlRes.json().catch(() => null);
+      if (!urlRes.ok) {
+        setErro(urlData?.error ?? "Não foi possível preparar o upload.");
+        return;
+      }
+
+      await enviarParaStorage(urlData.signedUrl, file);
+
+      const res = await updateItem({ anexoNome: file.name, anexoStoragePath: urlData.path });
       if (!res.ok) {
         const data = await res.json().catch(() => null);
         setErro(data?.error ?? "Não foi possível enviar o anexo.");
       }
+    } catch {
+      setErro("Não foi possível enviar o anexo. Tente novamente.");
     } finally {
       setUploading(false);
     }

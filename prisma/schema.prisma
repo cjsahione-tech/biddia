@@ -242,6 +242,11 @@ model Document {
   categoria        String?
   status           DocumentStatus @default(PENDENTE)
   conteudoBase64   String?
+  // Caminho no bucket "documentos-habilitacao" do Supabase Storage, pra anexos grandes
+  // enviados direto do navegador (fora do corpo da requisição da função serverless, que
+  // tem teto de ~4,5MB) — quando presente, o conteúdo mora no Storage, não na coluna
+  // conteudoBase64 acima.
+  storagePath      String?
   origemUrl        String?
   // Texto do PDF extraído uma única vez e reaproveitado pelos agentes Analista,
   // Financeiro e Advogado — evita reprocessar o mesmo PDF 3x por edital.
@@ -259,13 +264,14 @@ enum ChecklistStatus {
   OK
 }
 
-// Categorias de habilitação/qualificação da Lei 14.133/2021 (Art. 62-70). Um item só
-// recebe uma dessas quando o Agente Secretário consegue classificá-lo com confiança —
-// caso contrário fica null e aparece agrupado como "Outros" na tela e no ZIP.
+// Categorias de habilitação/qualificação da Lei 14.133/2021 (Art. 62-70) — nomeadas e
+// agrupadas para bater com a própria estrutura de seções que os editais reais usam (ex:
+// "13.1 Regularidade Fiscal, Trabalhista, Econômico-Financeira e Jurídica" como UMA seção
+// só, não três). Um item só recebe uma dessas quando o Agente Secretário consegue mapear
+// com confiança a seção do edital de onde ele veio — caso contrário fica null e aparece
+// agrupado como "Outros" na tela e no ZIP.
 enum HabilitacaoCategoria {
-  FISCAL
-  TRABALHISTA
-  ECONOMICO_FINANCEIRA_JURIDICA
+  FISCAL_TRABALHISTA_ECONOMICO_FINANCEIRA_JURIDICA
   QUALIFICACAO_TECNICA_EMPRESA
   QUALIFICACAO_EQUIPE_TECNICA
   GARANTIA_CONTRATO

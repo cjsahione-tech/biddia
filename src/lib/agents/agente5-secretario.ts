@@ -19,22 +19,58 @@ const CHECKLIST_BASE = [
 // Categoria fixa dos itens padrão acima — são os mesmos em toda licitação, não dependem
 // do texto do edital, então não precisam passar pela IA de classificação.
 const CATEGORIA_BASE: Record<string, HabilitacaoCategoria> = {
-  "Contrato Social / Estatuto consolidado": "ECONOMICO_FINANCEIRA_JURIDICA",
-  "Cartão CNPJ atualizado": "ECONOMICO_FINANCEIRA_JURIDICA",
-  "Certidão Negativa de Débitos Federais (Receita Federal/PGFN)": "FISCAL",
-  "Certidão Negativa de Débitos Estaduais": "FISCAL",
-  "Certidão Negativa de Débitos Municipais": "FISCAL",
-  "Certificado de Regularidade do FGTS (CRF)": "TRABALHISTA",
-  "Certidão Negativa de Débitos Trabalhistas (CNDT)": "TRABALHISTA",
-  "Balanço patrimonial / atestado de capacidade financeira": "ECONOMICO_FINANCEIRA_JURIDICA",
+  "Contrato Social / Estatuto consolidado": "FISCAL_TRABALHISTA_ECONOMICO_FINANCEIRA_JURIDICA",
+  "Cartão CNPJ atualizado": "FISCAL_TRABALHISTA_ECONOMICO_FINANCEIRA_JURIDICA",
+  "Certidão Negativa de Débitos Federais (Receita Federal/PGFN)": "FISCAL_TRABALHISTA_ECONOMICO_FINANCEIRA_JURIDICA",
+  "Certidão Negativa de Débitos Estaduais": "FISCAL_TRABALHISTA_ECONOMICO_FINANCEIRA_JURIDICA",
+  "Certidão Negativa de Débitos Municipais": "FISCAL_TRABALHISTA_ECONOMICO_FINANCEIRA_JURIDICA",
+  "Certificado de Regularidade do FGTS (CRF)": "FISCAL_TRABALHISTA_ECONOMICO_FINANCEIRA_JURIDICA",
+  "Certidão Negativa de Débitos Trabalhistas (CNDT)": "FISCAL_TRABALHISTA_ECONOMICO_FINANCEIRA_JURIDICA",
+  "Balanço patrimonial / atestado de capacidade financeira": "FISCAL_TRABALHISTA_ECONOMICO_FINANCEIRA_JURIDICA",
   "Atestado(s) de Capacidade Técnica": "QUALIFICACAO_TECNICA_EMPRESA",
 };
 
-/** Classifica os itens de habilitação específicos DESTE edital (extraídos do texto pelo
- * Agente Analista) nas categorias da Lei 14.133/2021 — só entra uma categoria na lista se
- * o edital de fato exigir algo nela; itens que não se encaixam claramente ficam sem
- * categoria (viram "Outros" na tela) em vez de forçados num balde errado. */
-async function classificarCategoriasHabilitacao(itens: string[]): Promise<Map<string, HabilitacaoCategoria>> {
+/** Mapeia os CABEÇALHOS DE SEÇÃO que o próprio edital usa (ex: "Regularidade Fiscal,
+ * Trabalhista, Econômico-Financeira e Jurídica", "Qualificação Técnica da Empresa") para
+ * uma das 4 categorias fixas — bem mais barato e mais fiel do que classificar item por
+ * item, porque respeita o agrupamento que o edital já fez em vez de reinventar um. Só
+ * chega aqui quando o Agente Analista conseguiu identificar cabeçalhos de verdade. */
+async function classificarCabecalhos(cabecalhos: string[]): Promise<Map<string, HabilitacaoCategoria>> {
+  const mapa = new Map<string, HabilitacaoCategoria>();
+  if (cabecalhos.length === 0) return mapa;
+
+  const result = await askJSON<{
+    classificacoes: { cabecalho: string; categoria: HabilitacaoCategoria | null }[];
+  }>(
+    `Classifique cada cabeçalho de seção de habilitação/qualificação de um edital de licitação pública brasileira
+(Lei 14.133/2021) em UMA destas categorias:
+- FISCAL_TRABALHISTA_ECONOMICO_FINANCEIRA_JURIDICA: regularidade fiscal (Receita Federal/Estadual/Municipal),
+  trabalhista (FGTS, CNDT), econômico-financeira (balanço, índices) e/ou jurídica (contrato social, capacidade
+  jurídica) — no edital, essas costumam vir todas juntas numa seção só; se o cabeçalho cobrir qualquer combinação
+  delas, use esta categoria.
+- QUALIFICACAO_TECNICA_EMPRESA: capacidade técnica/operacional da EMPRESA (atestados, registro em conselho de
+  classe, licenças sanitárias/ambientais, estrutura, equipamentos)
+- QUALIFICACAO_EQUIPE_TECNICA: qualificação dos PROFISSIONAIS/responsáveis técnicos nomeados pela empresa
+- GARANTIA_CONTRATO: garantia de proposta ou garantia contratual
+
+Responda "categoria": null só se o cabeçalho genuinamente não se encaixar em nenhuma (raro).
+
+Responda em JSON:
+{ "classificacoes": [ { "cabecalho": string (exatamente como veio na lista), "categoria": "FISCAL_TRABALHISTA_ECONOMICO_FINANCEIRA_JURIDICA" | "QUALIFICACAO_TECNICA_EMPRESA" | "QUALIFICACAO_EQUIPE_TECNICA" | "GARANTIA_CONTRATO" | null } ] }`,
+    cabecalhos.map((c, i) => `${i + 1}. ${c}`).join("\n"),
+    { model: MODELO_HAIKU, maxTokens: 1500 }
+  );
+
+  for (const c of result.classificacoes ?? []) {
+    if (c.categoria) mapa.set(c.cabecalho, c.categoria);
+  }
+  return mapa;
+}
+
+/** Fallback para quando o Agente Analista não conseguiu identificar cabeçalhos de seção
+ * claros (edital sem estrutura numerada, ou análise antiga anterior a essa mudança) —
+ * classifica item por item, sem o contexto do agrupamento original do edital. */
+async function classificarItensSemCabecalho(itens: string[]): Promise<Map<string, HabilitacaoCategoria>> {
   const mapa = new Map<string, HabilitacaoCategoria>();
   if (itens.length === 0) return mapa;
 
@@ -43,18 +79,20 @@ async function classificarCategoriasHabilitacao(itens: string[]): Promise<Map<st
   }>(
     `Classifique cada exigência de habilitação de uma licitação pública brasileira (Lei 14.133/2021) em UMA
 destas categorias:
-- FISCAL: regularidade com Receita Federal, Fazenda Estadual, Fazenda Municipal (tributos)
-- TRABALHISTA: FGTS, débitos trabalhistas (CNDT), regularidade com empregados
-- ECONOMICO_FINANCEIRA_JURIDICA: balanço patrimonial, índices contábeis, capital social, contrato social, regularidade jurídica da empresa
-- QUALIFICACAO_TECNICA_EMPRESA: atestado de capacidade técnica da empresa, registro em conselho/entidade profissional, comprovação de aptidão do licitante
-- QUALIFICACAO_EQUIPE_TECNICA: responsável técnico, registro profissional de membro da equipe, currículo/experiência de profissional nomeado
+- FISCAL_TRABALHISTA_ECONOMICO_FINANCEIRA_JURIDICA: regularidade com Receita Federal/Estadual/Municipal, FGTS,
+  débitos trabalhistas (CNDT), balanço patrimonial, índices contábeis, capital social, contrato social,
+  regularidade jurídica da empresa
+- QUALIFICACAO_TECNICA_EMPRESA: atestado de capacidade técnica da empresa, registro em conselho/entidade
+  profissional, licenças (sanitária/ambiental), comprovação de aptidão do licitante
+- QUALIFICACAO_EQUIPE_TECNICA: responsável técnico, registro profissional de membro da equipe,
+  currículo/experiência de profissional nomeado
 - GARANTIA_CONTRATO: garantia de proposta, garantia contratual, seguro-garantia, caução
 
 Se um item não se encaixar claramente em nenhuma categoria, responda "categoria": null — não force uma categoria
 errada só para preencher.
 
 Responda em JSON:
-{ "classificacoes": [ { "item": string (exatamente como veio na lista), "categoria": "FISCAL" | "TRABALHISTA" | "ECONOMICO_FINANCEIRA_JURIDICA" | "QUALIFICACAO_TECNICA_EMPRESA" | "QUALIFICACAO_EQUIPE_TECNICA" | "GARANTIA_CONTRATO" | null } ] }`,
+{ "classificacoes": [ { "item": string (exatamente como veio na lista), "categoria": "FISCAL_TRABALHISTA_ECONOMICO_FINANCEIRA_JURIDICA" | "QUALIFICACAO_TECNICA_EMPRESA" | "QUALIFICACAO_EQUIPE_TECNICA" | "GARANTIA_CONTRATO" | null } ] }`,
     itens.map((item, i) => `${i + 1}. ${item}`).join("\n"),
     { model: MODELO_HAIKU, maxTokens: 2000 }
   );
@@ -74,24 +112,55 @@ export async function executarAgente5(editalId: string) {
 
     const existentes = new Set(edital.checklistItems.map((c) => c.documentoNome));
 
-    let habilitacaoEdital: string[] = [];
+    // Formato novo: grupos {categoriaEdital, itens} que espelham a própria estrutura de
+    // seções do edital (ver GrupoHabilitacao no Agente Analista). Análises antigas (de
+    // antes dessa mudança) ainda têm o formato velho, uma lista plana de strings — nesse
+    // caso trata como um grupo sem cabeçalho, que cai no classificador item a item.
+    let grupos: { categoriaEdital: string | null; itens: string[] }[] = [];
     if (edital.analysis?.habilitacao) {
       try {
-        habilitacaoEdital = JSON.parse(edital.analysis.habilitacao) as string[];
+        const parsed = JSON.parse(edital.analysis.habilitacao) as unknown;
+        if (Array.isArray(parsed) && parsed.every((g) => g && typeof g === "object" && "itens" in g)) {
+          grupos = parsed as { categoriaEdital: string | null; itens: string[] }[];
+        } else if (Array.isArray(parsed)) {
+          grupos = [{ categoriaEdital: null, itens: parsed as string[] }];
+        }
       } catch {
-        habilitacaoEdital = [];
+        grupos = [];
       }
     }
 
+    const habilitacaoEdital = grupos.flatMap((g) => g.itens);
     const todosItens = Array.from(new Set([...CHECKLIST_BASE, ...habilitacaoEdital]));
 
     // Só classifica com IA os itens específicos do edital que ainda vão ser criados —
     // os padrão já têm categoria fixa (CATEGORIA_BASE) e itens que já existem não
     // precisam ser reclassificados a cada execução.
-    const novosEspecificos = todosItens.filter(
-      (nome) => !existentes.has(nome) && !CHECKLIST_BASE.includes(nome)
+    const novoNoEdital = (nome: string) => !existentes.has(nome) && !CHECKLIST_BASE.includes(nome);
+
+    // Cabeçalhos de verdade (o edital já organizou os itens por seção) — classifica os
+    // POUCOS cabeçalhos distintos, não cada item, e aplica a mesma categoria a todo item
+    // daquele grupo, respeitando o agrupamento original do edital.
+    const cabecalhosComNovoItem = Array.from(
+      new Set(grupos.filter((g) => g.categoriaEdital && g.itens.some(novoNoEdital)).map((g) => g.categoriaEdital!))
     );
-    const categoriasEspecificas = await classificarCategoriasHabilitacao(novosEspecificos);
+    const categoriaPorCabecalho = await classificarCabecalhos(cabecalhosComNovoItem);
+
+    const categoriaPorItem = new Map<string, HabilitacaoCategoria>();
+    for (const g of grupos) {
+      if (!g.categoriaEdital) continue;
+      const categoria = categoriaPorCabecalho.get(g.categoriaEdital);
+      if (!categoria) continue;
+      for (const item of g.itens) categoriaPorItem.set(item, categoria);
+    }
+
+    // Itens sem cabeçalho de seção identificado (edital sem estrutura clara, ou análise
+    // antiga) — único caso que ainda passa pelo classificador item a item.
+    const itensSemCabecalho = grupos
+      .filter((g) => !g.categoriaEdital)
+      .flatMap((g) => g.itens)
+      .filter((nome) => novoNoEdital(nome) && !categoriaPorItem.has(nome));
+    const categoriasSemCabecalho = await classificarItensSemCabecalho(itensSemCabecalho);
 
     let criados = 0;
     for (const nome of todosItens) {
@@ -102,7 +171,7 @@ export async function executarAgente5(editalId: string) {
           documentoNome: nome,
           obrigatorio: CHECKLIST_BASE.includes(nome),
           status: "FALTANTE",
-          categoria: CATEGORIA_BASE[nome] ?? categoriasEspecificas.get(nome) ?? null,
+          categoria: CATEGORIA_BASE[nome] ?? categoriaPorItem.get(nome) ?? categoriasSemCabecalho.get(nome) ?? null,
         },
       });
       criados++;

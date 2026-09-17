@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireCompany } from "@/lib/api-utils";
 import { baixarArquivoPncp } from "@/lib/agents/pncp";
 import { baixarArquivoLicitaNet } from "@/lib/agents/licitanet";
+import { criarUrlDownload } from "@/lib/storage";
 
 function respondFromDataUrl(dataUrl: string, filename: string) {
   const [meta, base64] = dataUrl.split(",");
@@ -30,6 +31,19 @@ export async function GET(
   if (!doc) return NextResponse.json({ error: "Documento não encontrado" }, { status: 404 });
 
   const nomeArquivo = doc.nome.replace(/[^a-zA-Z0-9-_. ]/g, "");
+
+  // Anexo grande enviado direto pro Storage (ver upload-url/route.ts) — redireciona pra
+  // uma URL assinada de curta duração em vez de fazer nossa função serverless carregar
+  // o arquivo inteiro na memória só pra repassar.
+  if (doc.storagePath) {
+    try {
+      const url = await criarUrlDownload(doc.storagePath);
+      return NextResponse.redirect(url);
+    } catch (err) {
+      console.error("Falha ao gerar URL de download do Storage:", err);
+      return NextResponse.json({ error: "Não foi possível obter o arquivo agora. Tente novamente." }, { status: 502 });
+    }
+  }
 
   // Caminho rápido: o Agente Comercial já baixou este arquivo (edital/TR do PNCP, ou
   // anexo gerado) no momento da captura. Serve direto do banco, sem depender do PNCP

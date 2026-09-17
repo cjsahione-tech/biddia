@@ -48,3 +48,6 @@ next-env.d.ts
 
 # cookies/sessão de testes manuais (nunca deve ir para o repositório)
 *cookies*.txt
+
+# arquivos de rascunho gerados durante a sessão (relatórios, PDFs de teste etc.)
+/scratchpad/

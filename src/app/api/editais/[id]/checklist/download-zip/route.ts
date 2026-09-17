@@ -3,6 +3,7 @@ import JSZip from "jszip";
 import { prisma } from "@/lib/prisma";
 import { requireCompany } from "@/lib/api-utils";
 import { nomePastaCategoria } from "@/lib/habilitacao-categorias";
+import { baixarAnexo } from "@/lib/storage";
 
 export const maxDuration = 30;
 
@@ -32,8 +33,19 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 
   for (const item of itens) {
     const doc = item.anexoDocId ? docPorId.get(item.anexoDocId) : undefined;
-    const base64 = doc?.conteudoBase64?.split(",")[1];
-    if (!base64) continue;
+    if (!doc) continue;
+
+    let bytes: Uint8Array | null = null;
+    if (doc.storagePath) {
+      bytes = await baixarAnexo(doc.storagePath).catch((err) => {
+        console.error(`Falha ao baixar anexo do Storage (${doc.storagePath}) para o ZIP:`, err);
+        return null;
+      });
+    } else if (doc.conteudoBase64) {
+      const base64 = doc.conteudoBase64.split(",")[1];
+      bytes = base64 ? Buffer.from(base64, "base64") : null;
+    }
+    if (!bytes) continue;
 
     const pasta = nomePastaCategoria(item.categoria);
     let nomeArquivo = (item.anexoNome || doc.nome || item.documentoNome).replace(/[\\/]/g, "-");
@@ -51,7 +63,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     usados.add(nomeArquivo);
     usadosPorPasta.set(pasta, usados);
 
-    zip.folder(pasta)!.file(nomeArquivo, Buffer.from(base64, "base64"));
+    zip.folder(pasta)!.file(nomeArquivo, bytes);
     adicionados++;
   }
 
