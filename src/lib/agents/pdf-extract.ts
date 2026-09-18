@@ -1,6 +1,8 @@
 import { extractText, getDocumentProxy } from "unpdf";
 import { prisma } from "@/lib/prisma";
 import { baixarArquivoPncp } from "@/lib/agents/pncp";
+import { transcreverPdfViaVisao, OCR_VISAO_LIMITE_PAGINAS, OCR_VISAO_LIMITE_BYTES } from "@/lib/anthropic";
+import { logAudit } from "@/lib/agents/run-tracker";
 import type { Document as DocumentRow } from "@prisma/client";
 
 // Limite de caracteres por documento enviado ao modelo — controla custo/latência
@@ -9,17 +11,68 @@ import type { Document as DocumentRow } from "@prisma/client";
 // deixa a resposta do modelo lenta o bastante para estourar esse limite.
 export const MAX_CHARS_POR_DOCUMENTO = 35_000;
 
-// Exportado para uso fora deste módulo (ex: extrair dados estruturados de um PDF
-// recém enviado pelo usuário, antes mesmo de haver um Document salvo).
-export async function extrairTextoPdf(bytes: Uint8Array): Promise<string | null> {
+// Abaixo desta densidade de caracteres por página, o PDF na prática não tem uma camada
+// de texto selecionável de verdade — é um edital escaneado (imagem de cada página), e o
+// pouco que o unpdf devolve costuma ser só lixo de metadados/cabeçalho de scanner. Um
+// documento com texto real tipicamente passa de várias centenas de caracteres por página.
+const MIN_CHARS_POR_PAGINA_TEXTO_REAL = 30;
+
+export type ResultadoExtracaoPdf = {
+  texto: string | null;
+  // true quando o texto veio de OCR via visão em vez da camada de texto selecionável do
+  // PDF — usado só para deixar isso registrado no log de auditoria do edital.
+  viaOcr: boolean;
+};
+
+/**
+ * Extrai o texto de um PDF. Primeiro tenta a camada de texto selecionável (rápido,
+ * sem custo de IA); quando o documento não tem uma camada de texto real — caso comum de
+ * edital escaneado — cai para OCR via visão do modelo (ver transcreverPdfViaVisao) em vez
+ * de devolver vazio, para que Analista, Financeiro e Advogado consigam ler o edital de
+ * qualquer forma.
+ */
+export async function extrairTextoPdfComOrigem(bytes: Uint8Array): Promise<ResultadoExtracaoPdf> {
+  let textoSelecionavel: string | null = null;
+  let paginas = 1;
+
   try {
     const pdf = await getDocumentProxy(bytes);
-    const { text } = await extractText(pdf, { mergePages: true });
-    return text.trim() || null;
+    const { text, totalPages } = await extractText(pdf, { mergePages: true });
+    paginas = totalPages || 1;
+    textoSelecionavel = text.trim() || null;
   } catch (err) {
     console.error("Falha ao extrair texto do PDF:", err);
-    return null;
   }
+
+  const densidade = (textoSelecionavel?.length ?? 0) / paginas;
+  if (densidade >= MIN_CHARS_POR_PAGINA_TEXTO_REAL) return { texto: textoSelecionavel, viaOcr: false };
+
+  // Sem texto selecionável suficiente — tenta OCR via visão, respeitando um teto de
+  // páginas/tamanho para não estourar o orçamento de tempo da função serverless com um
+  // documento gigante. Fora do teto, segue com o que a extração normal encontrou (pode
+  // ser null), como antes.
+  if (paginas > OCR_VISAO_LIMITE_PAGINAS || bytes.byteLength > OCR_VISAO_LIMITE_BYTES) {
+    console.warn(
+      `PDF sem texto selecionável e grande demais para OCR via visão (${paginas} páginas, ${bytes.byteLength} bytes) — seguindo sem OCR.`
+    );
+    return { texto: textoSelecionavel, viaOcr: false };
+  }
+
+  const base64 = Buffer.from(bytes).toString("base64");
+  const textoOcr = await transcreverPdfViaVisao(base64, {
+    maxTokens: Math.min(16_000, Math.max(4_000, paginas * 700)),
+  });
+  return textoOcr ? { texto: textoOcr, viaOcr: true } : { texto: textoSelecionavel, viaOcr: false };
+}
+
+/**
+ * Exportado para uso fora deste módulo (ex: extrair dados estruturados de um PDF recém
+ * enviado pelo usuário, antes mesmo de haver um Document salvo) — quando quem chama não
+ * precisa saber se o texto veio de OCR ou não.
+ */
+export async function extrairTextoPdf(bytes: Uint8Array): Promise<string | null> {
+  const { texto } = await extrairTextoPdfComOrigem(bytes);
+  return texto;
 }
 
 export function base64ParaBytes(dataUrl: string): Uint8Array {
@@ -130,8 +183,18 @@ export async function obterTextoBrutoDocumento(doc: DocumentRow): Promise<string
   }
   if (!bytes) return null;
 
-  const texto = await extrairTextoPdf(bytes);
+  const { texto, viaOcr } = await extrairTextoPdfComOrigem(bytes);
   if (!texto) return null;
+
+  if (viaOcr) {
+    await logAudit(
+      doc.editalId,
+      "Sistema",
+      "Leitura de documento",
+      "OK",
+      `"${doc.nome}" não tinha texto selecionável (provável documento escaneado) — lido via OCR automático.`
+    ).catch((err) => console.error(`Falha ao registrar auditoria de OCR do documento ${doc.id}:`, err));
+  }
 
   await prisma.document
     .update({ where: { id: doc.id }, data: { textoExtraido: texto } })

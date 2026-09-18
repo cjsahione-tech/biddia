@@ -57,3 +57,54 @@ export async function askJSON<T>(
     throw new Error("Não foi possível interpretar a resposta da IA como JSON.");
   }
 }
+
+// Tetos de segurança para o OCR via visão (ver transcreverPdfViaVisao): acima disso, o
+// tempo/custo de mandar o PDF inteiro como imagens por página deixa de valer a pena
+// dentro do orçamento de 60s da função serverless — o documento segue sem OCR em vez de
+// arriscar estourar o tempo do pipeline inteiro. 32MB/100 páginas é o teto da própria API
+// da Anthropic para documentos; ficamos bem abaixo disso de propósito.
+export const OCR_VISAO_LIMITE_PAGINAS = 25;
+export const OCR_VISAO_LIMITE_BYTES = 15 * 1024 * 1024;
+
+/**
+ * Transcreve o texto de um PDF sem camada de texto selecionável (edital escaneado)
+ * mandando o arquivo para o modelo como um bloco "document" — Claude lê cada página como
+ * imagem nativamente, então isso funciona como OCR sem precisar de nenhuma biblioteca de
+ * OCR à parte (evita dependências nativas tipo Tesseract, problemáticas em serverless).
+ * Devolve texto puro (não JSON), pensado para entrar no mesmo pipeline de corte/blocos
+ * que já existe para PDFs com texto selecionável de verdade — os agentes Analista,
+ * Financeiro e Advogado passam a enxergar o mesmo texto de qualquer forma.
+ */
+export async function transcreverPdfViaVisao(base64: string, opts?: { maxTokens?: number }): Promise<string | null> {
+  const anthropic = getClient();
+  try {
+    const message = await anthropic.messages.create({
+      model: MODELO_HAIKU,
+      max_tokens: opts?.maxTokens ?? 8000,
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 } },
+            {
+              type: "text",
+              text: `Este PDF é um documento escaneado (sem texto selecionável) — transcreva TODO o texto visível nele,
+na ordem em que aparece, página por página. Preserve números, tabelas (como texto separado por espaços/pipes
+alinhados) e a estrutura de seções/itens tal como aparecem no documento. Não resuma, não comente, não traduza —
+apenas transcreva literalmente o que está escrito e visível nas imagens das páginas. Se algum trecho estiver
+ilegível, marque com "[ilegível]" e siga em frente. Responda SOMENTE com o texto transcrito, sem nenhum comentário
+seu antes ou depois.`,
+            },
+          ],
+        },
+      ],
+    });
+
+    const block = message.content[0];
+    if (block.type !== "text") return null;
+    return block.text.trim() || null;
+  } catch (err) {
+    console.error("Falha ao transcrever PDF via visão (OCR):", err);
+    return null;
+  }
+}

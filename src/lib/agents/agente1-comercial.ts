@@ -425,7 +425,7 @@ export async function capturarEditalManual(
   const texto = await extrairTextoPdf(bytes);
   if (!texto) {
     throw new Error(
-      "Não foi possível ler texto neste PDF. Verifique se não é um arquivo digitalizado apenas como imagem (sem texto selecionável)."
+      "Não foi possível ler texto neste PDF, nem via OCR (o arquivo pode estar corrompido, protegido, ou ter páginas demais para a leitura automática). Tente novamente ou envie uma versão menor do arquivo."
     );
   }
 
