@@ -75,6 +75,65 @@ export async function extrairTextoPdf(bytes: Uint8Array): Promise<string | null>
   return texto;
 }
 
+// Casa referências tipo "página 99 a 109", "páginas 99-109", "pág. 99 à 109" — usado pra
+// priorizar exatamente o trecho que o usuário pediu num anexo de correção via chat.
+const REGEX_INTERVALO_PAGINAS = /p[aá]gin?a?s?\.?\s*(\d{1,4})\s*(?:a|à|-|até|e)\s*(\d{1,4})/i;
+
+/**
+ * Extrai o trecho relevante de um PDF anexado numa correção via chat. Prioriza o que o
+ * usuário pediu explicitamente: se a mensagem menciona um intervalo de páginas (ex:
+ * "página 99 a 109"), extrai exatamente essas páginas (com 1 página de folga de cada
+ * lado) — em vez de cortar cegamente pelo INÍCIO do documento, que em anexos longos quase
+ * sempre descarta justamente o trecho pedido (a causa raiz de o agente "não achar" a
+ * tabela que o usuário mandou). Sem menção a páginas, cai para a mesma seleção por
+ * densidade de palavras-chave usada na extração normal (ver selecionarTrechoRelevante),
+ * usando termos tirados da própria mensagem do usuário.
+ */
+export async function extrairTrechoDeAnexoParaCorrecao(
+  bytes: Uint8Array,
+  mensagemUsuario: string,
+  opts?: { tamanhoMax?: number }
+): Promise<string | null> {
+  const tamanhoMax = opts?.tamanhoMax ?? MAX_CHARS_POR_DOCUMENTO;
+
+  try {
+    const pdf = await getDocumentProxy(bytes);
+    const matchPaginas = mensagemUsuario.match(REGEX_INTERVALO_PAGINAS);
+
+    if (matchPaginas) {
+      const { text: paginas, totalPages } = await extractText(pdf, { mergePages: false });
+      const a = parseInt(matchPaginas[1], 10);
+      const b = parseInt(matchPaginas[2], 10);
+      const inicio = Math.max(1, Math.min(a, b) - 1);
+      const fim = Math.min(totalPages, Math.max(a, b) + 1);
+      const trecho = paginas.slice(inicio - 1, fim).join("\n\n").trim();
+      if (trecho) {
+        return trecho.length > tamanhoMax
+          ? `${trecho.slice(0, tamanhoMax)}\n\n[...trecho truncado — maior que o limite considerado...]`
+          : trecho;
+      }
+      // Intervalo pedido não bateu com páginas de verdade do PDF (ex: fora do total) —
+      // segue pro caminho normal abaixo em vez de devolver vazio.
+    }
+
+    const { text: textoCompleto } = await extractText(pdf, { mergePages: true });
+    const texto = textoCompleto.trim();
+    if (!texto) return null;
+    if (texto.length <= tamanhoMax) return texto;
+
+    // Termos com 4+ caracteres da própria mensagem do usuário como proxy do que ele está
+    // procurando — mesma lógica de concentração de palavras-chave da extração normal.
+    const palavrasChave = Array.from(new Set(mensagemUsuario.match(/[\p{L}\p{N}]{4,}/gu) ?? [])).slice(0, 15);
+    if (palavrasChave.length === 0) {
+      return `${texto.slice(0, tamanhoMax)}\n\n[...texto truncado — anexo maior que o limite considerado...]`;
+    }
+    return selecionarTrechoRelevante(texto, { tamanhoMax, palavrasChave });
+  } catch (err) {
+    console.error("Falha ao extrair trecho do anexo de correção:", err);
+    return null;
+  }
+}
+
 export function base64ParaBytes(dataUrl: string): Uint8Array {
   const base64 = dataUrl.split(",")[1] ?? dataUrl;
   return new Uint8Array(Buffer.from(base64, "base64"));

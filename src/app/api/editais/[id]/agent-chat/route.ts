@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireCompany } from "@/lib/api-utils";
 import { AGENTES_CHAT, isAgentChatKey, processarCorrecaoChat } from "@/lib/agents/agent-chat";
-import { extrairTextoPdf, base64ParaBytes } from "@/lib/agents/pdf-extract";
+import { extrairTrechoDeAnexoParaCorrecao, base64ParaBytes } from "@/lib/agents/pdf-extract";
 
 // Mesmo teto prático usado nos outros uploads da plataforma (corpo em base64, ~33%
 // maior que o arquivo, contra o limite fixo de ~4,5MB da Vercel).
@@ -95,8 +95,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     anexoDocId = doc.id;
 
     if (anexoBase64.startsWith("data:application/pdf")) {
-      const texto = await extrairTextoPdf(base64ParaBytes(anexoBase64)).catch(() => null);
-      if (texto) anexoTexto = texto.slice(0, MAX_CHARS_ANEXO_NO_PROMPT);
+      // Prioriza o trecho que o usuário pediu (ex: "página 99 a 109") em vez de cortar
+      // cegamente pelo início do anexo — que em documentos longos descarta justamente o
+      // trecho pedido e faz o agente "não achar" a tabela (ver extrairTrechoDeAnexoParaCorrecao).
+      anexoTexto = await extrairTrechoDeAnexoParaCorrecao(base64ParaBytes(anexoBase64), mensagem, {
+        tamanhoMax: MAX_CHARS_ANEXO_NO_PROMPT,
+      }).catch(() => null);
     }
   }
 

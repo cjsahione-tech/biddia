@@ -526,14 +526,27 @@ export async function corrigirAgente3ViaChat(editalId: string, notaCorrecao: str
     .map((it, i) => `[${i}] ${it.descricao} | ${it.unidade} | qtd ${it.quantidade} | unit ${it.valorUnitario}`)
     .join("\n");
 
+  // A observação do usuário pode trazer embutido um trecho de anexo (ex: um PDF enviado
+  // no chat com a tabela real a usar) — conta como fonte de itens tanto quanto o texto do
+  // próprio edital, então soma nas duas estimativas para não subdimensionar o espaço de
+  // resposta quando a tabela pedida for bem maior que a lista atual da proposta.
+  const itensEsperadosNaObservacao = estimarQuantidadeDeItens(notaCorrecao);
+  const baseParaTokens = Math.max(itensAtuais.length, itensEsperados, itensEsperadosNaObservacao);
+
   const diff = await askJSON<RevisaoDiff>(
     `Você é o agente financeiro de uma empresa. Abaixo estão (1) trechos do edital/TR com a tabela de itens, (2) a
-lista de itens JÁ na proposta, com índices [0..${itensAtuais.length - 1}], e (3) uma observação do usuário
-apontando um problema nessa lista para você corrigir. Aplique a correção pedida e devolva SOMENTE o que precisa
-mudar — não repita a lista inteira:
+lista de itens JÁ na proposta, com índices [0..${itensAtuais.length - 1}], e (3) uma observação do usuário apontando
+um problema para você corrigir — a observação pode conter só uma instrução curta, ou pode trazer embutido um trecho
+de documento (ex: um anexo que o usuário enviou) com a tabela real a usar. Aplique a correção pedida e devolva
+SOMENTE o que precisa mudar — não repita a lista inteira:
 - "correcoes": para cada item que precisa mudar, um objeto com o "indice" e SÓ os campos a corrigir.
 - "itensFaltantes": itens que faltam na lista (inclusive os que o usuário pediu para adicionar).
 - "indicesParaRemover": índices de itens que devem sair da lista.
+
+Se o usuário pedir para SUBSTITUIR a tabela inteira por outra (ex: por um trecho de anexo que ele mandou), isso
+significa colocar TODOS os itens da tabela nova em "itensFaltantes" e TODOS os índices [0..${itensAtuais.length - 1}]
+da lista atual em "indicesParaRemover" — não é uma correção pontual, é uma troca completa. Transcreva a tabela nova
+LITERALMENTE, item por item, sem pular nenhum — é o mesmo cuidado de uma extração normal.
 
 ${INSTRUCAO_FORMATO_NUMERICO}
 
@@ -544,10 +557,11 @@ Responda em JSON:
   "indicesParaRemover": [number]
 }`,
     `=== TEXTO-FONTE ===\n${textoAnexosPrecos ?? ""}\n${textoTermoReferencia ?? ""}\n${textoEdital ?? ""}\n\n=== LISTA ATUAL DA PROPOSTA (${itensAtuais.length} itens) ===\n${listaIndexada}\n\n=== OBSERVAÇÃO DO USUÁRIO ===\n${notaCorrecao}`,
-    // Mesmo abaixo do limiar de reextração total, o diff ainda pode envolver dezenas de
-    // itens (correções + faltantes) — um teto fixo baixo cortava a resposta no meio do
-    // JSON e derrubava a correção inteira por falha de parse.
-    { model: MODELO_HAIKU, maxTokens: maxTokensParaItens(itensAtuais.length, 8_000) }
+    // O teto varia com o MAIOR entre a lista atual, o texto-fonte do edital e o que veio
+    // na observação (ex: anexo do usuário) — usar só itensAtuais.length subdimensionava o
+    // espaço de resposta numa troca de tabela inteira por uma bem maior, cortando o JSON
+    // no meio e derrubando a correção inteira por falha de parse.
+    { model: MODELO_HAIKU, maxTokens: maxTokensParaItens(baseParaTokens, 16_000) }
   );
 
   const revisados = itensAtuais.map((item, i) => {
