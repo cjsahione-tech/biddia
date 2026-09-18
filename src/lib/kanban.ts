@@ -28,6 +28,11 @@ export const ETAPAS_NEGATIVAS = new Set<EtapaKanban>([
   "RECUSADA_DESCLASSIFICADA",
 ]);
 
+// Colunas de desfecho positivo — a licitação foi ganha (proposta aceita) ou já está em
+// execução/concluída depois de ganha. Usado pelo Dashboard de Resultados para calcular
+// taxa de conversão e valores ganhos.
+export const ETAPAS_GANHAS = new Set<EtapaKanban>(["ACEITA", "EM_CONTRATO", "FINALIZADA"]);
+
 // Etiquetas de cor do card, estilo Trello — classes já resolvidas para não precisar de
 // template string dinâmica (o Tailwind não gera classe pra string montada em runtime).
 export const CORES_CARD: { key: CorCard; label: string; dot: string; faixa: string }[] = [

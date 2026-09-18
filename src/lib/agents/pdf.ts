@@ -164,7 +164,11 @@ export function bytesToDataUrl(bytes: Uint8Array) {
 export type SecaoRelatorio =
   | { tipo: "campos"; titulo: string; campos: { label: string; valor: string }[] }
   | { tipo: "texto"; titulo: string; texto: string }
-  | { tipo: "tabela"; titulo: string; colunas: { label: string; largura: number }[]; linhas: string[][] };
+  | { tipo: "tabela"; titulo: string; colunas: { label: string; largura: number }[]; linhas: string[][] }
+  // Gráfico de barras horizontais desenhado com retângulos do próprio pdf-lib (sem
+  // depender de rasterizar imagem nenhuma) — usado pelo Dashboard de Resultados para dar
+  // uma leitura visual rápida de distribuições (funil de etapas, por portal, por UF...).
+  | { tipo: "barras"; titulo: string; itens: { label: string; valor: number; valorLabel: string }[] };
 
 function truncarParaLargura(texto: string, font: import("pdf-lib").PDFFont, size: number, maxWidth: number): string {
   if (font.widthOfTextAtSize(texto, size) <= maxWidth) return texto;
@@ -274,6 +278,45 @@ export async function gerarPdfRelatorio(opts: {
         novaPaginaSeNecessario(20);
         page.drawText(linha, { x: MARGIN, y: cursorY, size: 9.5, font, color: rgb(0.15, 0.15, 0.15) });
         cursorY -= 14;
+      }
+    } else if (secao.tipo === "barras") {
+      const labelWidth = 170;
+      const valorWidth = 80;
+      const barAreaWidth = maxWidth - labelWidth - valorWidth;
+      const barHeight = 10;
+      const maxValor = Math.max(...secao.itens.map((i) => i.valor), 1);
+
+      for (const item of secao.itens) {
+        novaPaginaSeNecessario(18);
+        const labelTruncado = truncarParaLargura(item.label, font, 8.5, labelWidth - 6);
+        page.drawText(labelTruncado, { x: MARGIN, y: cursorY, size: 8.5, font, color: rgb(0.25, 0.25, 0.25) });
+
+        // Barra "de fundo" (teto) sutil, pra dar noção de escala mesmo quando o valor é
+        // pequeno perto do maior item — sem ela, itens baixos ficam quase invisíveis.
+        page.drawRectangle({
+          x: MARGIN + labelWidth,
+          y: cursorY - 2,
+          width: barAreaWidth,
+          height: barHeight,
+          color: rgb(0.95, 0.95, 0.97),
+        });
+        const larguraBarra = Math.max(2, (item.valor / maxValor) * barAreaWidth);
+        page.drawRectangle({
+          x: MARGIN + labelWidth,
+          y: cursorY - 2,
+          width: larguraBarra,
+          height: barHeight,
+          color: rgb(0.267, 0.216, 0.792), // indigo — mesma cor da marca (--brand)
+        });
+
+        page.drawText(item.valorLabel, {
+          x: MARGIN + labelWidth + barAreaWidth + 8,
+          y: cursorY,
+          size: 8.5,
+          font,
+          color: rgb(0.25, 0.25, 0.25),
+        });
+        cursorY -= 16;
       }
     } else {
       novaPaginaSeNecessario(30);
