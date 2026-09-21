@@ -58,6 +58,19 @@ export type ChecklistItem = {
   anexoNome: string | null;
 };
 
+export type FormaDocumento = "COPIA_SIMPLES" | "AUTENTICADO" | "ASSINATURA_DIGITAL";
+
+export type CompanyDocumentItem = {
+  id: string;
+  tipo: string;
+  categoria: HabilitacaoCategoria | null;
+  nome: string;
+  forma: FormaDocumento;
+  dataEmissao: string | null;
+  validade: string | null;
+  createdAt: string;
+};
+
 export type DocumentItem = {
   id: string;
   nome: string;

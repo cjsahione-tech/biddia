@@ -8,42 +8,42 @@ datasource db {
 }
 
 model User {
-  id           String    @id @default(cuid())
-  email        String    @unique
+  id           String   @id @default(cuid())
+  email        String   @unique
   passwordHash String
   name         String
-  createdAt    DateTime  @default(now())
+  createdAt    DateTime @default(now())
   company      Company?
 }
 
 model Company {
-  id             String    @id @default(cuid())
-  userId         String    @unique
-  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  razaoSocial    String
-  cnpj           String
-  logradouro     String
-  numero         String
-  complemento    String?
-  bairro         String
-  cidade         String
-  uf             String
-  cep            String
+  razaoSocial String
+  cnpj        String
+  logradouro  String
+  numero      String
+  complemento String?
+  bairro      String
+  cidade      String
+  uf          String
+  cep         String
 
-  banco          String
-  agencia        String
-  conta          String
+  banco   String
+  agencia String
+  conta   String
 
-  socioNome      String
-  socioCpf       String
+  socioNome String
+  socioCpf  String
 
-  logoUrl        String?
+  logoUrl String?
 
-  objetoSocial   String
-  atendeServico  Boolean   @default(true)
-  atendeBem      Boolean   @default(true)
-  keywords       Keyword[]
+  objetoSocial  String
+  atendeServico Boolean   @default(true)
+  atendeBem     Boolean   @default(true)
+  keywords      Keyword[]
 
   // Segmento da LicitaNet (https://licitanet.com.br) usado pelo Agente Comercial para
   // buscar também nesse portal, além do PNCP — id/nome vêm da tabela fixa de segmentos
@@ -53,11 +53,15 @@ model Company {
 
   // Número de WhatsApp para notificações (formato E.164 sem "+", ex: 5511999999999) —
   // usado pela busca agendada (novos editais) e pelos alertas de prazo do checklist.
-  whatsapp              String?
+  whatsapp String?
 
-  editais        Edital[]
-  editaisExcluidos EditalExcluido[]
+  editais            Edital[]
+  editaisExcluidos   EditalExcluido[]
   estudosViabilidade EstudoViabilidade[]
+  // Dossiê de documentos reutilizáveis da empresa (certidões, contrato social...) — ver
+  // CompanyDocument. O Agente Secretário usa isso pra preencher sozinho os itens padrão
+  // do checklist de cada edital novo, sem o usuário reenviar o mesmo documento sempre.
+  documentos         CompanyDocument[]
 
   // Regime tributário padrão da empresa — só pré-preenche um novo estudo (Etapa 3);
   // cada estudo pode sobrescrever para simulações, sem alterar este cadastro.
@@ -67,16 +71,16 @@ model Company {
   faixasSimples          FaixaSimplesNacional[]
   parametrosRegime       ParametroTributarioRegime[]
 
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Keyword {
-  id         String   @id @default(cuid())
-  companyId  String
-  company    Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  term       String
-  createdAt  DateTime @default(now())
+  id        String   @id @default(cuid())
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  term      String
+  createdAt DateTime @default(now())
 
   @@unique([companyId, term])
 }
@@ -106,51 +110,51 @@ enum EtapaKanban {
 }
 
 model Edital {
-  id                  String        @id @default(cuid())
-  companyId           String
-  company             Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  id        String  @id @default(cuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
-  fonte               String        @default("PNCP")
-  numeroControlePNCP  String
-  titulo              String
-  descricao           String
-  orgaoNome           String
-  orgaoCnpj           String
-  municipio           String?
-  uf                  String?
-  modalidade          String?
-  situacao            String?
-  dataPublicacao      DateTime?
-  dataAtualizacaoPncp DateTime?
-  dataAberturaProposta DateTime?
+  fonte                    String    @default("PNCP")
+  numeroControlePNCP       String
+  titulo                   String
+  descricao                String
+  orgaoNome                String
+  orgaoCnpj                String
+  municipio                String?
+  uf                       String?
+  modalidade               String?
+  situacao                 String?
+  dataPublicacao           DateTime?
+  dataAtualizacaoPncp      DateTime?
+  dataAberturaProposta     DateTime?
   dataEncerramentoProposta DateTime?
-  valorGlobal         Float?
-  orcamentoSigiloso   Boolean       @default(false)
-  tipoObjeto          String?
-  linkPortal           String
-  keywordMatched      String?
+  valorGlobal              Float?
+  orcamentoSigiloso        Boolean   @default(false)
+  tipoObjeto               String?
+  linkPortal               String
+  keywordMatched           String?
 
-  status              EditalStatus  @default(NOVO)
-  decidedAt           DateTime?
+  status    EditalStatus @default(NOVO)
+  decidedAt DateTime?
 
   // Quadro Kanban: etapa/coluna, posição de arraste dentro da coluna, cor do card
   // (etiqueta livre, estilo Trello) e anotações internas do usuário sobre o card.
-  etapaKanban         EtapaKanban   @default(OPORTUNIDADE)
-  ordemKanban         Float         @default(0)
-  corCard             String?
-  notasInternas       String?
+  etapaKanban   EtapaKanban @default(OPORTUNIDADE)
+  ordemKanban   Float       @default(0)
+  corCard       String?
+  notasInternas String?
 
-  analysis            Analysis?
-  proposal            Proposal?
-  documents           Document[]
-  checklistItems      ChecklistItem[]
-  auditLogs           AuditLog[]
-  agentRuns           AgentRun[]
-  agentMessages       AgentMessage[]
-  estudosViabilidade  EstudoViabilidade[]
+  analysis           Analysis?
+  proposal           Proposal?
+  documents          Document[]
+  checklistItems     ChecklistItem[]
+  auditLogs          AuditLog[]
+  agentRuns          AgentRun[]
+  agentMessages      AgentMessage[]
+  estudosViabilidade EstudoViabilidade[]
 
-  createdAt           DateTime      @default(now())
-  updatedAt            DateTime     @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([companyId, numeroControlePNCP])
 }
@@ -163,7 +167,7 @@ model AgentMessage {
   editalId   String
   edital     Edital   @relation(fields: [editalId], references: [id], onDelete: Cascade)
   agentKey   String
-  role       String   // "user" | "agent"
+  role       String // "user" | "agent"
   conteudo   String
   anexoNome  String?
   anexoDocId String?
@@ -187,34 +191,34 @@ model EditalExcluido {
 }
 
 model Analysis {
-  id                    String   @id @default(cuid())
-  editalId              String   @unique
-  edital                Edital   @relation(fields: [editalId], references: [id], onDelete: Cascade)
+  id       String @id @default(cuid())
+  editalId String @unique
+  edital   Edital @relation(fields: [editalId], references: [id], onDelete: Cascade)
 
-  resumoObjeto          String
-  obrigacoesContratada  String
-  habilitacao           String
+  resumoObjeto           String
+  obrigacoesContratada   String
+  habilitacao            String
   requisitosObrigatorios String
-  requisitosAdicionais  String
-  riscos                String
-  parecer               String
+  requisitosAdicionais   String
+  riscos                 String
+  parecer                String
   baseadoEmTextoCompleto Boolean @default(false)
 
-  createdAt             DateTime @default(now())
+  createdAt DateTime @default(now())
 }
 
 model Proposal {
-  id                    String   @id @default(cuid())
-  editalId              String   @unique
-  edital                Edital   @relation(fields: [editalId], references: [id], onDelete: Cascade)
+  id       String @id @default(cuid())
+  editalId String @unique
+  edital   Edital @relation(fields: [editalId], references: [id], onDelete: Cascade)
 
-  valorGlobalReferencia Float
-  itensJson             String
-  observacoes           String?
-  descontoPercentual    Float    @default(0)
+  valorGlobalReferencia  Float
+  itensJson              String
+  observacoes            String?
+  descontoPercentual     Float   @default(0)
   baseadoEmTextoCompleto Boolean @default(false)
 
-  createdAt             DateTime @default(now())
+  createdAt DateTime @default(now())
 }
 
 enum DocumentTipo {
@@ -233,28 +237,28 @@ enum DocumentStatus {
 }
 
 model Document {
-  id               String         @id @default(cuid())
-  editalId         String
-  edital           Edital         @relation(fields: [editalId], references: [id], onDelete: Cascade)
+  id       String @id @default(cuid())
+  editalId String
+  edital   Edital @relation(fields: [editalId], references: [id], onDelete: Cascade)
 
-  nome             String
-  tipo             DocumentTipo
-  categoria        String?
-  status           DocumentStatus @default(PENDENTE)
-  conteudoBase64   String?
+  nome           String
+  tipo           DocumentTipo
+  categoria      String?
+  status         DocumentStatus @default(PENDENTE)
+  conteudoBase64 String?
   // Caminho no bucket "documentos-habilitacao" do Supabase Storage, pra anexos grandes
   // enviados direto do navegador (fora do corpo da requisição da função serverless, que
   // tem teto de ~4,5MB) — quando presente, o conteúdo mora no Storage, não na coluna
   // conteudoBase64 acima.
-  storagePath      String?
-  origemUrl        String?
+  storagePath    String?
+  origemUrl      String?
   // Texto do PDF extraído uma única vez e reaproveitado pelos agentes Analista,
   // Financeiro e Advogado — evita reprocessar o mesmo PDF 3x por edital.
-  textoExtraido    String?
-  validade         DateTime?
+  textoExtraido  String?
+  validade       DateTime?
 
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 enum ChecklistStatus {
@@ -278,13 +282,13 @@ enum HabilitacaoCategoria {
 }
 
 model ChecklistItem {
-  id            String          @id @default(cuid())
-  editalId      String
-  edital        Edital          @relation(fields: [editalId], references: [id], onDelete: Cascade)
+  id       String @id @default(cuid())
+  editalId String
+  edital   Edital @relation(fields: [editalId], references: [id], onDelete: Cascade)
 
   documentoNome String
-  obrigatorio   Boolean         @default(true)
-  status        ChecklistStatus @default(FALTANTE)
+  obrigatorio   Boolean               @default(true)
+  status        ChecklistStatus       @default(FALTANTE)
   categoria     HabilitacaoCategoria?
   validade      DateTime?
   observacao    String?
@@ -295,8 +299,47 @@ model ChecklistItem {
   // item — evita reenviar o mesmo aviso a cada execução do cron (8:30 e 15:30).
   ultimoAlertaEnviadoEm DateTime?
 
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Forma exigida/apresentada do documento (cópia simples, autenticado em cartório,
+// assinatura digital ICP-Brasil) — o sistema nunca decide sozinho se uma forma atende a
+// exigência de um edital específico; só deixa isso visível para o usuário decidir.
+enum FormaDocumento {
+  COPIA_SIMPLES
+  AUTENTICADO
+  ASSINATURA_DIGITAL
+}
+
+// Dossiê da empresa: documentos reutilizáveis entre editais (certidões, contrato social,
+// atestados...), independentes de qualquer licitação específica. O Agente Secretário casa
+// automaticamente os itens padrão do checklist (ver CHECKLIST_BASE em
+// agente5-secretario.ts) com o documento aqui de mesmo "tipo", verificando a validade
+// antes de reaproveitar — evita reenviar a mesma certidão a cada edital novo.
+model CompanyDocument {
+  id        String  @id @default(cuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  // Mesmo vocabulário de ChecklistItem.documentoNome — permite casar por igualdade de
+  // string, sem depender de matching difuso por IA.
+  tipo      String
+  categoria HabilitacaoCategoria?
+
+  nome        String
+  forma       FormaDocumento @default(COPIA_SIMPLES)
+  dataEmissao DateTime?
+  // null = não vence (ex: Contrato Social, Cartão CNPJ).
+  validade    DateTime?
+
+  conteudoBase64 String?
+  storagePath    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([companyId])
 }
 
 enum AuditSeverity {
@@ -306,17 +349,17 @@ enum AuditSeverity {
 }
 
 model AuditLog {
-  id          String        @id @default(cuid())
-  editalId    String
-  edital      Edital        @relation(fields: [editalId], references: [id], onDelete: Cascade)
+  id       String @id @default(cuid())
+  editalId String
+  edital   Edital @relation(fields: [editalId], references: [id], onDelete: Cascade)
 
-  agente      String
-  etapa       String
-  severidade  AuditSeverity
-  mensagem    String
-  acaoTomada  String?
+  agente     String
+  etapa      String
+  severidade AuditSeverity
+  mensagem   String
+  acaoTomada String?
 
-  createdAt   DateTime      @default(now())
+  createdAt DateTime @default(now())
 }
 
 enum AgentRunStatus {
@@ -326,16 +369,16 @@ enum AgentRunStatus {
 }
 
 model AgentRun {
-  id          String         @id @default(cuid())
-  editalId    String
-  edital      Edital         @relation(fields: [editalId], references: [id], onDelete: Cascade)
+  id       String @id @default(cuid())
+  editalId String
+  edital   Edital @relation(fields: [editalId], references: [id], onDelete: Cascade)
 
-  agentKey    String
-  status      AgentRunStatus @default(RUNNING)
-  message     String?
+  agentKey String
+  status   AgentRunStatus @default(RUNNING)
+  message  String?
 
-  startedAt   DateTime       @default(now())
-  finishedAt  DateTime?
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
 }
 
 // ── Estudo de Viabilidade ───────────────────────────────────────────────────
@@ -349,19 +392,19 @@ enum RamoEstudo {
 }
 
 model EstudoViabilidade {
-  id        String     @id @default(cuid())
+  id        String  @id @default(cuid())
   companyId String
-  company   Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
-  ramo      RamoEstudo
+  ramo RamoEstudo
   // Nome livre dado pelo usuário (ex: "HESA — Exames laboratoriais") — opcional; quando
   // nulo, a UI mostra o rótulo do ramo (RAMO_LABEL) como já fazia antes deste campo existir.
-  nome      String?
+  nome String?
 
   // Etapa 1: edital de referência do estudo (opcional — nulo enquanto não escolhido, e
   // pode ficar nulo se o edital de origem for excluído depois, sem apagar o estudo).
-  editalId  String?
-  edital    Edital?    @relation(fields: [editalId], references: [id], onDelete: SetNull)
+  editalId String?
+  edital   Edital? @relation(fields: [editalId], references: [id], onDelete: SetNull)
 
   // Etapa 2: requisitos extraídos via IA (JSON.stringify de RequisitosEstudo — mesmo
   // padrão de string JSON usado em Analysis/Proposal, não um tipo Json nativo).
@@ -387,22 +430,22 @@ model EstudoViabilidade {
   // uma referência estável para CustoItemEstudo.itemIndex, mesmo que a Proposal do
   // edital seja reprocessada depois. parametrosCustoJson guarda os valores usados pelo
   // botão "aplicar a todos" (não são obrigatórios, só uma conveniência de preenchimento).
-  itensSnapshotJson    String?
-  parametrosCustoJson  String?
-  custosItens          CustoItemEstudo[]
+  itensSnapshotJson   String?
+  parametrosCustoJson String?
+  custosItens         CustoItemEstudo[]
 
   // Etapa 4 (ramo Serviço): DRE mensal detalhada — cargosJson é sugerido por IA a partir
   // do texto do edital (extrairCargosServico) e depois editável pelo usuário; nenhuma
   // quantidade é assumida sem edital ou edição manual. custosOperacionaisJson é uma
   // lista livre de linhas nomeadas (aluguel, insumos etc.), sem campos fixos no schema.
-  cargosJson              String?
-  custosOperacionaisJson  String?
-  descontoPercentual      Float?
-  duracaoContratoMeses    Int?
+  cargosJson             String?
+  custosOperacionaisJson String?
+  descontoPercentual     Float?
+  duracaoContratoMeses   Int?
 
   // Compartilhado pelos dois ramos: só gravado quando o usuário revisa e confirma a
   // etapa manualmente (nunca avança sozinho).
-  custosConfirmadoEm   DateTime?
+  custosConfirmadoEm DateTime?
 
   // Etapa 5: motor de cálculo — puro/isolado em src/lib/calculo-viabilidade.ts, sem
   // nenhuma dependência de UI ou banco (recebe os dados já resolvidos e devolve o
@@ -413,8 +456,8 @@ model EstudoViabilidade {
   resultadoCalculoJson  String?
   calculoConfirmadoEm   DateTime?
 
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // Custos informados pelo usuário para UM item/lote do estudo — todos os campos
@@ -422,14 +465,14 @@ model EstudoViabilidade {
 // ramo (ver CustoItemServico/CustoItemProduto em src/lib/estudo-custos.ts), seguindo o
 // mesmo padrão de string JSON usado no resto do módulo.
 model CustoItemEstudo {
-  id         String            @id @default(cuid())
-  estudoId   String
-  estudo     EstudoViabilidade @relation(fields: [estudoId], references: [id], onDelete: Cascade)
+  id       String            @id @default(cuid())
+  estudoId String
+  estudo   EstudoViabilidade @relation(fields: [estudoId], references: [id], onDelete: Cascade)
 
   itemIndex  Int
   custosJson String
 
-  updatedAt  DateTime          @updatedAt
+  updatedAt DateTime @updatedAt
 
   @@unique([estudoId, itemIndex])
 }
@@ -450,9 +493,9 @@ enum AnexoSimples {
 // Tabela do Simples Nacional (LC 123/2006) — por empresa e editável (tela de parâmetros
 // tributários), nunca fixa no código. Uma linha por Anexo × Faixa de RBT12.
 model FaixaSimplesNacional {
-  id              String       @id @default(cuid())
-  companyId       String
-  company         Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  id        String  @id @default(cuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   anexo           AnexoSimples
   faixa           Int
@@ -461,7 +504,7 @@ model FaixaSimplesNacional {
   aliquotaNominal Float
   parcelaDeduzir  Float
 
-  updatedAt       DateTime     @updatedAt
+  updatedAt DateTime @updatedAt
 
   @@unique([companyId, anexo, faixa])
 }
@@ -469,9 +512,9 @@ model FaixaSimplesNacional {
 // Alíquotas efetivas sobre a receita para Lucro Presumido/Real — uma linha por
 // regime × ramo (ISS para serviço, ICMS para produto). Também editável, nunca fixa.
 model ParametroTributarioRegime {
-  id        String           @id @default(cuid())
+  id        String  @id @default(cuid())
   companyId String
-  company   Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   regime    RegimeTributario
   ramo      RamoEstudo
@@ -485,7 +528,7 @@ model ParametroTributarioRegime {
   // suposição de atividade/base é feita sem o usuário configurar).
   baseCalculoPresumidoPercentual Float?
 
-  updatedAt DateTime         @updatedAt
+  updatedAt DateTime @updatedAt
 
   @@unique([companyId, regime, ramo])
 }

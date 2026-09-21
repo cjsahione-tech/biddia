@@ -31,6 +31,12 @@ export function caminhoAnexo(companyId: string, editalId: string, itemId: string
   return `${companyId}/${editalId}/${itemId}/${Date.now()}-${sanitizarNomeArquivo(nomeArquivo)}`;
 }
 
+/** Mesmo bucket do checklist — o dossiê da empresa (CompanyDocument) não pertence a
+ * nenhum edital, então o caminho troca editalId/itemId por um segmento fixo "dossie". */
+export function caminhoDocumentoEmpresa(companyId: string, docId: string, nomeArquivo: string): string {
+  return `${companyId}/dossie/${docId}/${Date.now()}-${sanitizarNomeArquivo(nomeArquivo)}`;
+}
+
 /** Gera uma URL assinada de upload — o navegador faz PUT direto nela, o arquivo nunca
  * passa pelo corpo da nossa função serverless. Token válido por tempo curto. */
 export async function criarUrlUpload(path: string) {

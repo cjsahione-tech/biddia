@@ -1,34 +1,11 @@
-import type { ChecklistStatus, HabilitacaoCategoria } from "@prisma/client";
+import type { ChecklistStatus, HabilitacaoCategoria, Edital } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { askJSON, MODELO_HAIKU } from "@/lib/anthropic";
 import { withAgentRun, logAudit } from "@/lib/agents/run-tracker";
+import { dentroDaValidadeComMargem, FORMA_LABEL } from "@/lib/documentos-empresa";
+import { CHECKLIST_BASE, CATEGORIA_BASE } from "@/lib/checklist-base";
 
-// Documentos de habilitação recorrentes em licitações públicas brasileiras (Lei 14.133/2021).
-const CHECKLIST_BASE = [
-  "Contrato Social / Estatuto consolidado",
-  "Cartão CNPJ atualizado",
-  "Certidão Negativa de Débitos Federais (Receita Federal/PGFN)",
-  "Certidão Negativa de Débitos Estaduais",
-  "Certidão Negativa de Débitos Municipais",
-  "Certificado de Regularidade do FGTS (CRF)",
-  "Certidão Negativa de Débitos Trabalhistas (CNDT)",
-  "Balanço patrimonial / atestado de capacidade financeira",
-  "Atestado(s) de Capacidade Técnica",
-];
-
-// Categoria fixa dos itens padrão acima — são os mesmos em toda licitação, não dependem
-// do texto do edital, então não precisam passar pela IA de classificação.
-const CATEGORIA_BASE: Record<string, HabilitacaoCategoria> = {
-  "Contrato Social / Estatuto consolidado": "FISCAL_TRABALHISTA_ECONOMICO_FINANCEIRA_JURIDICA",
-  "Cartão CNPJ atualizado": "FISCAL_TRABALHISTA_ECONOMICO_FINANCEIRA_JURIDICA",
-  "Certidão Negativa de Débitos Federais (Receita Federal/PGFN)": "FISCAL_TRABALHISTA_ECONOMICO_FINANCEIRA_JURIDICA",
-  "Certidão Negativa de Débitos Estaduais": "FISCAL_TRABALHISTA_ECONOMICO_FINANCEIRA_JURIDICA",
-  "Certidão Negativa de Débitos Municipais": "FISCAL_TRABALHISTA_ECONOMICO_FINANCEIRA_JURIDICA",
-  "Certificado de Regularidade do FGTS (CRF)": "FISCAL_TRABALHISTA_ECONOMICO_FINANCEIRA_JURIDICA",
-  "Certidão Negativa de Débitos Trabalhistas (CNDT)": "FISCAL_TRABALHISTA_ECONOMICO_FINANCEIRA_JURIDICA",
-  "Balanço patrimonial / atestado de capacidade financeira": "FISCAL_TRABALHISTA_ECONOMICO_FINANCEIRA_JURIDICA",
-  "Atestado(s) de Capacidade Técnica": "QUALIFICACAO_TECNICA_EMPRESA",
-};
+export { CHECKLIST_BASE, CATEGORIA_BASE };
 
 /** Mapeia os CABEÇALHOS DE SEÇÃO que o próprio edital usa (ex: "Regularidade Fiscal,
  * Trabalhista, Econômico-Financeira e Jurídica", "Qualificação Técnica da Empresa") para
@@ -101,6 +78,78 @@ Responda em JSON:
     if (c.categoria) mapa.set(c.item, c.categoria);
   }
   return mapa;
+}
+
+/**
+ * Casa os itens PADRÃO ainda faltantes do checklist com o dossiê da empresa
+ * (CompanyDocument) por igualdade de nome — quando o documento do dossiê está dentro da
+ * validade (com a margem de 5 dias úteis antes da abertura das propostas), preenche o
+ * item como se o usuário tivesse anexado na hora, reaproveitando o MESMO storagePath
+ * (sem duplicar bytes). Quando está vencido/vencendo na margem, deixa marcado no próprio
+ * item pra aparecer destacado no checklist, sem inventar uma estrutura de pendências à
+ * parte — o checklist já É o "manifesto".
+ */
+async function preencherChecklistComDossie(
+  edital: Pick<Edital, "id" | "companyId" | "dataAberturaProposta" | "dataEncerramentoProposta">
+): Promise<{ preenchidosDoDossie: number; dossieVencidos: number }> {
+  const dataReferencia = edital.dataAberturaProposta ?? edital.dataEncerramentoProposta ?? new Date();
+
+  const itensBaseFaltantes = await prisma.checklistItem.findMany({
+    where: { editalId: edital.id, documentoNome: { in: CHECKLIST_BASE }, status: "FALTANTE" },
+  });
+  if (itensBaseFaltantes.length === 0) return { preenchidosDoDossie: 0, dossieVencidos: 0 };
+
+  const docsDossie = await prisma.companyDocument.findMany({
+    where: { companyId: edital.companyId, tipo: { in: itensBaseFaltantes.map((i) => i.documentoNome) } },
+  });
+  const dossiePorTipo = new Map(docsDossie.map((d) => [d.tipo, d]));
+
+  let preenchidosDoDossie = 0;
+  let dossieVencidos = 0;
+
+  for (const item of itensBaseFaltantes) {
+    const docDossie = dossiePorTipo.get(item.documentoNome);
+    if (!docDossie) continue;
+
+    if (dentroDaValidadeComMargem(docDossie.validade, dataReferencia)) {
+      const documento = await prisma.document.create({
+        data: {
+          editalId: edital.id,
+          nome: docDossie.nome,
+          tipo: "DOCUMENTO_USUARIO",
+          categoria: "CHECKLIST",
+          status: "DISPONIVEL",
+          storagePath: docDossie.storagePath,
+          conteudoBase64: docDossie.conteudoBase64,
+        },
+        select: { id: true },
+      });
+      await prisma.checklistItem.update({
+        where: { id: item.id },
+        data: {
+          status: "OK",
+          anexoDocId: documento.id,
+          anexoNome: docDossie.nome,
+          validade: docDossie.validade,
+          observacao: `Preenchido automaticamente a partir do dossiê da empresa (forma: ${FORMA_LABEL[docDossie.forma]}${
+            docDossie.dataEmissao ? `, emitido em ${docDossie.dataEmissao.toLocaleDateString("pt-BR")}` : ""
+          }) — confira se a forma atende o que o edital exige.`,
+        },
+      });
+      preenchidosDoDossie++;
+    } else {
+      dossieVencidos++;
+      const jaVencido = docDossie.validade! < new Date();
+      await prisma.checklistItem.update({
+        where: { id: item.id },
+        data: {
+          observacao: `${jaVencido ? "Documento vencido" : "Documento vence antes da abertura das propostas (dentro da margem de segurança)"} no dossiê da empresa — validade: ${docDossie.validade!.toLocaleDateString("pt-BR")}. Atualize o dossiê antes de enviar.`,
+        },
+      });
+    }
+  }
+
+  return { preenchidosDoDossie, dossieVencidos };
 }
 
 export async function executarAgente5(editalId: string) {
@@ -192,6 +241,13 @@ export async function executarAgente5(editalId: string) {
       }
     }
 
+    // Preenche automaticamente os itens PADRÃO (CHECKLIST_BASE, os mesmos em toda
+    // licitação) a partir do dossiê da empresa — evita reenviar a mesma certidão a cada
+    // edital novo. Só mexe em itens ainda "FALTANTE": nunca sobrescreve o que o usuário
+    // já tratou manualmente. Itens específicos deste edital (fora de CHECKLIST_BASE)
+    // continuam manuais — o dossiê não tenta casar com eles.
+    const { preenchidosDoDossie, dossieVencidos } = await preencherChecklistComDossie(edital);
+
     const hoje = new Date();
     const itensAtuais = await prisma.checklistItem.findMany({ where: { editalId } });
     let vencidos = 0;
@@ -212,7 +268,7 @@ export async function executarAgente5(editalId: string) {
       "Agente Advogado",
       "Checklist de documentos",
       faltantes > 0 ? "ALERTA" : "OK",
-      `${criados} item(ns) novo(s) no checklist. ${faltantes} documento(s) obrigatório(s) ainda pendente(s) de envio. ${vencidos} vencido(s).`
+      `${criados} item(ns) novo(s) no checklist. ${preenchidosDoDossie} item(ns) preenchido(s) automaticamente a partir do dossiê da empresa. ${faltantes} documento(s) obrigatório(s) ainda pendente(s) de envio. ${vencidos} vencido(s)${dossieVencidos > 0 ? ` (${dossieVencidos} deles com o documento correspondente vencido no dossiê — atualize lá)` : ""}.`
     );
 
     return { criados, faltantes, vencidos };
