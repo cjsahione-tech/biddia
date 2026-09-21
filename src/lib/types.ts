@@ -38,6 +38,11 @@ export type EditalListItem = {
   proposal: { valorGlobalReferencia: number } | null;
   documents: { id: string; nome: string; categoria: "EDITAL" | "TERMO_REFERENCIA" | "ANEXO_PRECOS" | null }[];
   _count: { documents: number; checklistItems: number };
+  visualizado: boolean;
+  visualizadoEm: string | null;
+  ultimaMovimentacao: string;
+  motivoMovimentacao: "INATIVIDADE" | "EXCLUSAO_MANUAL" | null;
+  movidoEm: string | null;
 };
 
 export type HabilitacaoCategoria =

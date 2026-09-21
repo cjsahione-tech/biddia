@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { requireCompany } from "@/lib/api-utils";
 import { AGENTES_CHAT, isAgentChatKey, processarCorrecaoChat } from "@/lib/agents/agent-chat";
 import { extrairTrechoDeAnexoParaCorrecao, base64ParaBytes } from "@/lib/agents/pdf-extract";
+import { tocarEdital } from "@/lib/agents/run-tracker";
 
 // Mesmo teto prático usado nos outros uploads da plataforma (corpo em base64, ~33%
 // maior que o arquivo, contra o limite fixo de ~4,5MB da Vercel).
@@ -129,5 +130,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     data: { editalId: id, agentKey, role: "agent", conteudo: respostaTexto },
   });
 
+  await tocarEdital(id);
   return NextResponse.json({ userMessage, agentMessage, agentLabel: AGENTES_CHAT[agentKey].label });
 }

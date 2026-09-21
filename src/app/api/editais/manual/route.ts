@@ -9,10 +9,17 @@ import { dispararPipeline } from "@/lib/agents/pipeline";
 // Advogado, Secretário, Auditor) é que roda em segundo plano depois da resposta.
 export const maxDuration = 60;
 
-const schema = z.object({
-  nomeArquivo: z.string().min(1).max(200),
-  arquivoBase64: z.string().min(1),
-});
+// Caminho novo (PDFs grandes, até 50MB): o arquivo já foi enviado direto pro Storage via
+// URL assinada (ver upload-url/route.ts) — só chega o caminho onde ele ficou. Caminho
+// antigo (arquivoBase64) mantido pra compatibilidade, mas o cliente atual sempre usa o
+// caminho novo.
+const schema = z
+  .object({
+    nomeArquivo: z.string().min(1).max(200),
+    arquivoBase64: z.string().min(1).optional(),
+    storagePath: z.string().min(1).optional(),
+  })
+  .refine((d) => !!d.arquivoBase64 || !!d.storagePath, { message: "Envie um arquivo PDF válido." });
 
 export async function POST(req: Request) {
   const { company, error } = await requireCompany();
@@ -23,7 +30,7 @@ export async function POST(req: Request) {
   if (!parsed.success) {
     return NextResponse.json({ error: "Envie um arquivo PDF válido." }, { status: 400 });
   }
-  if (!parsed.data.arquivoBase64.startsWith("data:application/pdf")) {
+  if (parsed.data.arquivoBase64 && !parsed.data.arquivoBase64.startsWith("data:application/pdf")) {
     return NextResponse.json({ error: "O arquivo precisa ser um PDF." }, { status: 400 });
   }
 

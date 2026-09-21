@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { baixarArquivoPncp } from "@/lib/agents/pncp";
 import { transcreverPdfViaVisao, OCR_VISAO_LIMITE_PAGINAS, OCR_VISAO_LIMITE_BYTES } from "@/lib/anthropic";
 import { logAudit } from "@/lib/agents/run-tracker";
+import { baixarAnexo } from "@/lib/storage";
 import type { Document as DocumentRow } from "@prisma/client";
 
 // Limite de caracteres por documento enviado ao modelo — controla custo/latência
@@ -231,7 +232,12 @@ export async function obterTextoBrutoDocumento(doc: DocumentRow): Promise<string
   if (doc.textoExtraido) return doc.textoExtraido;
 
   let bytes: Uint8Array | null = null;
-  if (doc.conteudoBase64) {
+  if (doc.storagePath) {
+    bytes = await baixarAnexo(doc.storagePath).catch((err) => {
+      console.error(`Falha ao baixar "${doc.nome}" do Storage (${doc.storagePath}):`, err);
+      return null;
+    });
+  } else if (doc.conteudoBase64) {
     bytes = base64ParaBytes(doc.conteudoBase64);
   } else if (doc.origemUrl) {
     const arquivo = await baixarArquivoPncp(doc.origemUrl).catch((err) => {

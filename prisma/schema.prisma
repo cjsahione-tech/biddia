@@ -109,6 +109,14 @@ enum EtapaKanban {
   RASCUNHO
 }
 
+// Por que um card foi parar em "Rascunho" sem ação manual comum — usado só pra
+// diferenciar visualmente os dois casos na coluna; null significa card ali por qualquer
+// outro motivo (ex: captação manual em andamento, ou arrastado manualmente pra lá).
+enum MotivoMovimentacao {
+  INATIVIDADE
+  EXCLUSAO_MANUAL
+}
+
 model Edital {
   id        String  @id @default(cuid())
   companyId String
@@ -143,6 +151,20 @@ model Edital {
   ordemKanban   Float       @default(0)
   corCard       String?
   notasInternas String?
+
+  // Ciclo de vida da coluna "Oportunidade": "visualizado" marca se o usuário já abriu o
+  // card (reseta pra false se o órgão retificar o edital depois de já visto — ver
+  // agente1-comercial.ts). "ultimaMovimentacao" é tocado por qualquer AÇÃO DO USUÁRIO
+  // (não por execução automática de agente) e alimenta a expiração por inatividade de
+  // 48h, verificada sob demanda em GET /api/editais (sem cron). "motivoMovimentacao"
+  // só é setado quando o card vai pra Rascunho por inatividade ou exclusão — fica null
+  // no caso normal, e é limpo de volta assim que o usuário arrasta o card manualmente
+  // (isso já funciona como a "recuperação" de um card excluído, sem UI nova).
+  visualizado        Boolean             @default(false)
+  visualizadoEm      DateTime?
+  ultimaMovimentacao DateTime            @default(now())
+  motivoMovimentacao MotivoMovimentacao?
+  movidoEm           DateTime?
 
   analysis           Analysis?
   proposal           Proposal?

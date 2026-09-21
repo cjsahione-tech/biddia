@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireCompany } from "@/lib/api-utils";
 import { apagarAnexo } from "@/lib/storage";
+import { tocarEdital } from "@/lib/agents/run-tracker";
 
 // Só vale pro caminho antigo (anexoBase64 no corpo da requisição) — arquivos grandes
 // usam o fluxo de URL assinada (ver upload-url/route.ts), que não tem esse teto.
@@ -110,5 +111,6 @@ export async function PATCH(
     },
   });
 
+  await tocarEdital(id);
   return NextResponse.json({ item: updated });
 }

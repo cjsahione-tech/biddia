@@ -23,7 +23,9 @@ import { classificarTipoObjeto, empresaAtende, type TipoObjeto } from "@/lib/age
 import { classificarEditaisEmLote } from "@/lib/agents/relevancia";
 import { askJSON, MODELO_HAIKU } from "@/lib/anthropic";
 import { extrairTextoPdf, base64ParaBytes } from "@/lib/agents/pdf-extract";
+import { baixarAnexo, subirAnexo, caminhoDocumentoEdital } from "@/lib/storage";
 import { logAudit } from "@/lib/agents/run-tracker";
+import { houveRetificacao } from "@/lib/edital-retificacao";
 import { mapComLimite } from "@/lib/concorrencia";
 
 // Quantos editais trazer por palavra-chave (PNCP) ou por segmento (LicitaNet), na ordem
@@ -38,6 +40,11 @@ const MAX_POR_SEGMENTO_LICITANET = 100;
  * garantindo que o texto esteja disponível para os agentes mesmo se o download em
  * background não tiver terminado.
  */
+// Acima disso, um documento baixado do PNCP/LicitaNet vai pro Storage em vez de base64
+// inline no Postgres — um PDF de 50MB viraria uma linha de ~67MB de texto na tabela
+// (base64 é ~33% maior que o arquivo original), o que não faz sentido guardar no banco.
+const LIMITE_BASE64_INLINE = 4 * 1024 * 1024;
+
 export async function baixarDocumentosPendentes(editalIds: string[]) {
   if (editalIds.length === 0) return;
   const docs = await prisma.document.findMany({
@@ -45,14 +52,25 @@ export async function baixarDocumentosPendentes(editalIds: string[]) {
       editalId: { in: editalIds },
       tipo: { in: ["DOCUMENTO_PNCP", "DOCUMENTO_LICITANET"] },
       conteudoBase64: null,
+      storagePath: null,
       origemUrl: { not: null },
     },
+    include: { edital: { select: { companyId: true } } },
   });
 
   await mapComLimite(docs, 6, async (doc) => {
     const baixar = doc.tipo === "DOCUMENTO_LICITANET" ? baixarArquivoLicitaNet : baixarArquivoPncp;
     const arquivo = await baixar(doc.origemUrl!).catch(() => null);
     if (!arquivo) return;
+
+    if (arquivo.bytes.byteLength > LIMITE_BASE64_INLINE) {
+      const path = caminhoDocumentoEdital(doc.edital.companyId, doc.editalId, doc.id, doc.nome);
+      await subirAnexo(path, arquivo.bytes, arquivo.contentType)
+        .then(() => prisma.document.update({ where: { id: doc.id }, data: { storagePath: path } }))
+        .catch((err) => console.error(`Falha ao subir arquivo grande do documento ${doc.id} pro Storage:`, err));
+      return;
+    }
+
     await prisma.document
       .update({
         where: { id: doc.id },
@@ -154,7 +172,7 @@ export async function executarAgente1(companyId: string) {
         companyId: company.id,
         numeroControlePNCP: { in: candidatos.map((c) => c.numeroControle) },
       },
-      select: { numeroControlePNCP: true },
+      select: { id: true, numeroControlePNCP: true, dataAtualizacaoPncp: true },
     }),
     prisma.editalExcluido.findMany({
       where: {
@@ -164,10 +182,53 @@ export async function executarAgente1(companyId: string) {
       select: { numeroControlePNCP: true },
     }),
   ]);
+  const jaExistentesPorChave = new Map(jaExistentesRows.map((e) => [e.numeroControlePNCP, e]));
   const jaExistentes = new Set(jaExistentesRows.map((e) => e.numeroControlePNCP));
   const jaExcluidos = new Set(jaExcluidosRows.map((e) => e.numeroControlePNCP));
   const novosCandidatos = candidatos.filter(
     (c) => !jaExistentes.has(c.numeroControle) && !jaExcluidos.has(c.numeroControle)
+  );
+
+  // 2b. Para editais do PNCP já capturados antes: o próprio PNCP marca
+  // data_atualizacao_pncp toda vez que o órgão retifica a contratação — se essa data
+  // avançou desde a última captura, é uma retificação real (novo anexo, mudança de
+  // data/valor). Atualiza os campos que o PNCP já manda de graça na própria busca (sem
+  // gastar as chamadas extras de detalhe/arquivos) e reseta "visualizado" pro usuário
+  // saber que precisa revisar de novo.
+  let retificados = 0;
+  await mapComLimite(
+    candidatos.filter((c): c is CandidatoPncp => c.fonte === "PNCP" && jaExistentes.has(c.numeroControle)),
+    8,
+    async (c) => {
+      const existente = jaExistentesPorChave.get(c.numeroControle);
+      if (!existente) return;
+      const item = c.item;
+      const novaData = item.data_atualizacao_pncp ? new Date(item.data_atualizacao_pncp) : null;
+      if (!houveRetificacao(existente.dataAtualizacaoPncp, novaData)) return;
+
+      await prisma.edital.update({
+        where: { id: existente.id },
+        data: {
+          titulo: item.title,
+          descricao: item.description || "(sem descrição disponível)",
+          valorGlobal: item.valor_global,
+          dataAtualizacaoPncp: novaData,
+          dataAberturaProposta: item.data_inicio_vigencia ? new Date(item.data_inicio_vigencia) : null,
+          dataEncerramentoProposta: item.data_fim_vigencia ? new Date(item.data_fim_vigencia) : null,
+          visualizado: false,
+          visualizadoEm: null,
+          ultimaMovimentacao: new Date(),
+        },
+      });
+      await logAudit(
+        existente.id,
+        "Agente Comercial",
+        "Retificação detectada",
+        "ALERTA",
+        "O órgão atualizou este edital no PNCP desde a última captura (data/valor/anexo pode ter mudado) — revise antes de prosseguir."
+      );
+      retificados++;
+    }
   );
 
   // 3. Classifica em lote (relevância + tipo do objeto) com IA — mesmo pipeline para as
@@ -338,12 +399,14 @@ export async function executarAgente1(companyId: string) {
   }
   if (falhasPncp > 0) partes.push(`${falhasPncp} palavra-chave indisponível no PNCP no momento.`);
   if (falhaLicitaNet) partes.push(`LicitaNet indisponível no momento (${falhaLicitaNet}).`);
+  if (retificados > 0) partes.push(`${retificados} edital(is) já capturado(s) foi(ram) retificado(s) pelo órgão — revise antes de prosseguir.`);
 
   return {
     novos: criadosIds.length,
     analisados,
     descartadosPerfil,
     descartadosRelevancia,
+    retificados,
     mensagem: partes.join(" "),
   };
 }
@@ -417,11 +480,13 @@ Retorne um objeto JSON com exatamente estas chaves:
  */
 export async function capturarEditalManual(
   companyId: string,
-  input: { nomeArquivo: string; arquivoBase64: string }
+  input: { nomeArquivo: string; arquivoBase64?: string; storagePath?: string }
 ) {
   const company = await prisma.company.findUniqueOrThrow({ where: { id: companyId } });
 
-  const bytes = base64ParaBytes(input.arquivoBase64);
+  // PDF grande (até 50MB): já está no Storage, busca os bytes de lá pra extração.
+  // PDF pequeno (caminho antigo, mantido por compatibilidade): já chega em base64.
+  const bytes = input.storagePath ? await baixarAnexo(input.storagePath) : base64ParaBytes(input.arquivoBase64!);
   const texto = await extrairTextoPdf(bytes);
   if (!texto) {
     throw new Error(
@@ -469,7 +534,7 @@ export async function capturarEditalManual(
       tipo: "DOCUMENTO_USUARIO",
       categoria: "EDITAL",
       status: "DISPONIVEL",
-      conteudoBase64: input.arquivoBase64,
+      ...(input.storagePath ? { storagePath: input.storagePath } : { conteudoBase64: input.arquivoBase64 }),
     },
   });
 

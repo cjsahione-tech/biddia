@@ -7,11 +7,11 @@ import { Button } from "@/components/ui/Button";
 import { KanbanBoard } from "@/components/dashboard/KanbanBoard";
 import type { EditalListItem } from "@/lib/types";
 
-// Limite prático de tamanho do PDF enviado manualmente: o corpo da requisição vai em
-// base64 (~33% maior que o arquivo original) e a Vercel tem um teto fixo de ~4,5MB por
-// requisição em Serverless Functions — não dá para configurar isso, então avisamos
-// antes de tentar enviar.
-const TAMANHO_MAXIMO_PDF = 3.5 * 1024 * 1024;
+// O arquivo sobe direto pro Supabase Storage via URL assinada (nunca passa pelo corpo
+// da nossa função serverless, que tem um teto físico de ~4,5MB na Vercel) — o teto real
+// aqui é só pra cobrir editais consolidados (edital + Termo de Referência + anexos num
+// único PDF) sem exagerar no custo de armazenamento/extração de texto.
+const TAMANHO_MAXIMO_PDF = 50 * 1024 * 1024;
 
 export function DashboardClient() {
   const router = useRouter();
@@ -73,24 +73,41 @@ export function DashboardClient() {
     }
     if (file.size > TAMANHO_MAXIMO_PDF) {
       setUploadError(
-        `PDF muito grande (${(file.size / 1024 / 1024).toFixed(1)}MB). O limite é de ${(TAMANHO_MAXIMO_PDF / 1024 / 1024).toFixed(1)}MB.`
+        `PDF muito grande (${(file.size / 1024 / 1024).toFixed(1)}MB). O limite é de ${(TAMANHO_MAXIMO_PDF / 1024 / 1024).toFixed(0)}MB.`
       );
       return;
     }
 
-    const arquivoBase64 = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = () => reject(reader.error);
-      reader.readAsDataURL(file);
-    });
-
     setUploading(true);
     try {
+      // Sobe direto pro Storage via URL assinada — o PDF nunca passa pelo corpo da
+      // nossa função serverless, então cabe um edital consolidado grande (edital + TR +
+      // anexos no mesmo arquivo) sem esbarrar no teto de corpo de requisição da Vercel.
+      const urlRes = await fetch("/api/editais/manual/upload-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nomeArquivo: file.name, tamanhoBytes: file.size }),
+      });
+      const urlData = await urlRes.json().catch(() => null);
+      if (!urlRes.ok) {
+        setUploadError(urlData?.error ?? "Não foi possível preparar o upload.");
+        return;
+      }
+
+      const putRes = await fetch(urlData.signedUrl, {
+        method: "PUT",
+        headers: { "Content-Type": "application/pdf" },
+        body: file,
+      });
+      if (!putRes.ok) {
+        setUploadError("Falha no upload para o armazenamento. Tente novamente.");
+        return;
+      }
+
       const res = await fetch("/api/editais/manual", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nomeArquivo: file.name, arquivoBase64 }),
+        body: JSON.stringify({ nomeArquivo: file.name, storagePath: urlData.path }),
       });
       const data = await res.json();
       if (!res.ok) {

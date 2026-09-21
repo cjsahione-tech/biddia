@@ -27,6 +27,18 @@ export async function withAgentRun<T>(
   }
 }
 
+/**
+ * Marca "última movimentação" agora — chamado a partir de AÇÕES DO USUÁRIO (abrir o
+ * card, editar, mover no quadro, anexar documento, corrigir via chat), nunca de dentro
+ * de uma execução automática de agente. Alimenta a expiração por inatividade de 48h da
+ * coluna "Oportunidade" (verificada sob demanda em GET /api/editais) — se isso também
+ * fosse tocado por execuções automáticas do pipeline, um card nunca expiraria mesmo sem
+ * nenhuma atenção humana de verdade.
+ */
+export async function tocarEdital(editalId: string) {
+  await prisma.edital.update({ where: { id: editalId }, data: { ultimaMovimentacao: new Date() } });
+}
+
 export async function logAudit(
   editalId: string,
   agente: string,

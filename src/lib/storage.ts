@@ -37,6 +37,19 @@ export function caminhoDocumentoEmpresa(companyId: string, docId: string, nomeAr
   return `${companyId}/dossie/${docId}/${Date.now()}-${sanitizarNomeArquivo(nomeArquivo)}`;
 }
 
+/** Captação manual de edital: ainda não existe editalId nesse momento (o PDF sobe ANTES
+ * de o registro do edital ser criado), então o caminho usa um id de sessão livre gerado
+ * pelo cliente (ex: um cuid solto) em vez do editalId. */
+export function caminhoEditalManual(companyId: string, sessaoId: string, nomeArquivo: string): string {
+  return `${companyId}/captura-manual/${sessaoId}/${Date.now()}-${sanitizarNomeArquivo(nomeArquivo)}`;
+}
+
+/** Documento baixado do PNCP/LicitaNet grande demais pra guardar como base64 inline no
+ * Postgres (ver agente1-comercial.ts) — mesmo bucket, escopado por edital/documento. */
+export function caminhoDocumentoEdital(companyId: string, editalId: string, docId: string, nomeArquivo: string): string {
+  return `${companyId}/${editalId}/documentos/${docId}/${Date.now()}-${sanitizarNomeArquivo(nomeArquivo)}`;
+}
+
 /** Gera uma URL assinada de upload — o navegador faz PUT direto nela, o arquivo nunca
  * passa pelo corpo da nossa função serverless. Token válido por tempo curto. */
 export async function criarUrlUpload(path: string) {
@@ -51,6 +64,14 @@ export async function criarUrlDownload(path: string) {
   const { data, error } = await getClient().storage.from(BUCKET).createSignedUrl(path, 300);
   if (error) throw error;
   return data.signedUrl;
+}
+
+/** Sobe bytes direto pro Storage a partir do servidor (sem URL assinada) — usado quando
+ * o arquivo já está em memória no backend, ex: documento baixado do PNCP/LicitaNet
+ * grande demais pra guardar como base64 inline no Postgres (ver agente1-comercial.ts). */
+export async function subirAnexo(path: string, bytes: Uint8Array, contentType = "application/pdf") {
+  const { error } = await getClient().storage.from(BUCKET).upload(path, bytes, { contentType });
+  if (error) throw error;
 }
 
 export async function apagarAnexo(path: string) {

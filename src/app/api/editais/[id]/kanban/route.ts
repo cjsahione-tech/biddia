@@ -82,7 +82,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
   const updated = await prisma.edital.update({
     where: { id },
-    data: { etapaKanban, ordemKanban, status: novoStatus, decidedAt },
+    // Qualquer arraste manual limpa o motivo de inatividade/exclusão (é a própria forma
+    // de "recuperar" um card, sem precisar de UI dedicada) e conta como atividade.
+    data: { etapaKanban, ordemKanban, status: novoStatus, decidedAt, motivoMovimentacao: null, ultimaMovimentacao: new Date() },
   });
 
   if (disparaPipeline) dispararPipeline(id, req);

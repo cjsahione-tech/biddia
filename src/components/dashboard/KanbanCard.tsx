@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { AlertTriangle, ChevronDown, ChevronUp, MapPin, Paperclip, StickyNote } from "lucide-react";
-import { formatValorEdital, formatDate } from "@/lib/format";
+import { AlertTriangle, ChevronDown, ChevronUp, Clock, MapPin, Paperclip, StickyNote, Trash2 } from "lucide-react";
+import { formatValorEdital, formatDate, formatDateTime } from "@/lib/format";
 import { faixaCorCard } from "@/lib/kanban";
+import { calcularEstadoInatividade } from "@/lib/kanban-atividade";
 import type { EditalListItem } from "@/lib/types";
 
 const TIPO_OBJETO_LABEL: Record<"SERVICO" | "BEM" | "AMBOS", string> = {
@@ -43,6 +44,12 @@ export function KanbanCard({
   const prazoUrgente = dias !== null && dias <= 3;
   const [expandido, setExpandido] = useState(false);
 
+  // Estado "novo vs visto": todo edital nasce em Oportunidade sem ter sido aberto ainda
+  // (ou volta a ficar assim se o órgão retificar depois de já visto) — destaque azul até
+  // o usuário abrir o card pela primeira vez.
+  const naoVisualizado = !edital.visualizado;
+  const estadoInatividade = calcularEstadoInatividade(edital.etapaKanban, edital.ultimaMovimentacao);
+
   return (
     <div
       draggable={!modoSelecao}
@@ -51,9 +58,9 @@ export function KanbanCard({
       onDragOver={onDragOverCard}
       onDrop={onDropCard}
       onClick={onClick}
-      className={`relative cursor-pointer rounded-lg border border-l-4 bg-background p-3 shadow-sm transition hover:shadow-md ${faixaCorCard(edital.corCard)} ${
-        selecionado ? "border-brand ring-2 ring-brand/40" : foraDoPerfil ? "border-warning/40" : "border-border"
-      }`}
+      className={`relative cursor-pointer rounded-lg border border-l-4 p-3 shadow-sm transition hover:shadow-md ${faixaCorCard(edital.corCard)} ${
+        naoVisualizado ? "bg-brand-light/50" : "bg-background"
+      } ${selecionado ? "border-brand ring-2 ring-brand/40" : foraDoPerfil ? "border-warning/40" : "border-border"}`}
     >
       {dragOverPos === "before" && (
         <div className="absolute -top-1.5 left-0 right-0 h-1 rounded-full bg-brand" />
@@ -86,6 +93,35 @@ export function KanbanCard({
       )}
 
       <div className="flex flex-wrap items-center gap-1 pr-5">
+        {naoVisualizado && (
+          <span className="inline-flex items-center gap-0.5 rounded-full bg-brand px-1.5 py-0.5 text-[10px] font-medium text-white">
+            Novo
+          </span>
+        )}
+        {estadoInatividade === "quase_expirando" && (
+          <span
+            className="inline-flex items-center gap-0.5 rounded-full bg-warning/10 px-1.5 py-0.5 text-[10px] font-medium text-warning"
+            title="Sem atividade há mais de 36h — expira para Rascunho em 48h se ninguém mexer"
+          >
+            <Clock className="h-2.5 w-2.5" /> Quase expirando
+          </span>
+        )}
+        {edital.etapaKanban === "RASCUNHO" && edital.motivoMovimentacao && (
+          <span
+            className="inline-flex items-center gap-0.5 rounded-full bg-muted/10 px-1.5 py-0.5 text-[10px] font-medium text-muted"
+            title={edital.movidoEm ? `Movido em ${formatDateTime(edital.movidoEm)}` : undefined}
+          >
+            {edital.motivoMovimentacao === "INATIVIDADE" ? (
+              <>
+                <Clock className="h-2.5 w-2.5" /> Expirou por inatividade
+              </>
+            ) : (
+              <>
+                <Trash2 className="h-2.5 w-2.5" /> Excluído manualmente
+              </>
+            )}
+          </span>
+        )}
         {edital.uf && (
           <span className="inline-flex items-center gap-0.5 rounded-full bg-brand-light px-1.5 py-0.5 text-[10px] font-medium text-brand">
             <MapPin className="h-2.5 w-2.5" /> {edital.uf}

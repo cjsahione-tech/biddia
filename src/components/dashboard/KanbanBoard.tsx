@@ -175,7 +175,13 @@ export function KanbanBoard({
         body: JSON.stringify({ ids }),
       });
       if (res.ok) {
-        setEditais((prev) => prev.filter((e) => !selecionados.has(e.id)));
+        // Não some do quadro — vira Rascunho (soft-delete), então só atualiza a coluna
+        // localmente em vez de remover os cards da lista.
+        setEditais((prev) =>
+          prev.map((e) =>
+            selecionados.has(e.id) ? { ...e, etapaKanban: "RASCUNHO", motivoMovimentacao: "EXCLUSAO_MANUAL" } : e
+          )
+        );
         sairDoModoSelecao();
       }
     } finally {
@@ -274,7 +280,7 @@ export function KanbanBoard({
             ) : (
               <>
                 <span className="inline-flex items-center gap-1.5 text-sm font-medium text-danger">
-                  <AlertTriangle className="h-4 w-4" /> Excluir {selecionados.size} card(s) de vez?
+                  <AlertTriangle className="h-4 w-4" /> Mover {selecionados.size} card(s) pra Rascunho?
                 </span>
                 <Button variant="secondary" onClick={() => setConfirmandoExclusaoLote(false)}>
                   Cancelar
@@ -347,8 +353,10 @@ export function KanbanBoard({
           onMoved={async () => {
             await onReload();
           }}
-          onDeleted={(id) => {
-            setEditais((prev) => prev.filter((e) => e.id !== id));
+          onDeleted={async () => {
+            // Não some do quadro — vira Rascunho (soft-delete), então recarrega do
+            // servidor em vez de remover o card da lista local.
+            await onReload();
           }}
         />
       )}

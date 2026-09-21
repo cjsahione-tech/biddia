@@ -2,14 +2,13 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireCompany } from "@/lib/api-utils";
-import { registrarExclusaoPermanente } from "@/lib/agents/editais-excluidos";
 
 const schema = z.object({ ids: z.array(z.string().min(1)).min(1).max(200) });
 
-/** Exclui vários editais de uma vez (seleção múltipla no quadro Kanban). O filtro por
- * companyId garante que só apaga o que é da própria empresa, mesmo que a lista de ids
- * venha adulterada. Cascata do schema cuida de análise/proposta/anexos/checklist/
- * histórico de cada um. */
+/** Exclui vários editais de uma vez (seleção múltipla no quadro Kanban) — igual à
+ * exclusão individual (ver editais/[id]/route.ts DELETE), move todos pra Rascunho em vez
+ * de apagar de verdade. O filtro por companyId garante que só afeta o que é da própria
+ * empresa, mesmo que a lista de ids venha adulterada. */
 export async function POST(req: Request) {
   const { company, error } = await requireCompany();
   if (error) return error;
@@ -18,15 +17,10 @@ export async function POST(req: Request) {
   const parsed = schema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Lista de editais inválida" }, { status: 400 });
 
-  const alvos = await prisma.edital.findMany({
+  const result = await prisma.edital.updateMany({
     where: { id: { in: parsed.data.ids }, companyId: company!.id },
-    select: { companyId: true, numeroControlePNCP: true, fonte: true },
+    data: { etapaKanban: "RASCUNHO", motivoMovimentacao: "EXCLUSAO_MANUAL", movidoEm: new Date() },
   });
-
-  const result = await prisma.edital.deleteMany({
-    where: { id: { in: parsed.data.ids }, companyId: company!.id },
-  });
-  await registrarExclusaoPermanente(alvos);
 
   return NextResponse.json({ excluidos: result.count });
 }

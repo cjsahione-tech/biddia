@@ -335,9 +335,9 @@ export function KanbanCardModal({
                 <div className="flex shrink-0 items-center gap-2 text-xs">
                   <span
                     className="inline-flex items-center gap-1 text-danger"
-                    title="Apaga também análise, proposta, anexos, checklist e histórico deste edital — não dá pra desfazer."
+                    title="Move o card pra Rascunho — a análise, a proposta e os documentos continuam salvos, e dá pra recuperar arrastando o card de volta."
                   >
-                    <AlertTriangle className="h-3.5 w-3.5" /> Excluir de vez?
+                    <AlertTriangle className="h-3.5 w-3.5" /> Mover pra Rascunho?
                   </span>
                   <button
                     onClick={() => setConfirmandoExclusao(false)}
