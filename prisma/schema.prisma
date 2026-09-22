@@ -14,6 +14,13 @@ model User {
   name         String
   createdAt    DateTime @default(now())
   company      Company?
+
+  // Redefinição de senha via SMS: código de 6 dígitos hasheado (nunca guardado em texto
+  // puro, mesmo padrão do passwordHash), validade curta e contador de tentativas pra
+  // limitar brute-force do código antes de exigir um novo pedido.
+  resetCodeHash      String?
+  resetCodeExpiresAt DateTime?
+  resetCodeAttempts  Int       @default(0)
 }
 
 model Company {

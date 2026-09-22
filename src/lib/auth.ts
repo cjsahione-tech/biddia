@@ -25,24 +25,6 @@ export function verifySession(token: string): SessionPayload | null {
   }
 }
 
-type ResetPayload = { userId: string; purpose: "reset" };
-
-// Token de redefinição de senha — mesmo segredo do token de sessão, mas com um "purpose"
-// próprio pra um nunca ser aceito no lugar do outro. Vida curta (15min): é enviado por
-// SMS e só serve pra essa única ação.
-export function signResetToken(userId: string): string {
-  return jwt.sign({ userId, purpose: "reset" } satisfies ResetPayload, JWT_SECRET, { expiresIn: "15m" });
-}
-
-export function verifyResetToken(token: string): string | null {
-  try {
-    const payload = jwt.verify(token, JWT_SECRET) as ResetPayload;
-    return payload.purpose === "reset" ? payload.userId : null;
-  } catch {
-    return null;
-  }
-}
-
 export async function setSessionCookie(token: string) {
   const store = await cookies();
   store.set(COOKIE_NAME, token, {
