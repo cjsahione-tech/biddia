@@ -136,6 +136,13 @@ model Edital {
   dataAtualizacaoPncp      DateTime?
   dataAberturaProposta     DateTime?
   dataEncerramentoProposta DateTime?
+
+  // Prazos da coluna "Qualificação", exibidos na aba Agenda — abertura/encerramento de
+  // proposta já vêm do PNCP (acima); estes 3 não têm fonte automática, são preenchidos
+  // manualmente no card (ver KanbanCardModal.tsx).
+  dataPrazoHabilitacao DateTime?
+  dataVisitaTecnica    DateTime?
+  dataPrazoImpugnacao  DateTime?
   valorGlobal              Float?
   orcamentoSigiloso        Boolean   @default(false)
   tipoObjeto               String?

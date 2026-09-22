@@ -4,7 +4,7 @@ import type { CorCard, EtapaKanban } from "@/lib/types";
 export const ETAPAS_KANBAN: { key: EtapaKanban; label: string }[] = [
   { key: "OPORTUNIDADE", label: "Oportunidade" },
   { key: "QUALIFICACAO", label: "Qualificação" },
-  { key: "SEM_PROPOSTAS", label: "Sem propostas" },
+  { key: "SEM_PROPOSTAS", label: "Editais em preparação" },
   { key: "PRONTA_PARA_ENVIAR", label: "Pronta para Enviar" },
   { key: "ENVIADA_PARA_DISPUTA", label: "Enviada para Disputa" },
   { key: "CLASSIFICACAO", label: "Classificação" },

@@ -59,6 +59,10 @@ export function KanbanCardModal({
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [onClose]);
 
+  function toDateInputValue(iso: string | null): string {
+    return iso ? iso.slice(0, 10) : "";
+  }
+
   async function salvarCampo(campo: string, valor: unknown) {
     setSalvandoCampo(campo);
     try {
@@ -257,6 +261,47 @@ export function KanbanCardModal({
                       title={c.label}
                     />
                   ))}
+                </div>
+              </div>
+
+              <div className="mt-5">
+                <label className="block text-sm font-medium text-foreground">Prazos</label>
+                <p className="mt-0.5 text-xs text-muted">
+                  Alimentam a aba Agenda enquanto o card estiver em &ldquo;Qualificação&rdquo;.
+                </p>
+                <div className="mt-1.5 grid grid-cols-2 gap-2">
+                  <Field label="Abertura das propostas" htmlFor="dataAberturaProposta">
+                    <TextInput
+                      id="dataAberturaProposta"
+                      type="date"
+                      defaultValue={toDateInputValue(edital.dataAberturaProposta)}
+                      onBlur={(e) => salvarCampo("dataAberturaProposta", e.target.value || null)}
+                    />
+                  </Field>
+                  <Field label="Prazo de habilitação" htmlFor="dataPrazoHabilitacao">
+                    <TextInput
+                      id="dataPrazoHabilitacao"
+                      type="date"
+                      defaultValue={toDateInputValue(edital.dataPrazoHabilitacao)}
+                      onBlur={(e) => salvarCampo("dataPrazoHabilitacao", e.target.value || null)}
+                    />
+                  </Field>
+                  <Field label="Visita técnica" htmlFor="dataVisitaTecnica">
+                    <TextInput
+                      id="dataVisitaTecnica"
+                      type="date"
+                      defaultValue={toDateInputValue(edital.dataVisitaTecnica)}
+                      onBlur={(e) => salvarCampo("dataVisitaTecnica", e.target.value || null)}
+                    />
+                  </Field>
+                  <Field label="Impugnação/esclarecimento" htmlFor="dataPrazoImpugnacao">
+                    <TextInput
+                      id="dataPrazoImpugnacao"
+                      type="date"
+                      defaultValue={toDateInputValue(edital.dataPrazoImpugnacao)}
+                      onBlur={(e) => salvarCampo("dataPrazoImpugnacao", e.target.value || null)}
+                    />
+                  </Field>
                 </div>
               </div>
 

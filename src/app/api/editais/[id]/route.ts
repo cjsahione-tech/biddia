@@ -41,10 +41,23 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 // restrita aqui para o card sempre exibir uma cor coerente com o resto da interface.
 const CORES_CARD = ["azul", "verde", "amarelo", "laranja", "vermelho", "roxo", "rosa", "cinza"] as const;
 
+// Datas de prazo aceitam "YYYY-MM-DD" (vindas de <input type="date">) e são convertidas
+// pro Date do Prisma; null limpa o campo (prazo ainda não definido/confirmado).
+const dataPrazo = z
+  .string()
+  .refine((v) => !Number.isNaN(new Date(v).getTime()), "Data inválida")
+  .transform((v) => new Date(v))
+  .nullable()
+  .optional();
+
 const editSchema = z.object({
   titulo: z.string().trim().min(1).max(300).optional(),
   corCard: z.enum(CORES_CARD).nullable().optional(),
   notasInternas: z.string().max(5000).nullable().optional(),
+  dataAberturaProposta: dataPrazo,
+  dataPrazoHabilitacao: dataPrazo,
+  dataVisitaTecnica: dataPrazo,
+  dataPrazoImpugnacao: dataPrazo,
 });
 
 /** Edição "de card" — campos organizacionais do quadro Kanban, editáveis livremente

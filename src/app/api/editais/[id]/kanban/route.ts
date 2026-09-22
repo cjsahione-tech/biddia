@@ -27,7 +27,7 @@ const ETAPAS_NEGATIVAS = new Set(["SEM_PROPOSTAS", "ELIMINADA_APOS_CLASSIFICACAO
 const ETAPA_LABEL: Record<string, string> = {
   OPORTUNIDADE: "Oportunidade",
   QUALIFICACAO: "Qualificação",
-  SEM_PROPOSTAS: "Sem propostas",
+  SEM_PROPOSTAS: "Editais em preparação",
   PRONTA_PARA_ENVIAR: "Pronta para Enviar",
   ENVIADA_PARA_DISPUTA: "Enviada para Disputa",
   CLASSIFICACAO: "Classificação",

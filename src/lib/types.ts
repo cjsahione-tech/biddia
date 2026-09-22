@@ -114,6 +114,18 @@ export type AgentMessageItem = {
   createdAt: string;
 };
 
+// Item enxuto retornado por GET /api/editais/agenda — só os campos que a visão de
+// calendário precisa, escopados a editais na coluna "Qualificação".
+export type AgendaEditalItem = {
+  id: string;
+  titulo: string;
+  orgaoNome: string;
+  dataAberturaProposta: string | null;
+  dataPrazoHabilitacao: string | null;
+  dataVisitaTecnica: string | null;
+  dataPrazoImpugnacao: string | null;
+};
+
 export type EstudoViabilidadeItem = {
   id: string;
   ramo: "SERVICO" | "PRODUTO";
@@ -169,6 +181,11 @@ export type EditalDetail = Omit<EditalListItem, "analysis" | "proposal" | "docum
   orgaoCnpj: string;
   dataPublicacao: string | null;
   dataAberturaProposta: string | null;
+  // Prazos da coluna "Qualificação", preenchidos manualmente no card e exibidos na
+  // aba Agenda (ver src/components/agenda/AgendaClient.tsx).
+  dataPrazoHabilitacao: string | null;
+  dataVisitaTecnica: string | null;
+  dataPrazoImpugnacao: string | null;
   analysis: {
     resumoObjeto: string;
     obrigacoesContratada: string;
