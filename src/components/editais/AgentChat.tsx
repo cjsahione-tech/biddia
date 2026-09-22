@@ -99,7 +99,8 @@ export function AgentChat({
       <div className="border-b border-border px-4 py-3">
         <h4 className="text-sm font-semibold text-foreground">Converse com o {agentLabel}</h4>
         <p className="mt-0.5 text-xs text-muted">
-          Encontrou um erro no que o agente fez? Explique aqui (pode anexar um documento) e ele corrige.
+          Converse aqui com o {agentLabel}: tire dúvidas, peça sugestões e opiniões, ou aponte uma correção (pode
+          anexar um documento) e ele ajusta o que fez.
         </p>
       </div>
 
@@ -150,7 +151,7 @@ export function AgentChat({
         ))}
         {enviando && (
           <div className="flex items-center gap-2 text-xs text-muted">
-            <Loader2 className="h-3.5 w-3.5 animate-spin" /> {agentLabel} está corrigindo...
+            <Loader2 className="h-3.5 w-3.5 animate-spin" /> {agentLabel} está respondendo...
           </div>
         )}
       </div>
@@ -188,7 +189,7 @@ export function AgentChat({
             }}
             rows={1}
             disabled={enviando}
-            placeholder={`Descreva o que o ${agentLabel} errou...`}
+            placeholder={`Converse, peça uma sugestão ou aponte uma correção para o ${agentLabel}...`}
             className="max-h-32 flex-1 resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
           />
           <Button onClick={enviar} loading={enviando} disabled={!texto.trim()} className="shrink-0 px-3">

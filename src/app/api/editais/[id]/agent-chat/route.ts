@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireCompany } from "@/lib/api-utils";
-import { AGENTES_CHAT, isAgentChatKey, processarCorrecaoChat } from "@/lib/agents/agent-chat";
+import { AGENTES_CHAT, isAgentChatKey, processarMensagemChat } from "@/lib/agents/agent-chat";
 import { extrairTrechoDeAnexoParaCorrecao, base64ParaBytes } from "@/lib/agents/pdf-extract";
 import { tocarEdital } from "@/lib/agents/run-tracker";
 
@@ -49,9 +49,11 @@ const schema = z.object({
 });
 
 /**
- * Envia uma mensagem de correção para o agente da aba (com anexo opcional) e aplica a
- * correção na hora — cada agente sabe refazer (ou ajustar) o próprio resultado a partir
- * do texto-fonte e da observação do usuário. Ver src/lib/agents/agent-chat.ts.
+ * Envia uma mensagem para o chat da aba (com anexo opcional). A mensagem é
+ * classificada primeiro: se for só uma conversa (dúvida, pedido de opinião/sugestão,
+ * comentário), o agente responde sem mexer em nada; se for uma correção de verdade, o
+ * agente refaz (ou ajusta) o próprio resultado a partir do texto-fonte e da observação
+ * do usuário. Ver src/lib/agents/agent-chat.ts.
  */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { company, error } = await requireCompany();
@@ -109,7 +111,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     data: { editalId: id, agentKey, role: "user", conteudo: mensagem, anexoNome, anexoDocId },
   });
 
-  const notaCorrecao =
+  const notaOuMensagem =
     mensagem +
     (anexoNome
       ? anexoTexto
@@ -119,11 +121,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   let respostaTexto: string;
   try {
-    respostaTexto = await processarCorrecaoChat(id, agentKey, notaCorrecao);
+    respostaTexto = await processarMensagemChat(id, agentKey, notaOuMensagem);
   } catch (err) {
-    console.error(`Falha ao processar correção via chat (${agentKey}, edital ${id}):`, err);
+    console.error(`Falha ao processar mensagem do chat (${agentKey}, edital ${id}):`, err);
     respostaTexto =
-      "Não consegui aplicar essa correção agora — pode ser instabilidade do modelo ou do texto do edital. Tente de novo em instantes.";
+      "Não consegui responder agora — pode ser instabilidade do modelo ou do texto do edital. Tente de novo em instantes.";
   }
 
   const agentMessage = await prisma.agentMessage.create({

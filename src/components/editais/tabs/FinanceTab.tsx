@@ -1,11 +1,15 @@
-import { useState } from "react";
-import { Download, Check } from "lucide-react";
+import { useRef, useState } from "react";
+import { Download, Check, Upload, FileSpreadsheet } from "lucide-react";
 import { formatBRL } from "@/lib/format";
 import { parseItens, aplicarDesconto } from "@/lib/proposal";
 import { Button } from "@/components/ui/Button";
 import { FonteBadge } from "@/components/ui/FonteBadge";
 import { AgentChat } from "@/components/editais/AgentChat";
 import type { EditalDetail } from "@/lib/types";
+
+// Mesmo teto prático usado nos outros uploads pequenos da plataforma (corpo em base64,
+// ~33% maior que o arquivo, contra o limite fixo de ~4,5MB da Vercel).
+const TAMANHO_MAXIMO_PLANILHA = 3.5 * 1024 * 1024;
 
 export function FinanceTab({ edital, onUpdate }: { edital: EditalDetail; onUpdate: () => void }) {
   const proposal = edital.proposal;
@@ -14,12 +18,111 @@ export function FinanceTab({ edital, onUpdate }: { edital: EditalDetail; onUpdat
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Importação de planilha própria (substitui os itens que o Agente Financeiro montou).
+  const importInputRef = useRef<HTMLInputElement>(null);
+  const [importando, setImportando] = useState(false);
+  const [erroImportacao, setErroImportacao] = useState<string | null>(null);
+  const [avisosImportacao, setAvisosImportacao] = useState<string[]>([]);
+  const [sucessoImportacao, setSucessoImportacao] = useState<string | null>(null);
+
+  async function handleSelecionarArquivo(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+
+    setErroImportacao(null);
+    setAvisosImportacao([]);
+    setSucessoImportacao(null);
+
+    if (!file.name.toLowerCase().endsWith(".xlsx")) {
+      setErroImportacao("Envie um arquivo .xlsx (Excel).");
+      return;
+    }
+    if (file.size > TAMANHO_MAXIMO_PLANILHA) {
+      setErroImportacao(`Arquivo muito grande (máx. ${(TAMANHO_MAXIMO_PLANILHA / 1024 / 1024).toFixed(1)}MB).`);
+      return;
+    }
+
+    setImportando(true);
+    try {
+      const arquivoBase64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(file);
+      });
+
+      const res = await fetch(`/api/editais/${edital.id}/proposal/importar`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ arquivoBase64 }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setErroImportacao(data.error ?? "Não foi possível importar essa planilha.");
+        return;
+      }
+
+      const qtd = parseItens(data.proposal.itensJson).length;
+      setSucessoImportacao(`Planilha importada: ${qtd} ite${qtd === 1 ? "m" : "ns"} na proposta.`);
+      setAvisosImportacao(data.avisos ?? []);
+      onUpdate();
+    } finally {
+      setImportando(false);
+    }
+  }
+
+  const importarPlanilhaBox = (
+    <div className="rounded-2xl border border-border bg-surface/30 p-5">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h4 className="text-sm font-semibold text-foreground">Importar planilha própria</h4>
+          <p className="mt-1 text-xs text-muted">
+            Já tem uma planilha pronta com os itens da proposta? Envie aqui para substituir a que o Agente
+            Financeiro montou automaticamente. Use o modelo abaixo para garantir o formato certo.
+          </p>
+        </div>
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <a
+            href={`/api/editais/${edital.id}/proposal/modelo`}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-2 text-sm font-medium text-foreground hover:bg-surface"
+          >
+            <FileSpreadsheet className="h-4 w-4" /> Baixar modelo (.xlsx)
+          </a>
+          <input ref={importInputRef} type="file" accept=".xlsx" className="hidden" onChange={handleSelecionarArquivo} />
+          <Button
+            variant="secondary"
+            onClick={() => importInputRef.current?.click()}
+            loading={importando}
+          >
+            {!importando && <Upload className="h-4 w-4" />} Importar planilha (.xlsx)
+          </Button>
+        </div>
+      </div>
+
+      {erroImportacao && <p className="mt-3 text-xs text-danger">{erroImportacao}</p>}
+      {sucessoImportacao && (
+        <p className="mt-3 inline-flex items-center gap-1 text-xs text-accent">
+          <Check className="h-3.5 w-3.5" /> {sucessoImportacao}
+        </p>
+      )}
+      {avisosImportacao.length > 0 && (
+        <ul className="mt-2 space-y-0.5 text-xs text-warning">
+          {avisosImportacao.map((a, i) => (
+            <li key={i}>⚠ {a}</li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+
   if (!proposal) {
     return (
       <div className="space-y-6">
         <p className="py-12 text-center text-sm text-muted">
           O Agente Financeiro ainda não montou a proposta para este edital.
         </p>
+        {importarPlanilhaBox}
         <AgentChat editalId={edital.id} agentKey="agente3-financeiro" agentLabel="Agente Financeiro" onCorrected={onUpdate} />
       </div>
     );
@@ -119,6 +222,8 @@ export function FinanceTab({ edital, onUpdate }: { edital: EditalDetail; onUpdat
           <Download className="h-4 w-4" /> Baixar planilha da proposta (.xlsx)
         </a>
       </div>
+
+      {importarPlanilhaBox}
 
       <div className="overflow-x-auto rounded-2xl border border-border">
         <table className="w-full text-sm">

@@ -58,6 +58,30 @@ export async function askJSON<T>(
   }
 }
 
+/**
+ * Chama o modelo pedindo uma resposta em texto livre (não JSON) — usado pelo chat "de
+ * conversa" de cada agente (ver src/lib/agents/agent-chat.ts), onde a resposta é uma
+ * resposta natural para o usuário ler, não uma estrutura de dados para o app processar.
+ */
+export async function askText(
+  system: string,
+  userPrompt: string,
+  opts?: { model?: string; maxTokens?: number }
+): Promise<string> {
+  const anthropic = getClient();
+
+  const message = await anthropic.messages.create({
+    model: opts?.model ?? MODELO_SONNET,
+    max_tokens: opts?.maxTokens ?? 1500,
+    system,
+    messages: [{ role: "user", content: userPrompt }],
+  });
+
+  const block = message.content[0];
+  if (block.type !== "text") throw new Error("Resposta inesperada do modelo");
+  return block.text.trim();
+}
+
 // Tetos de segurança para o OCR via visão (ver transcreverPdfViaVisao): acima disso, o
 // tempo/custo de mandar o PDF inteiro como imagens por página deixa de valer a pena
 // dentro do orçamento de 60s da função serverless — o documento segue sem OCR em vez de
