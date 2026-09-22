@@ -82,6 +82,76 @@ export async function askText(
   return block.text.trim();
 }
 
+export type FerramentaDef = { name: string; description: string; input_schema: Anthropic.Tool["input_schema"] };
+
+export type ResultadoFerramenta = {
+  resultadoTexto: string;
+  arquivo?: { nome: string; contentType: string; base64: string };
+};
+
+export type ExecutarFerramenta = (name: string, input: Record<string, unknown>) => Promise<ResultadoFerramenta>;
+
+const MAX_ITERACOES_FERRAMENTAS = 6;
+
+/**
+ * Conversa com o modelo permitindo que ele chame ferramentas (tool use) antes de
+ * responder — usado pelo assistente geral "Bidd.IA" (src/app/api/assistente/route.ts),
+ * diferente de askJSON/askText que são sempre single-turn sem tools. O `arquivo` que uma
+ * ferramenta eventualmente produz NUNCA volta pro modelo em base64 (gastaria contexto à
+ * toa) — só um resumo textual curto entra no tool_result; os arquivos de verdade são
+ * coletados à parte e devolvidos junto da resposta final, pro chamador repassar ao
+ * cliente HTTP.
+ */
+export async function conversarComFerramentas(
+  system: string,
+  historico: { role: "user" | "assistant"; content: string }[],
+  ferramentas: FerramentaDef[],
+  executar: ExecutarFerramenta,
+  opts?: { model?: string; maxTokens?: number }
+): Promise<{ texto: string; arquivos: { nome: string; contentType: string; base64: string }[] }> {
+  const anthropic = getClient();
+  const arquivos: { nome: string; contentType: string; base64: string }[] = [];
+
+  const mensagens: Anthropic.MessageParam[] = historico.map((m) => ({ role: m.role, content: m.content }));
+
+  for (let iteracao = 0; iteracao < MAX_ITERACOES_FERRAMENTAS; iteracao++) {
+    const message = await anthropic.messages.create({
+      model: opts?.model ?? MODELO_SONNET,
+      max_tokens: opts?.maxTokens ?? 1500,
+      system,
+      tools: ferramentas,
+      messages: mensagens,
+    });
+
+    if (message.stop_reason !== "tool_use") {
+      const texto = message.content
+        .filter((b): b is Anthropic.TextBlock => b.type === "text")
+        .map((b) => b.text)
+        .join("\n")
+        .trim();
+      return { texto, arquivos };
+    }
+
+    mensagens.push({ role: "assistant", content: message.content });
+
+    const blocosUso = message.content.filter((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
+    const resultados: Anthropic.ToolResultBlockParam[] = [];
+    for (const bloco of blocosUso) {
+      try {
+        const resultado = await executar(bloco.name, bloco.input as Record<string, unknown>);
+        if (resultado.arquivo) arquivos.push(resultado.arquivo);
+        resultados.push({ type: "tool_result", tool_use_id: bloco.id, content: resultado.resultadoTexto });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Erro desconhecido";
+        resultados.push({ type: "tool_result", tool_use_id: bloco.id, content: `Erro: ${msg}`, is_error: true });
+      }
+    }
+    mensagens.push({ role: "user", content: resultados });
+  }
+
+  return { texto: "Não consegui concluir sua solicitação — tente reformular ou dividir em passos menores.", arquivos };
+}
+
 // Tetos de segurança para o OCR via visão (ver transcreverPdfViaVisao): acima disso, o
 // tempo/custo de mandar o PDF inteiro como imagens por página deixa de valer a pena
 // dentro do orçamento de 60s da função serverless — o documento segue sem OCR em vez de

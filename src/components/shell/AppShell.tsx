@@ -3,9 +3,10 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutGrid, Building2, Bell, Calculator, BarChart3, FileStack, LogOut, Calendar } from "lucide-react";
+import { LayoutGrid, Building2, Bell, Calculator, BarChart3, FileStack, LogOut, Calendar, Sparkles } from "lucide-react";
 
 const NAV = [
+  { href: "/bidd-ia", label: "Bidd.IA", icon: Sparkles },
   { href: "/dashboard", label: "Editais", icon: LayoutGrid },
   { href: "/agenda", label: "Agenda", icon: Calendar },
   { href: "/resultados", label: "Resultados", icon: BarChart3 },

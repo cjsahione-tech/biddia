@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { ETAPAS_KANBAN, ETAPAS_NEGATIVAS, ETAPAS_GANHAS } from "@/lib/kanban";
 import { labelPortal } from "@/lib/fonte-edital";
+import { formatBRL, formatDate } from "@/lib/format";
+import type { SecaoRelatorio } from "@/lib/agents/pdf";
 import type { EtapaKanban } from "@/lib/types";
 
 // Formato mínimo de edital que o Dashboard de Resultados precisa — deliberadamente
@@ -337,4 +339,130 @@ export function montarResultados(todos: EditalParaResultados[], filtros: Filtros
     evolucaoMensal: montarEvolucaoMensal(filtrados),
     opcoesFiltro,
   };
+}
+
+const SITUACAO_LABEL: Record<SituacaoFiltro, string> = {
+  TODOS: "Todas",
+  ANDAMENTO: "Em andamento",
+  GANHOS: "Ganhos",
+  PERDIDOS: "Perdidos",
+};
+
+function formatPercentual(v: number | null): string {
+  return v == null ? "—" : `${(v * 100).toFixed(1)}%`;
+}
+
+function formatDias(v: number | null): string {
+  return v == null ? "—" : `${v.toFixed(0)} dia(s)`;
+}
+
+/**
+ * Monta as seções do relatório em PDF do Dashboard de Resultados a partir do resultado
+ * já calculado — extraído de GET /api/resultados/pdf pra também poder ser chamado pela
+ * ferramenta `gerar_pdf_resultados` do assistente (Bidd.IA), sem duplicar a montagem.
+ */
+export function montarSecoesRelatorioResultados(r: ResultadosAgregados, filtros: FiltrosResultados): SecaoRelatorio[] {
+  const secoes: SecaoRelatorio[] = [];
+
+  secoes.push({
+    tipo: "campos",
+    titulo: "Filtros aplicados",
+    campos: [
+      { label: "Período", valor: filtros.de || filtros.ate ? `${filtros.de ?? "início"} a ${filtros.ate ?? "hoje"}` : "Todo o histórico" },
+      { label: "Situação", valor: SITUACAO_LABEL[filtros.situacao] ?? filtros.situacao },
+      { label: "Portal", valor: filtros.fonte ?? "Todos" },
+      { label: "Estado (UF)", valor: filtros.uf ?? "Todos" },
+      { label: "Tipo de objeto", valor: filtros.tipoObjeto ? (TIPO_OBJETO_LABEL[filtros.tipoObjeto] ?? filtros.tipoObjeto) : "Todos" },
+    ],
+  });
+
+  secoes.push({
+    tipo: "campos",
+    titulo: "Resumo geral",
+    campos: [
+      { label: "Editais no filtro", valor: `${r.totalFiltrado} de ${r.totalGeral} no total` },
+      { label: "Ganhos", valor: `${r.ganhos}` },
+      { label: "Perdidos", valor: `${r.perdidos}` },
+      { label: "Em andamento", valor: `${r.emAndamento}` },
+      { label: "Taxa de conversão (ganhos / decididos)", valor: formatPercentual(r.taxaConversao) },
+      { label: "Tempo médio até a decisão", valor: formatDias(r.tempoMedioDecisaoDias) },
+    ],
+  });
+
+  secoes.push({
+    tipo: "campos",
+    titulo: "Resultado financeiro",
+    campos: [
+      { label: "Valor total ganho", valor: `${formatBRL(r.valorGanho)} (${r.qtdGanhosComValor} edital(is) com valor conhecido)` },
+      { label: "Ticket médio ganho", valor: r.ticketMedioGanho != null ? formatBRL(r.ticketMedioGanho) : "—" },
+      { label: "Valor em disputa (em andamento)", valor: `${formatBRL(r.valorEmDisputa)} (${r.qtdEmDisputaComValor} edital(is) com valor conhecido)` },
+      { label: "Valor perdido", valor: formatBRL(r.valorPerdido) },
+      ...(r.qtdSigilosos > 0
+        ? [{ label: "Orçamento sigiloso", valor: `${r.qtdSigilosos} edital(is) sem valor publicado pelo órgão — somas acima podem estar subestimadas` }]
+        : []),
+    ],
+  });
+
+  const funilComDados = r.funil.filter((f) => f.quantidade > 0);
+  if (funilComDados.length > 0) {
+    secoes.push({
+      tipo: "barras",
+      titulo: "Funil por etapa do Kanban",
+      itens: funilComDados.map((f) => ({ label: f.label, valor: f.quantidade, valorLabel: `${f.quantidade}` })),
+    });
+  }
+
+  if (r.porPortal.length > 0) {
+    secoes.push({
+      tipo: "barras",
+      titulo: "Distribuição por portal",
+      itens: r.porPortal.map((p) => ({ label: p.label, valor: p.quantidade, valorLabel: `${p.quantidade} (${formatBRL(p.valor)})` })),
+    });
+  }
+
+  if (r.porUf.length > 0) {
+    secoes.push({
+      tipo: "barras",
+      titulo: "Distribuição por estado (UF)",
+      itens: r.porUf.map((u) => ({ label: u.label, valor: u.quantidade, valorLabel: `${u.quantidade}` })),
+    });
+  }
+
+  if (r.porTipoObjeto.length > 0) {
+    secoes.push({
+      tipo: "barras",
+      titulo: "Distribuição por tipo de objeto",
+      itens: r.porTipoObjeto.map((t) => ({ label: t.label, valor: t.quantidade, valorLabel: `${t.quantidade}` })),
+    });
+  }
+
+  if (r.porOrgao.length > 0) {
+    secoes.push({
+      tipo: "barras",
+      titulo: "Principais órgãos licitantes",
+      itens: r.porOrgao.map((o) => ({ label: o.label, valor: o.quantidade, valorLabel: `${o.quantidade}` })),
+    });
+  }
+
+  if (r.evolucaoMensal.length > 0) {
+    secoes.push({
+      tipo: "tabela",
+      titulo: "Evolução mensal",
+      colunas: [
+        { label: "Mês", largura: 90 },
+        { label: "Captados", largura: 90 },
+        { label: "Ganhos", largura: 90 },
+        { label: "Perdidos", largura: 90 },
+      ],
+      linhas: r.evolucaoMensal.map((p) => [p.label, `${p.captados}`, `${p.ganhos}`, `${p.perdidos}`]),
+    });
+  }
+
+  return secoes;
+}
+
+/** Título/subtítulo padrão do relatório de Resultados — reaproveitado pela rota HTTP e
+ * pela ferramenta do assistente, pra nunca divergirem. */
+export function tituloRelatorioResultados(): { titulo: string; subtitulo: string } {
+  return { titulo: "Dashboard de Resultados", subtitulo: `Gerado em ${formatDate(new Date().toISOString())}` };
 }
