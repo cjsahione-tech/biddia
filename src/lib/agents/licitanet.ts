@@ -111,11 +111,31 @@ export async function buscarPublicacoesLicitaNet(
   return data.filter((p) => p.status === STATUS_ABERTO);
 }
 
-/** Baixa um arquivo hospedado pelo LicitaNet (edital em .zip ou anexo em PDF) — sem
- * cabeçalhos especiais, os links de documento já são hospedados em CDN pública. */
-export async function baixarArquivoLicitaNet(url: string): Promise<{ bytes: Uint8Array; contentType: string } | null> {
-  const res = await fetchComTimeout(url, 20_000).catch(() => null);
-  if (!res || !res.ok) return null;
+/**
+ * Baixa um arquivo hospedado pelo LicitaNet (edital em .zip ou anexo em PDF) — sem
+ * cabeçalhos especiais, os links de documento já são hospedados em CDN pública. Mesmo
+ * padrão de retry de baixarArquivoPncp (o download precisa ser confiável, a análise por
+ * IA só roda depois dele) — lança em vez de devolver null na falha final.
+ */
+export async function baixarArquivoLicitaNet(url: string): Promise<{ bytes: Uint8Array; contentType: string }> {
+  let res: Response | null = null;
+  let lastStatus = 0;
+  for (let tentativa = 0; tentativa < 3; tentativa++) {
+    if (tentativa > 0) await sleep(600 * tentativa);
+    try {
+      res = await fetchComTimeout(url, 20_000);
+    } catch {
+      continue;
+    }
+    lastStatus = res.status;
+    if (res.ok) break;
+    if (![502, 503, 504].includes(res.status)) break;
+  }
+
+  if (!res || !res.ok) {
+    throw new Error(`Não foi possível baixar o arquivo do LicitaNet (${lastStatus}): ${url}`);
+  }
+
   const buffer = await res.arrayBuffer();
   return { bytes: new Uint8Array(buffer), contentType: res.headers.get("content-type") ?? "application/octet-stream" };
 }

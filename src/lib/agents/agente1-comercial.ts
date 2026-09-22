@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { after } from "next/server";
 import { prisma } from "@/lib/prisma";
 import {
   searchEditaisPorPalavraChave,
@@ -7,14 +6,12 @@ import {
   buscarDetalheCompra,
   buscarArquivosCompra,
   selecionarDocumentosPrincipais,
-  baixarArquivoPncp,
   parseItemUrl,
   type PncpSearchItem,
   type PncpArquivo,
 } from "@/lib/agents/pncp";
 import {
   buscarPublicacoesLicitaNet,
-  baixarArquivoLicitaNet,
   parseDataBr,
   linkBoletimSegmento,
   type LicitaNetPublication,
@@ -23,7 +20,8 @@ import { classificarTipoObjeto, empresaAtende, type TipoObjeto } from "@/lib/age
 import { classificarEditaisEmLote } from "@/lib/agents/relevancia";
 import { askJSON, MODELO_HAIKU } from "@/lib/anthropic";
 import { extrairTextoPdf, base64ParaBytes } from "@/lib/agents/pdf-extract";
-import { baixarAnexo, subirAnexo, caminhoDocumentoEdital } from "@/lib/storage";
+import { baixarAnexo } from "@/lib/storage";
+import { baixarEPersistirDocumento } from "@/lib/agents/document-download";
 import { logAudit } from "@/lib/agents/run-tracker";
 import { houveRetificacao } from "@/lib/edital-retificacao";
 import { mapComLimite } from "@/lib/concorrencia";
@@ -34,17 +32,13 @@ const MAX_POR_PALAVRA_CHAVE = 100;
 const MAX_POR_SEGMENTO_LICITANET = 100;
 
 /**
- * Baixa (em segundo plano) os PDFs/arquivos de editais já captados que ainda estão só
- * com o link de origem. Roda depois da resposta da busca, para não deixar o usuário
- * esperando dezenas de downloads — e também é acionado na aprovação de um edital,
- * garantindo que o texto esteja disponível para os agentes mesmo se o download em
- * background não tiver terminado.
+ * Baixa (com retry — ver baixarArquivoPncp/baixarArquivoLicitaNet) e persiste os
+ * documentos ainda pendentes de um ou mais editais. Nunca lança: falhas (mesmo após as
+ * tentativas) são agrupadas por edital e registradas com UM logAudit por edital ao
+ * final, em vez de seguirem em silêncio — quem chama esta função sempre roda ANTES de
+ * qualquer análise por IA (ver dispararPipeline em pipeline.ts), então esse log já
+ * garante que uma análise feita sem o PDF completo fica visível no histórico do edital.
  */
-// Acima disso, um documento baixado do PNCP/LicitaNet vai pro Storage em vez de base64
-// inline no Postgres — um PDF de 50MB viraria uma linha de ~67MB de texto na tabela
-// (base64 é ~33% maior que o arquivo original), o que não faz sentido guardar no banco.
-const LIMITE_BASE64_INLINE = 4 * 1024 * 1024;
-
 export async function baixarDocumentosPendentes(editalIds: string[]) {
   if (editalIds.length === 0) return;
   const docs = await prisma.document.findMany({
@@ -58,28 +52,31 @@ export async function baixarDocumentosPendentes(editalIds: string[]) {
     include: { edital: { select: { companyId: true } } },
   });
 
+  const falhasPorEdital = new Map<string, string[]>();
   await mapComLimite(docs, 6, async (doc) => {
-    const baixar = doc.tipo === "DOCUMENTO_LICITANET" ? baixarArquivoLicitaNet : baixarArquivoPncp;
-    const arquivo = await baixar(doc.origemUrl!).catch(() => null);
-    if (!arquivo) return;
-
-    if (arquivo.bytes.byteLength > LIMITE_BASE64_INLINE) {
-      const path = caminhoDocumentoEdital(doc.edital.companyId, doc.editalId, doc.id, doc.nome);
-      await subirAnexo(path, arquivo.bytes, arquivo.contentType)
-        .then(() => prisma.document.update({ where: { id: doc.id }, data: { storagePath: path } }))
-        .catch((err) => console.error(`Falha ao subir arquivo grande do documento ${doc.id} pro Storage:`, err));
-      return;
+    try {
+      await baixarEPersistirDocumento(
+        { id: doc.id, editalId: doc.editalId, nome: doc.nome, tipo: doc.tipo, origemUrl: doc.origemUrl! },
+        doc.edital.companyId
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "erro desconhecido";
+      console.error(`Falha ao baixar documento ${doc.id} (edital ${doc.editalId}):`, err);
+      const lista = falhasPorEdital.get(doc.editalId) ?? [];
+      lista.push(`${doc.nome}: ${msg}`);
+      falhasPorEdital.set(doc.editalId, lista);
     }
-
-    await prisma.document
-      .update({
-        where: { id: doc.id },
-        data: {
-          conteudoBase64: `data:${arquivo.contentType};base64,${Buffer.from(arquivo.bytes).toString("base64")}`,
-        },
-      })
-      .catch((err) => console.error(`Falha ao salvar arquivo baixado do documento ${doc.id}:`, err));
   });
+
+  for (const [editalId, falhas] of falhasPorEdital) {
+    await logAudit(
+      editalId,
+      "Agente Comercial",
+      "Download de anexos",
+      "ALERTA",
+      `${falhas.length} anexo(s) não puderam ser baixados mesmo após tentar de novo: ${falhas.join("; ")}. A análise pode ter sido feita sem o conteúdo completo desses arquivos.`
+    );
+  }
 }
 
 type CandidatoPncp = { fonte: "PNCP"; numeroControle: string; titulo: string; descricao: string; item: PncpSearchItem; keyword: string };
@@ -378,12 +375,11 @@ export async function executarAgente1(companyId: string) {
     }
   });
 
-  // 6. Baixa os arquivos em segundo plano — o usuário já vê os editais na lista sem
-  // esperar.
-  if (criadosIds.length > 0) {
-    const ids = [...criadosIds];
-    after(() => baixarDocumentosPendentes(ids));
-  }
+  // 6. O download dos documentos e a extração do texto só acontecem quando o usuário
+  // demonstra interesse de verdade — ver dispararPipeline em pipeline.ts (disparado ao
+  // sair de "Oportunidade") ou o download avulso de um documento (rota
+  // .../documents/[docId]/download). A maioria dos editais captados nunca chega a ser
+  // aberta, então não faz sentido baixar tudo aqui.
 
   const partes = [`${criadosIds.length} novo(s) edital(is) captado(s)`];
   if (company.keywords.length > 0 && company.licitanetSegmentoId) {

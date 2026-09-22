@@ -4,6 +4,8 @@ import { executarAgente2 } from "@/lib/agents/agente2-analista";
 import { executarAgente3 } from "@/lib/agents/agente3-financeiro";
 import { executarAgente4 } from "@/lib/agents/agente4-advogado";
 import { executarAgente5 } from "@/lib/agents/agente5-secretario";
+import { baixarDocumentosPendentes } from "@/lib/agents/agente1-comercial";
+import { prewarmTextoDocumentos } from "@/lib/agents/pdf-extract";
 
 /**
  * Agente Auditor Sênior — HEAD da equipe. Confere o resultado de cada agente e,
@@ -61,15 +63,32 @@ export async function executarAgente6(editalId: string) {
     await checar(
       "Análise do edital (Agente Analista)",
       "agente2-analista",
-      async () => !!(await prisma.analysis.findUnique({ where: { editalId } })),
-      () => executarAgente2(editalId)
+      async () => {
+        const a = await prisma.analysis.findUnique({ where: { editalId } });
+        // baseadoEmTextoCompleto: false significa que a análise rodou sem o PDF
+        // completo (ver dispararPipeline em pipeline.ts) — trata como pendente, não só
+        // "já existe", pra dar uma segunda chance ao download antes de aceitar.
+        return !!a && a.baseadoEmTextoCompleto;
+      },
+      async () => {
+        await baixarDocumentosPendentes([editalId]); // idempotente: só retenta o que falhou
+        await prewarmTextoDocumentos(editalId);
+        return executarAgente2(editalId);
+      }
     );
 
     await checar(
       "Proposta financeira (Agente Financeiro)",
       "agente3-financeiro",
-      async () => !!(await prisma.proposal.findUnique({ where: { editalId } })),
-      () => executarAgente3(editalId)
+      async () => {
+        const p = await prisma.proposal.findUnique({ where: { editalId } });
+        return !!p && p.baseadoEmTextoCompleto;
+      },
+      async () => {
+        await baixarDocumentosPendentes([editalId]);
+        await prewarmTextoDocumentos(editalId);
+        return executarAgente3(editalId);
+      }
     );
 
     await checar(

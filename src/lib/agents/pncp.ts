@@ -161,8 +161,25 @@ export async function buscarArquivosCompra(
   sequencial: string
 ): Promise<PncpArquivo[]> {
   const url = `${PNCP_API_BASE}/v1/orgaos/${cnpj}/compras/${ano}/${sequencial}/arquivos`;
-  const res = await fetchComTimeout(url).catch(() => null);
-  if (!res || !res.ok) return [];
+
+  let res: Response | null = null;
+  let lastStatus = 0;
+  for (let tentativa = 0; tentativa < 3; tentativa++) {
+    if (tentativa > 0) await sleep(600 * tentativa);
+    try {
+      res = await fetchComTimeout(url);
+    } catch {
+      continue;
+    }
+    lastStatus = res.status;
+    if (res.ok) break;
+    if (![502, 503, 504].includes(res.status)) break;
+  }
+
+  if (!res || !res.ok) {
+    throw new Error(`Não foi possível listar os arquivos da contratação no PNCP (${lastStatus}): ${cnpj}/${ano}/${sequencial}`);
+  }
+
   const data = (await res.json()) as PncpArquivo[];
   return data.filter((doc) => doc.statusAtivo);
 }
@@ -200,10 +217,32 @@ export function selecionarDocumentosPrincipais(arquivos: PncpArquivo[]) {
   return { edital, termoReferencia, anexosPrecos };
 }
 
-export async function baixarArquivoPncp(url: string): Promise<{ bytes: Uint8Array; contentType: string } | null> {
+/**
+ * Baixa um arquivo do PNCP com retry (mesmo padrão de searchEditaisPorPalavraChave) —
+ * o download precisa ser confiável, porque a análise por IA só roda depois dele (ver
+ * dispararPipeline em pipeline.ts). Lança em vez de devolver null na falha final, para
+ * o chamador poder registrar a falha (logAudit) em vez de segui-la em silêncio.
+ */
+export async function baixarArquivoPncp(url: string): Promise<{ bytes: Uint8Array; contentType: string }> {
   // Arquivos (PDFs) podem ser maiores que as respostas JSON — timeout mais generoso.
-  const res = await fetchComTimeout(url, 20_000).catch(() => null);
-  if (!res || !res.ok) return null;
+  let res: Response | null = null;
+  let lastStatus = 0;
+  for (let tentativa = 0; tentativa < 3; tentativa++) {
+    if (tentativa > 0) await sleep(600 * tentativa);
+    try {
+      res = await fetchComTimeout(url, 20_000);
+    } catch {
+      continue;
+    }
+    lastStatus = res.status;
+    if (res.ok) break;
+    if (![502, 503, 504].includes(res.status)) break;
+  }
+
+  if (!res || !res.ok) {
+    throw new Error(`Não foi possível baixar o arquivo do PNCP (${lastStatus}): ${url}`);
+  }
+
   const buffer = await res.arrayBuffer();
   return { bytes: new Uint8Array(buffer), contentType: res.headers.get("content-type") ?? "application/pdf" };
 }

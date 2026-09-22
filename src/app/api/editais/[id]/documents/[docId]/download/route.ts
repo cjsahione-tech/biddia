@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireCompany } from "@/lib/api-utils";
-import { baixarArquivoPncp } from "@/lib/agents/pncp";
-import { baixarArquivoLicitaNet } from "@/lib/agents/licitanet";
+import { baixarEPersistirDocumento } from "@/lib/agents/document-download";
+import { tocarEdital } from "@/lib/agents/run-tracker";
 import { criarUrlDownload } from "@/lib/storage";
 
 function respondFromDataUrl(dataUrl: string, filename: string) {
@@ -45,32 +45,38 @@ export async function GET(
     }
   }
 
-  // Caminho rápido: o Agente Comercial já baixou este arquivo (edital/TR do PNCP, ou
-  // anexo gerado) no momento da captura. Serve direto do banco, sem depender do PNCP
-  // estar no ar agora.
+  // Caminho rápido: o arquivo já foi baixado antes (aprovação do edital, ou um download
+  // avulso anterior). Serve direto do banco, sem depender do PNCP/LicitaNet estar no ar.
   const oficial = doc.tipo === "DOCUMENTO_PNCP" || doc.tipo === "DOCUMENTO_LICITANET";
   if (doc.conteudoBase64) {
     return respondFromDataUrl(doc.conteudoBase64, oficial ? nomeArquivo : `${nomeArquivo}.pdf`);
   }
 
-  // Sem cópia local (download imediato falhou na captura, ou é um registro antigo):
-  // tenta buscar direto na fonte oficial como último recurso.
+  // Sem cópia local ainda: baixa agora e JÁ PERSISTE no Document (não serve só uma
+  // cópia temporária) — o download avulso é um dos dois gatilhos de download real
+  // (o outro é sair de "Oportunidade", ver dispararPipeline em pipeline.ts), e conta
+  // como interesse do usuário no edital.
   if (oficial && doc.origemUrl) {
-    const baixar = doc.tipo === "DOCUMENTO_LICITANET" ? baixarArquivoLicitaNet : baixarArquivoPncp;
     const fonte = doc.tipo === "DOCUMENTO_LICITANET" ? "LicitaNet" : "PNCP";
-    const arquivo = await baixar(doc.origemUrl);
-    if (!arquivo) {
+    try {
+      const arquivo = await baixarEPersistirDocumento(
+        { id: doc.id, editalId: id, nome: doc.nome, tipo: doc.tipo, origemUrl: doc.origemUrl },
+        company!.id
+      );
+      await tocarEdital(id);
+      return new NextResponse(Buffer.from(arquivo.bytes), {
+        headers: {
+          "Content-Type": arquivo.contentType,
+          "Content-Disposition": `inline; filename="${nomeArquivo}"`,
+        },
+      });
+    } catch (err) {
+      console.error(`Falha ao baixar documento ${doc.id} pra download avulso:`, err);
       return NextResponse.json(
         { error: `Não foi possível obter o arquivo no ${fonte} no momento. Tente novamente em instantes.` },
         { status: 502 }
       );
     }
-    return new NextResponse(Buffer.from(arquivo.bytes), {
-      headers: {
-        "Content-Type": arquivo.contentType,
-        "Content-Disposition": `inline; filename="${nomeArquivo}"`,
-      },
-    });
   }
 
   return NextResponse.json({ error: "Documento não encontrado" }, { status: 404 });
