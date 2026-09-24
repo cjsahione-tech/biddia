@@ -184,6 +184,73 @@ export async function buscarArquivosCompra(
   return data.filter((doc) => doc.statusAtivo);
 }
 
+export type PncpItemCompra = {
+  numeroItem: number;
+  descricao: string;
+  quantidade: number;
+  valorUnitarioEstimado: number | null;
+  unidadeMedida: string;
+};
+
+/**
+ * Itens estruturados da contratação, direto da API do PNCP — usado como conferência
+ * complementar à extração por texto do Agente Financeiro (ver agente3-financeiro.ts),
+ * nunca como substituto: o PNCP não tem nenhum campo de lote/grupo por item em lugar
+ * nenhum do schema (confirmado contra a API real e o swagger oficial), então "lote"
+ * continua vindo só do texto do edital.
+ */
+export async function buscarItensCompra(cnpj: string, ano: string, sequencial: string): Promise<PncpItemCompra[]> {
+  const url = `${PNCP_API_BASE}/v1/orgaos/${cnpj}/compras/${ano}/${sequencial}/itens`;
+
+  let res: Response | null = null;
+  let lastStatus = 0;
+  for (let tentativa = 0; tentativa < 3; tentativa++) {
+    if (tentativa > 0) await sleep(600 * tentativa);
+    try {
+      res = await fetchComTimeout(url);
+    } catch {
+      continue;
+    }
+    lastStatus = res.status;
+    if (res.ok) break;
+    if (![502, 503, 504].includes(res.status)) break;
+  }
+
+  if (!res || !res.ok) {
+    throw new Error(`Não foi possível listar os itens da contratação no PNCP (${lastStatus}): ${cnpj}/${ano}/${sequencial}`);
+  }
+
+  const data = (await res.json()) as Array<{
+    numeroItem: number;
+    descricao: string;
+    quantidade: number;
+    valorUnitarioEstimado: number | null;
+    unidadeMedida: string;
+  }>;
+
+  return data.map((item) => ({
+    numeroItem: item.numeroItem,
+    descricao: item.descricao,
+    quantidade: item.quantidade,
+    valorUnitarioEstimado: item.valorUnitarioEstimado,
+    unidadeMedida: item.unidadeMedida,
+  }));
+}
+
+/**
+ * Extrai cnpj/ano/sequencial do numeroControlePNCP salvo no Edital (formato
+ * "{cnpj}-{tipo}-{sequencial}/{ano}", ex: "76247329000113-1-000073/2026") — mesma
+ * identificação usada pelos outros endpoints de compra, sem precisar guardar um campo
+ * novo no Edital. O sequencial vem com zeros à esquerda no numeroControlePNCP, mas a
+ * API espera sem eles (confirmado contra a API real).
+ */
+export function parseNumeroControlePNCP(numeroControlePNCP: string): { cnpj: string; ano: string; sequencial: string } | null {
+  const m = numeroControlePNCP.match(/^(\d{14})-\d+-(\d+)\/(\d{4})$/);
+  if (!m) return null;
+  const [, cnpj, sequencialBruto, ano] = m;
+  return { cnpj, ano, sequencial: String(Number(sequencialBruto)) };
+}
+
 /**
  * Dentre os arquivos da contratação, identifica o edital (ou aviso equivalente), o
  * termo de referência e — separadamente — outros anexos com indício de conter a

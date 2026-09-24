@@ -51,11 +51,14 @@ export async function importarPlanilhaProposta(bytes: Uint8Array): Promise<Resul
     }
 
     itens.push({
+      numero: null,
       descricao,
       unidade: unidade || "un",
       quantidade,
       valorUnitario,
       valorTotal: round2(quantidade * valorUnitario),
+      lote: null,
+      editadoManualmente: false,
     });
   });
 

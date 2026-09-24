@@ -254,6 +254,15 @@ model Proposal {
   descontoPercentual     Float   @default(0)
   baseadoEmTextoCompleto Boolean @default(false)
 
+  // Editais com estrutura de lote/grupo: metadados dos lotes encontrados na extração
+  // ([{numero, descricao, valorReferencia}]), quais colunas extras do catálogo fechado
+  // (ver CAMPOS_EXTRAS_CATALOGO em src/lib/proposal.ts) este edital exige, e quais lotes
+  // a empresa decidiu disputar (null = todos, ver FinanceTab.tsx). Editais sem lote
+  // ficam com os 3 campos null — comportamento idêntico ao anterior a esta mudança.
+  lotesJson             String?
+  colunasExtrasJson     String?
+  lotesSelecionadosJson String?
+
   createdAt DateTime @default(now())
 }
 

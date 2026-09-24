@@ -2,6 +2,8 @@ import { prisma } from "@/lib/prisma";
 import { askJSON, MODELO_HAIKU, MODELO_SONNET } from "@/lib/anthropic";
 import { obterTextoCompletoEdital } from "@/lib/agents/pdf-extract";
 import { withAgentRun, logAudit } from "@/lib/agents/run-tracker";
+import { buscarItensCompra, parseNumeroControlePNCP } from "@/lib/agents/pncp";
+import { CAMPOS_EXTRAS_CATALOGO, chaveCampoExtraValida, type ChaveCampoExtra, type LoteMeta } from "@/lib/proposal";
 
 // Quanto de saída reservar na chamada de IA, em função de quantos itens se espera —
 // reservar 16k tokens para um edital de 20 itens só fazia a chamada disputar cota de
@@ -11,10 +13,13 @@ function maxTokensParaItens(qtdItens: number, teto = 16_000): number {
 }
 
 type ItemProposta = {
+  numero?: number | null;
   descricao: string;
   unidade: string;
   quantidade: number;
   valorUnitario: number;
+  lote?: string | null;
+  camposExtras?: Partial<Record<ChaveCampoExtra, number | string>>;
 };
 
 type FinanceiroResult = {
@@ -32,6 +37,9 @@ type RevisaoDiff = {
     unidade?: string;
     quantidade?: number;
     valorUnitario?: number;
+    numero?: number;
+    lote?: string;
+    camposExtras?: Partial<Record<ChaveCampoExtra, number | string>>;
   }[];
   itensFaltantes: ItemProposta[];
   indicesParaRemover: number[];
@@ -65,6 +73,8 @@ const PALAVRAS_CHAVE_FINANCEIRO = [
   "mapa de preços",
   "especificação do objeto",
   "descrição do item",
+  "lote",
+  "grupo",
 ];
 
 const INSTRUCAO_FORMATO_NUMERICO = `Atenção ao formato numérico brasileiro no texto-fonte: ponto separa milhar e
@@ -116,6 +126,10 @@ function dividirEmBlocosPorLinha(texto: string, tamanhoAlvo: number): string[] {
 // viram um bloco só) ser tratado com o mesmo cuidado que uma tabela de 200 itens.
 const TAMANHO_BLOCO_ITENS = 5_000;
 
+const LISTA_CAMPOS_EXTRAS_CATALOGO = Object.entries(CAMPOS_EXTRAS_CATALOGO)
+  .map(([chave, def]) => `"${chave}" (${def.label})`)
+  .join(", ");
+
 function montarPromptBloco(indice: number, total: number, reforco?: string): string {
   return `Você é o agente financeiro de uma empresa, extraindo a tabela de itens/preços de um edital
 público brasileiro. Abaixo está APENAS UM TRECHO de uma tabela (trecho ${indice + 1} de ${total}) — TRANSCREVA
@@ -124,10 +138,21 @@ depois dele, fora do que foi te mostrado). Não invente itens que não estejam n
 pular nenhum item que esteja nele, por mais numeroso ou repetitivo que pareça — isso é transcrição literal linha
 por linha, não um resumo. Faltar um item na lista é um erro grave para quem vai usar esta proposta.
 
+Preste atenção especial a dois pontos:
+1. Se este trecho tiver um cabeçalho do tipo "LOTE X" ou "GRUPO X" (numeral ou por extenso) antes de uma sequência
+de itens, preencha "lote" com esse número/identificação em TODOS os itens daquela sequência, até o próximo
+cabeçalho de lote/grupo. Se não houver estrutura de lote/grupo neste edital, deixe "lote" como null em todos.
+Preencha também "numero" com o número do item como aparece na própria tabela do edital (ex: "Item 3" → 3), ou
+null se não houver numeração clara.
+2. Se a tabela já tiver, ela mesma, uma coluna extra batendo com uma destas (e SOMENTE estas — nunca invente
+outra chave): ${LISTA_CAMPOS_EXTRAS_CATALOGO}, preencha "camposExtras" com um objeto usando exatamente essas
+chaves. Colunas que não batem com nenhuma dessas são ignoradas (não force encaixe).
+
 ${INSTRUCAO_FORMATO_NUMERICO}
 ${reforco ?? ""}
 
-Responda em JSON: { "itens": [{ "descricao": string, "unidade": string, "quantidade": number, "valorUnitario": number }] }
+Responda em JSON: { "itens": [{ "numero": number | null, "descricao": string, "unidade": string, "quantidade": number,
+"valorUnitario": number, "lote": string | null, "camposExtras"?: object }] }
 Se este trecho não contiver nenhuma linha de tabela reconhecível, devolva "itens": [].`;
 }
 
@@ -188,6 +213,126 @@ fim deste trecho e devolva a lista COMPLETA — não pare antes do fim.`
 }
 
 /**
+ * Blocos são extraídos em paralelo, sem contexto uns dos outros — se um cabeçalho
+ * "LOTE X" cair num bloco e os itens daquele lote continuarem no bloco seguinte, o
+ * segundo bloco não tem como saber em que lote está. Corrige isso depois de juntar
+ * todos os blocos, na ordem original: item sem lote herda o último lote visto na
+ * sequência (mesma lógica de uma tabela de verdade — vale até o próximo cabeçalho).
+ */
+function preencherLotePorArrastamento(itens: ItemProposta[]): ItemProposta[] {
+  let loteAtual: string | null = null;
+  return itens.map((item) => {
+    if (item.lote) {
+      loteAtual = item.lote;
+      return item;
+    }
+    return loteAtual ? { ...item, lote: loteAtual } : item;
+  });
+}
+
+/**
+ * Classificação rápida e separada (não contamina o prompt de transcrição item a item):
+ * quais colunas do catálogo fechado (ver CAMPOS_EXTRAS_CATALOGO) a tabela deste edital
+ * usa, se alguma. Roda uma vez só sobre o início da área financeira, onde o cabeçalho da
+ * tabela normalmente aparece.
+ */
+async function detectarColunasExtras(areaFinanceira: string): Promise<ChaveCampoExtra[]> {
+  if (!areaFinanceira.trim()) return [];
+  try {
+    const resultado = await askJSON<{ colunas: string[] }>(
+      `Você está olhando um trecho de edital público brasileiro com uma tabela de itens/preços. Diga quais destas
+colunas, SE ALGUMA, a tabela realmente usa (procure pelo cabeçalho da tabela): ${LISTA_CAMPOS_EXTRAS_CATALOGO}.
+Não force encaixe — se a tabela não tiver nenhuma dessas colunas, devolva uma lista vazia.
+
+Responda em JSON: { "colunas": string[] } — usando exatamente as chaves entre aspas listadas acima.`,
+      areaFinanceira.slice(0, 20_000),
+      { model: MODELO_HAIKU, maxTokens: 200 }
+    );
+    return (resultado.colunas ?? []).filter(chaveCampoExtraValida);
+  } catch (err) {
+    console.error("Falha ao detectar colunas extras da tabela de itens:", err);
+    return [];
+  }
+}
+
+/**
+ * Conferência complementar (não substitui a extração por texto) contra a API de itens
+ * estruturados do PNCP — só preenche quantidade/valorUnitario quando o item da IA está
+ * com o campo ausente/zerado, casando por número do item; nunca sobrescreve um valor já
+ * lido com confiança do texto. Best-effort: qualquer falha (rede, edital sem
+ * numeroControlePNCP parseável, item sem match) é silenciosa, não derruba a extração.
+ * O PNCP não tem campo de lote/grupo por item — essa conferência nunca toca em "lote".
+ */
+async function conferirComPncp(
+  edital: { fonte: string; numeroControlePNCP: string },
+  itens: ItemProposta[]
+): Promise<ItemProposta[]> {
+  if (edital.fonte !== "PNCP") return itens;
+  const ids = parseNumeroControlePNCP(edital.numeroControlePNCP);
+  if (!ids) return itens;
+
+  try {
+    const itensPncp = await buscarItensCompra(ids.cnpj, ids.ano, ids.sequencial);
+    const porNumero = new Map(itensPncp.map((i) => [i.numeroItem, i]));
+    return itens.map((item) => {
+      if (item.numero == null) return item;
+      const ref = porNumero.get(item.numero);
+      if (!ref) return item;
+      const semQuantidade = item.quantidade == null || Number.isNaN(item.quantidade) || item.quantidade === 0;
+      const semValor = item.valorUnitario == null || Number.isNaN(item.valorUnitario) || item.valorUnitario === 0;
+      if (!semQuantidade && !semValor) return item;
+      return {
+        ...item,
+        quantidade: semQuantidade ? ref.quantidade : item.quantidade,
+        valorUnitario: semValor && ref.valorUnitarioEstimado != null ? ref.valorUnitarioEstimado : item.valorUnitario,
+      };
+    });
+  } catch (err) {
+    console.error(`Falha na conferência de itens com o PNCP (edital ${edital.numeroControlePNCP}):`, err);
+    return itens;
+  }
+}
+
+/** Agrupa os itens finais por lote, somando o valorTotal de cada grupo como referência
+ * — null (sem lote) não vira um "grupo" no resultado, é só o caso comum de hoje. */
+function montarLotes(itens: { lote?: string | null; valorTotal: number }[]): LoteMeta[] {
+  const porLote = new Map<string, number>();
+  for (const item of itens) {
+    if (!item.lote) continue;
+    porLote.set(item.lote, (porLote.get(item.lote) ?? 0) + item.valorTotal);
+  }
+  return Array.from(porLote.entries()).map(([numero, valorReferencia]) => ({
+    numero,
+    descricao: `Lote ${numero}`,
+    valorReferencia,
+  }));
+}
+
+/**
+ * Editais grandes às vezes citam a mesma relação de itens duas vezes no documento (ex:
+ * uma vez na planilha de preços de verdade, outra num anexo/especificação que só lista
+ * os nomes sem valor) — como agora o texto-fonte não é mais cortado antes de dividir em
+ * blocos (ver MAX_CHARS_FINANCEIRO), os dois trechos podem virar itens duplicados.
+ * Agrupa por lote+descrição (não só descrição — o mesmo nome de item pode aparecer em
+ * lotes diferentes de verdade) e mantém a versão com preço válido quando há duplicata.
+ */
+function deduplicarItens(itens: ItemProposta[]): ItemProposta[] {
+  const porChave = new Map<string, ItemProposta>();
+  for (const item of itens) {
+    const chave = `${item.lote ?? ""}::${item.descricao.trim().toLowerCase()}`;
+    const existente = porChave.get(chave);
+    if (!existente) {
+      porChave.set(chave, item);
+      continue;
+    }
+    const existenteTemPreco = existente.valorUnitario != null && existente.valorUnitario > 0;
+    const novoTemPreco = item.valorUnitario != null && item.valorUnitario > 0;
+    if (!existenteTemPreco && novoTemPreco) porChave.set(chave, item);
+  }
+  return Array.from(porChave.values());
+}
+
+/**
  * Alguns editais (comum em registro de preços) publicam só descrição/unidade/quantidade
  * na tabela — sem valor unitário de referência, porque é a própria empresa licitante que
  * propõe o preço. Sem tratar isso, o item fica com valorUnitario nulo/zero e a "proposta"
@@ -230,29 +375,6 @@ Responda em JSON: { "precos": [{ "indice": number, "valorUnitario": number }] }`
   }
 }
 
-/**
- * Editais grandes às vezes citam a mesma relação de itens duas vezes no documento (ex:
- * uma vez na planilha de preços de verdade, outra num anexo/especificação que só lista
- * os nomes sem valor) — como agora o texto-fonte não é mais cortado antes de dividir em
- * blocos (ver MAX_CHARS_FINANCEIRO), os dois trechos podem virar itens duplicados.
- * Agrupa por descrição e mantém a versão com preço válido quando há duplicata.
- */
-function deduplicarItens(itens: ItemProposta[]): ItemProposta[] {
-  const porDescricao = new Map<string, ItemProposta>();
-  for (const item of itens) {
-    const chave = item.descricao.trim().toLowerCase();
-    const existente = porDescricao.get(chave);
-    if (!existente) {
-      porDescricao.set(chave, item);
-      continue;
-    }
-    const existenteTemPreco = existente.valorUnitario != null && existente.valorUnitario > 0;
-    const novoTemPreco = item.valorUnitario != null && item.valorUnitario > 0;
-    if (!existenteTemPreco && novoTemPreco) porDescricao.set(chave, item);
-  }
-  return Array.from(porDescricao.values());
-}
-
 export async function executarAgente3(editalId: string) {
   return withAgentRun(editalId, "agente3-financeiro", async () => {
     const edital = await prisma.edital.findUniqueOrThrow({ where: { id: editalId } });
@@ -292,6 +414,7 @@ ${textoEdital ? `\n=== TRECHOS RELEVANTES DO EDITAL ===\n${textoEdital}` : ""}
     const itensEsperados = estimarQuantidadeDeItens(areaFinanceira);
 
     let result: FinanceiroResult;
+    let colunasExtras: ChaveCampoExtra[] = [];
 
     if (temTextoCompleto) {
       // SEMPRE divide em blocos e extrai em paralelo — mesmo uma tabela pequena vira
@@ -303,10 +426,12 @@ ${textoEdital ? `\n=== TRECHOS RELEVANTES DO EDITAL ===\n${textoEdital}` : ""}
       const blocos = dividirEmBlocosPorLinha(areaFinanceira, TAMANHO_BLOCO_ITENS);
       console.log(`[agente3-financeiro] edital ${editalId}: ~${itensEsperados} itens estimados — extraindo em ${blocos.length} bloco(s).`);
 
-      const itensPorBloco = await Promise.all(
-        blocos.map((bloco, i) => extrairBlocoDeItens(bloco, i, blocos.length, cabecalho))
-      );
-      let itens = deduplicarItens(itensPorBloco.flat());
+      const [itensPorBloco, colunasDetectadas] = await Promise.all([
+        Promise.all(blocos.map((bloco, i) => extrairBlocoDeItens(bloco, i, blocos.length, cabecalho))),
+        detectarColunasExtras(areaFinanceira),
+      ]);
+      colunasExtras = colunasDetectadas;
+      let itens = deduplicarItens(preencherLotePorArrastamento(itensPorBloco.flat()));
 
       // Edital publicou a tabela sem coluna de preço (comum em registro de preços) —
       // sem isso, todo item ficaria com valorTotal zerado, o que é enganoso.
@@ -361,15 +486,15 @@ Gere entre 2 e 20 itens plausíveis. Use números puros (sem "R$" ou separadores
     if (result.itensEncontradosNoTexto && result.itens.length > 0 && result.itens.length <= LIMITE_ITENS_PARA_REVISAO) {
       try {
         const listaIndexada = result.itens
-          .map((it, i) => `[${i}] ${it.descricao} | ${it.unidade} | qtd ${it.quantidade} | unit ${it.valorUnitario}`)
+          .map((it, i) => `[${i}] ${it.descricao} | ${it.unidade} | qtd ${it.quantidade} | unit ${it.valorUnitario} | lote ${it.lote ?? "-"}`)
           .join("\n");
 
         const diff = await askJSON<RevisaoDiff>(
           `Você é um revisor financeiro rigoroso. Abaixo estão (1) trechos do edital/TR com a tabela de itens e (2)
 uma lista de itens JÁ extraída, com índices [0..${result.itens.length - 1}]. Confira a lista contra o texto-fonte
 e devolva SOMENTE o que precisa mudar — não repita a lista inteira:
-- "correcoes": para cada item cujo texto/quantidade/unidade/valor unitário não bate com a fonte, um objeto com o
-  "indice" e SÓ os campos a corrigir.
+- "correcoes": para cada item cujo texto/quantidade/unidade/valor unitário/lote não bate com a fonte, um objeto com
+  o "indice" e SÓ os campos a corrigir.
 - "itensFaltantes": itens que existem na tabela do texto mas não estão na lista.
 - "indicesParaRemover": índices de itens que NÃO existem de fato no texto-fonte.
 Se estiver tudo certo, devolva as três listas vazias.
@@ -378,8 +503,8 @@ ${INSTRUCAO_FORMATO_NUMERICO}
 
 Responda em JSON:
 {
-  "correcoes": [{ "indice": number, "descricao"?: string, "unidade"?: string, "quantidade"?: number, "valorUnitario"?: number }],
-  "itensFaltantes": [{ "descricao": string, "unidade": string, "quantidade": number, "valorUnitario": number }],
+  "correcoes": [{ "indice": number, "descricao"?: string, "unidade"?: string, "quantidade"?: number, "valorUnitario"?: number, "lote"?: string }],
+  "itensFaltantes": [{ "descricao": string, "unidade": string, "quantidade": number, "valorUnitario": number, "lote"?: string }],
   "indicesParaRemover": [number]
 }`,
           `=== TEXTO-FONTE ===\n${textoAnexosPrecos ?? ""}\n${textoTermoReferencia ?? ""}\n${textoEdital ?? ""}\n\n=== LISTA EXTRAÍDA (${result.itens.length} itens) ===\n${listaIndexada}`,
@@ -393,10 +518,13 @@ Responda em JSON:
           if (!c) return item;
           ajustes.push(`item "${item.descricao}" ajustado`);
           return {
+            numero: typeof c.numero === "number" ? c.numero : item.numero,
             descricao: c.descricao ?? item.descricao,
             unidade: c.unidade ?? item.unidade,
             quantidade: typeof c.quantidade === "number" ? c.quantidade : item.quantidade,
             valorUnitario: typeof c.valorUnitario === "number" ? c.valorUnitario : item.valorUnitario,
+            lote: c.lote ?? item.lote,
+            camposExtras: c.camposExtras ?? item.camposExtras,
           };
         });
 
@@ -422,11 +550,23 @@ Responda em JSON:
       }
     }
 
+    // Conferência complementar contra a API de itens do PNCP — só preenche lacunas,
+    // nunca sobrescreve o que a IA já leu com confiança (ver conferirComPncp).
+    itensFinais = await conferirComPncp(edital, itensFinais);
+
     const itensComTotal = itensFinais.map((item) => ({
-      ...item,
+      numero: item.numero ?? null,
+      descricao: item.descricao,
+      unidade: item.unidade,
+      quantidade: item.quantidade,
+      valorUnitario: item.valorUnitario,
       valorTotal: Number((item.quantidade * item.valorUnitario).toFixed(2)),
+      lote: item.lote ?? null,
+      camposExtras: item.camposExtras,
+      editadoManualmente: false,
     }));
     const somaItens = itensComTotal.reduce((acc, i) => acc + i.valorTotal, 0);
+    const lotes = montarLotes(itensComTotal);
 
     await prisma.proposal.upsert({
       where: { editalId },
@@ -436,12 +576,16 @@ Responda em JSON:
         itensJson: JSON.stringify(itensComTotal),
         observacoes: observacoesFinais,
         baseadoEmTextoCompleto: !!result.itensEncontradosNoTexto,
+        lotesJson: lotes.length > 0 ? JSON.stringify(lotes) : null,
+        colunasExtrasJson: colunasExtras.length > 0 ? JSON.stringify(colunasExtras) : null,
       },
       update: {
         valorGlobalReferencia: valorReferencia ?? somaItens,
         itensJson: JSON.stringify(itensComTotal),
         observacoes: observacoesFinais,
         baseadoEmTextoCompleto: !!result.itensEncontradosNoTexto,
+        lotesJson: lotes.length > 0 ? JSON.stringify(lotes) : null,
+        colunasExtrasJson: colunasExtras.length > 0 ? JSON.stringify(colunasExtras) : null,
       },
     });
 
@@ -468,7 +612,7 @@ Responda em JSON:
       "Agente Financeiro",
       "Montagem da proposta",
       divergenciaSignificativa || possivelmenteIncompleta ? "ALERTA" : "OK",
-      `Proposta montada com ${itensComTotal.length} item(ns) (${origemLabel}), somando R$ ${somaItens.toFixed(2)}.` +
+      `Proposta montada com ${itensComTotal.length} item(ns) (${origemLabel})${lotes.length > 0 ? `, em ${lotes.length} lote(s)` : ""}, somando R$ ${somaItens.toFixed(2)}.` +
         (possivelmenteIncompleta
           ? ` O texto-fonte parece ter aproximadamente ${itensEsperados} linhas de tabela — a lista capturada pode estar incompleta, confira contra o PDF original antes de enviar.`
           : "") +
@@ -523,7 +667,7 @@ export async function corrigirAgente3ViaChat(editalId: string, notaCorrecao: str
   }
 
   const listaIndexada = itensAtuais
-    .map((it, i) => `[${i}] ${it.descricao} | ${it.unidade} | qtd ${it.quantidade} | unit ${it.valorUnitario}`)
+    .map((it, i) => `[${i}] ${it.descricao} | ${it.unidade} | qtd ${it.quantidade} | unit ${it.valorUnitario} | lote ${it.lote ?? "-"}`)
     .join("\n");
 
   // A observação do usuário pode trazer embutido um trecho de anexo (ex: um PDF enviado
@@ -552,8 +696,8 @@ ${INSTRUCAO_FORMATO_NUMERICO}
 
 Responda em JSON:
 {
-  "correcoes": [{ "indice": number, "descricao"?: string, "unidade"?: string, "quantidade"?: number, "valorUnitario"?: number }],
-  "itensFaltantes": [{ "descricao": string, "unidade": string, "quantidade": number, "valorUnitario": number }],
+  "correcoes": [{ "indice": number, "descricao"?: string, "unidade"?: string, "quantidade"?: number, "valorUnitario"?: number, "lote"?: string }],
+  "itensFaltantes": [{ "descricao": string, "unidade": string, "quantidade": number, "valorUnitario": number, "lote"?: string }],
   "indicesParaRemover": [number]
 }`,
     `=== TEXTO-FONTE ===\n${textoAnexosPrecos ?? ""}\n${textoTermoReferencia ?? ""}\n${textoEdital ?? ""}\n\n=== LISTA ATUAL DA PROPOSTA (${itensAtuais.length} itens) ===\n${listaIndexada}\n\n=== OBSERVAÇÃO DO USUÁRIO ===\n${notaCorrecao}`,
@@ -568,10 +712,13 @@ Responda em JSON:
     const c = diff.correcoes?.find((x) => x.indice === i);
     if (!c) return item;
     return {
+      numero: typeof c.numero === "number" ? c.numero : item.numero,
       descricao: c.descricao ?? item.descricao,
       unidade: c.unidade ?? item.unidade,
       quantidade: typeof c.quantidade === "number" ? c.quantidade : item.quantidade,
       valorUnitario: typeof c.valorUnitario === "number" ? c.valorUnitario : item.valorUnitario,
+      lote: c.lote ?? item.lote,
+      camposExtras: c.camposExtras ?? item.camposExtras,
     };
   });
   const remover = new Set(diff.indicesParaRemover ?? []);
@@ -591,10 +738,18 @@ Responda em JSON:
   }
 
   const itensComTotal = itensFinais.map((item) => ({
-    ...item,
+    numero: item.numero ?? null,
+    descricao: item.descricao,
+    unidade: item.unidade,
+    quantidade: item.quantidade,
+    valorUnitario: item.valorUnitario,
     valorTotal: Number((item.quantidade * item.valorUnitario).toFixed(2)),
+    lote: item.lote ?? null,
+    camposExtras: item.camposExtras,
+    editadoManualmente: false,
   }));
   const somaItens = itensComTotal.reduce((acc, i) => acc + i.valorTotal, 0);
+  const lotes = montarLotes(itensComTotal);
 
   await prisma.proposal.update({
     where: { editalId },
@@ -602,6 +757,7 @@ Responda em JSON:
       valorGlobalReferencia: edital.valorGlobal ?? somaItens,
       itensJson: JSON.stringify(itensComTotal),
       observacoes: `${proposal.observacoes ?? ""}\n\nCorreção via chat: "${notaCorrecao}"`.trim(),
+      lotesJson: lotes.length > 0 ? JSON.stringify(lotes) : null,
     },
   });
 

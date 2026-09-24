@@ -24,16 +24,68 @@ function wrapText(text: string, font: import("pdf-lib").PDFFont, size: number, m
 }
 
 /**
+ * Desenha uma tabela (cabeçalho + linhas, colunas de largura fixa) a partir da posição
+ * atual do cursor, paginando quando necessário — extraído do que antes só existia
+ * dentro de gerarPdfRelatorio, agora reaproveitado também por gerarPdfTimbrado (anexo
+ * de proposta comercial, que precisa de tabela E bloco de assinatura no mesmo PDF).
+ * Muta `ctx` (pode trocar de página) e devolve o cursorY final.
+ */
+function desenharTabela(
+  ctx: { pdfDoc: PDFDocument; page: import("pdf-lib").PDFPage; cursorY: number },
+  font: import("pdf-lib").PDFFont,
+  fontBold: import("pdf-lib").PDFFont,
+  colunas: { label: string; largura: number }[],
+  linhas: string[][]
+): void {
+  const novaPaginaSeNecessario = (alturaNecessaria: number) => {
+    if (ctx.cursorY < MARGIN + alturaNecessaria) {
+      ctx.page = ctx.pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+      ctx.cursorY = PAGE_HEIGHT - MARGIN;
+    }
+  };
+
+  novaPaginaSeNecessario(30);
+  let x = MARGIN;
+  for (const coluna of colunas) {
+    ctx.page.drawText(coluna.label, { x, y: ctx.cursorY, size: 8.5, font: fontBold, color: rgb(0.3, 0.3, 0.3) });
+    x += coluna.largura;
+  }
+  ctx.cursorY -= 12;
+  ctx.page.drawLine({
+    start: { x: MARGIN, y: ctx.cursorY + 4 },
+    end: { x: PAGE_WIDTH - MARGIN, y: ctx.cursorY + 4 },
+    thickness: 0.5,
+    color: rgb(0.85, 0.85, 0.85),
+  });
+  ctx.cursorY -= 4;
+
+  for (const linha of linhas) {
+    novaPaginaSeNecessario(18);
+    let xCel = MARGIN;
+    linha.forEach((valor, i) => {
+      const largura = colunas[i]?.largura ?? 60;
+      const textoTruncado = truncarParaLargura(valor, font, 8, largura - 4);
+      ctx.page.drawText(textoTruncado, { x: xCel, y: ctx.cursorY, size: 8, font, color: rgb(0.15, 0.15, 0.15) });
+      xCel += largura;
+    });
+    ctx.cursorY -= 13;
+  }
+}
+
+/**
  * Gera um PDF timbrado com logo/cabeçalho da empresa, título e parágrafos de corpo.
+ * `tabela` é opcional (usado pelo anexo de proposta comercial — ver
+ * proposta-comercial.ts) e é desenhada entre os parágrafos e o bloco de assinatura.
  * Retorna os bytes do PDF já prontos para persistir em base64.
  */
 export async function gerarPdfTimbrado(opts: {
   company: Company;
   titulo: string;
   paragrafos: string[];
+  tabela?: { colunas: { label: string; largura: number }[]; linhas: string[][] };
   rodapeExtra?: string;
 }): Promise<Uint8Array> {
-  const { company, titulo, paragrafos, rodapeExtra } = opts;
+  const { company, titulo, paragrafos, tabela, rodapeExtra } = opts;
 
   const pdfDoc = await PDFDocument.create();
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
@@ -121,6 +173,14 @@ export async function gerarPdfTimbrado(opts: {
       cursorY -= lineHeight;
     }
     cursorY -= 10;
+  }
+
+  if (tabela && tabela.linhas.length > 0) {
+    cursorY -= 12;
+    const ctx = { pdfDoc, page, cursorY };
+    desenharTabela(ctx, font, fontBold, tabela.colunas, tabela.linhas);
+    page = ctx.page;
+    cursorY = ctx.cursorY;
   }
 
   cursorY -= 30;
@@ -319,32 +379,10 @@ export async function gerarPdfRelatorio(opts: {
         cursorY -= 16;
       }
     } else {
-      novaPaginaSeNecessario(30);
-      let x = MARGIN;
-      for (const coluna of secao.colunas) {
-        page.drawText(coluna.label, { x, y: cursorY, size: 8.5, font: fontBold, color: rgb(0.3, 0.3, 0.3) });
-        x += coluna.largura;
-      }
-      cursorY -= 12;
-      page.drawLine({
-        start: { x: MARGIN, y: cursorY + 4 },
-        end: { x: PAGE_WIDTH - MARGIN, y: cursorY + 4 },
-        thickness: 0.5,
-        color: rgb(0.85, 0.85, 0.85),
-      });
-      cursorY -= 4;
-
-      for (const linha of secao.linhas) {
-        novaPaginaSeNecessario(18);
-        let xCel = MARGIN;
-        linha.forEach((valor, i) => {
-          const largura = secao.colunas[i]?.largura ?? 60;
-          const textoTruncado = truncarParaLargura(valor, font, 8, largura - 4);
-          page.drawText(textoTruncado, { x: xCel, y: cursorY, size: 8, font, color: rgb(0.15, 0.15, 0.15) });
-          xCel += largura;
-        });
-        cursorY -= 13;
-      }
+      const ctx = { pdfDoc, page, cursorY };
+      desenharTabela(ctx, font, fontBold, secao.colunas, secao.linhas);
+      page = ctx.page;
+      cursorY = ctx.cursorY;
     }
     cursorY -= 12;
   }

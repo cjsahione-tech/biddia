@@ -36,7 +36,7 @@ export type EditalListItem = {
   linkPortal: string;
   analysis: { resumoObjeto: string } | null;
   proposal: { valorGlobalReferencia: number } | null;
-  documents: { id: string; nome: string; categoria: "EDITAL" | "TERMO_REFERENCIA" | "ANEXO_PRECOS" | null }[];
+  documents: { id: string; nome: string; categoria: "EDITAL" | "TERMO_REFERENCIA" | "ANEXO_PRECOS" | "PROPOSTA_COMERCIAL" | null }[];
   _count: { documents: number; checklistItems: number };
   visualizado: boolean;
   visualizadoEm: string | null;
@@ -80,7 +80,7 @@ export type DocumentItem = {
   id: string;
   nome: string;
   tipo: "ANEXO_GERADO" | "DOCUMENTO_USUARIO" | "DOCUMENTO_PNCP" | "DOCUMENTO_LICITANET";
-  categoria: "EDITAL" | "TERMO_REFERENCIA" | "ANEXO_PRECOS" | null;
+  categoria: "EDITAL" | "TERMO_REFERENCIA" | "ANEXO_PRECOS" | "PROPOSTA_COMERCIAL" | null;
   status: "PENDENTE" | "GERADO" | "ENVIADO" | "VENCIDO" | "DISPONIVEL";
   validade: string | null;
   createdAt: string;
@@ -202,6 +202,9 @@ export type EditalDetail = Omit<EditalListItem, "analysis" | "proposal" | "docum
     observacoes: string | null;
     descontoPercentual: number;
     baseadoEmTextoCompleto: boolean;
+    lotesJson: string | null;
+    colunasExtrasJson: string | null;
+    lotesSelecionadosJson: string | null;
   } | null;
   documents: DocumentItem[];
   checklistItems: ChecklistItem[];
