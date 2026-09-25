@@ -2,10 +2,12 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { Search, Loader2, RefreshCw, Upload } from "lucide-react";
+import { Search, Loader2, RefreshCw, Upload, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { KanbanBoard } from "@/components/dashboard/KanbanBoard";
 import type { EditalListItem } from "@/lib/types";
+
+type StatusLimite = { atual: number; limite: number | null; excedido: boolean };
 
 // O arquivo sobe direto pro Supabase Storage via URL assinada (nunca passa pelo corpo
 // da nossa função serverless, que tem um teto físico de ~4,5MB na Vercel) — o teto real
@@ -23,6 +25,7 @@ export function DashboardClient() {
   const [perfil, setPerfil] = useState({ atendeServico: true, atendeBem: true });
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [limite, setLimite] = useState<{ editaisAtivos: StatusLimite; analisesNoMes: StatusLimite } | null>(null);
 
   const load = useCallback(async () => {
     const [editaisRes, companyRes] = await Promise.all([fetch("/api/editais"), fetch("/api/company")]);
@@ -36,6 +39,11 @@ export function DashboardClient() {
       });
     }
     setLoading(false);
+    // Nunca bloqueia — só informa, sem travar o carregamento do quadro se falhar.
+    fetch("/api/plano/limite")
+      .then((r) => r.json())
+      .then((d) => d.editaisAtivos && setLimite(d))
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -155,6 +163,19 @@ export function DashboardClient() {
         resto — leitura, análise, proposta, anexos e checklist, automaticamente. Editais buscados pelo Agente
         Comercial entram em &ldquo;Oportunidade&rdquo;; arraste para fora de lá quando decidir participar.
       </p>
+
+      {(limite?.editaisAtivos.excedido || limite?.analisesNoMes.excedido) && (
+        <p className="mt-4 flex items-start gap-2 rounded-lg border border-warning/30 bg-warning/5 px-4 py-2.5 text-sm text-warning">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>
+            {limite.editaisAtivos.excedido &&
+              `Você tem ${limite.editaisAtivos.atual} editais ativos, acima do limite de ${limite.editaisAtivos.limite} do seu plano. `}
+            {limite.analisesNoMes.excedido &&
+              `Já rodaram ${limite.analisesNoMes.atual} análises este mês, acima do limite de ${limite.analisesNoMes.limite} do seu plano. `}
+            Nada foi bloqueado — considere um upgrade de plano pra continuar dentro do previsto.
+          </span>
+        </p>
+      )}
 
       {searchMsg && (
         <p className="mt-4 rounded-lg border border-border bg-surface px-4 py-2.5 text-sm text-foreground">

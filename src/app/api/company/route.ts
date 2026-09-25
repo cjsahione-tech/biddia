@@ -5,7 +5,9 @@ import { requireUser } from "@/lib/api-utils";
 import { nomeSegmentoLicitaNet } from "@/lib/licitanet-segmentos";
 import { normalizarWhatsapp } from "@/lib/whatsapp";
 
-const companySchema = z.object({
+// Exportado pra ser reaproveitado por /api/analista/carteira (o Analista cadastra uma
+// empresa-cliente com os mesmos dados do cadastro normal de empresa).
+export const companySchema = z.object({
   objetoSocial: z.string().min(5, "Descreva o objeto da empresa"),
   atendeServico: z.boolean().optional(),
   atendeBem: z.boolean().optional(),

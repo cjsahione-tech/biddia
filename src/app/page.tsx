@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import { formatBRL } from "@/lib/format";
 import { AgentPreviewCard } from "@/components/landing/AgentPreviewCard";
 import {
   Search,
@@ -12,8 +14,24 @@ import {
   ArrowRight,
   Wrench,
   Package,
+  Check,
   type LucideIcon,
 } from "lucide-react";
+
+// Valores padrão usados enquanto o admin não salvou nada em /admin/site (SiteContent
+// vazio na primeira execução) — nunca deixa a home pública sem texto.
+const CONTEUDO_PADRAO = {
+  heroTitulo: "Sua equipe autônoma para participar de licitações públicas",
+  heroSubtitulo:
+    "A Bidd.IA busca editais por você, analisa cada um, monta a proposta financeira, prepara os anexos jurídicos e mantém a documentação em dia — do jeito certo, todos os dias.",
+  heroImagemUrl: null as string | null,
+  agentesSecaoTitulo: "Uma esteira completa, do edital à proposta pronta",
+  agentesSecaoDescricao:
+    "Cada agente tem uma função clara e passa o trabalho adiante — com um auditor sênior conferindo tudo no final.",
+  estudoSecaoTitulo: "Estudo de Viabilidade: saiba antes de participar",
+  estudoSecaoDescricao:
+    "Antes de investir tempo numa licitação, simule se ela vale a pena — com uma metodologia própria para cada tipo de objeto, sempre auditável e nunca com alíquotas ou custos fixos no código.",
+};
 
 const AGENTES: { icon: LucideIcon; nome: string; descricao: string; imagens: [string, string] }[] = [
   {
@@ -84,6 +102,16 @@ export default async function LandingPage() {
     redirect(user.company ? "/dashboard" : "/onboarding");
   }
 
+  const [siteContent, planos] = await Promise.all([
+    prisma.siteContent.findFirst({ orderBy: { updatedAt: "desc" } }),
+    prisma.plan.findMany({
+      where: { ativo: true, publicoAlvo: "EMPRESA" },
+      orderBy: { ordemExibicao: "asc" },
+      include: { features: { include: { feature: true } } },
+    }),
+  ]);
+  const conteudo = { ...CONTEUDO_PADRAO, ...siteContent };
+
   return (
     <div className="flex-1">
       <header className="border-b border-border">
@@ -113,12 +141,17 @@ export default async function LandingPage() {
           6 agentes de IA trabalhando em conjunto
         </span>
         <h1 className="mx-auto mt-6 max-w-3xl text-4xl font-semibold tracking-tight text-foreground sm:text-5xl">
-          Sua equipe autônoma para participar de licitações públicas
+          {conteudo.heroTitulo}
         </h1>
-        <p className="mx-auto mt-5 max-w-2xl text-lg text-muted">
-          A Bidd.IA busca editais por você, analisa cada um, monta a proposta financeira,
-          prepara os anexos jurídicos e mantém a documentação em dia — do jeito certo, todos os dias.
-        </p>
+        <p className="mx-auto mt-5 max-w-2xl text-lg text-muted">{conteudo.heroSubtitulo}</p>
+        {conteudo.heroImagemUrl && (
+          // eslint-disable-next-line @next/next/no-img-element -- URL assinada externa de duração longa (ver storage.ts), sem otimização de imagem necessária aqui
+          <img
+            src={conteudo.heroImagemUrl}
+            alt=""
+            className="mx-auto mt-10 max-h-[420px] w-full max-w-4xl rounded-xl border border-border object-cover shadow-sm"
+          />
+        )}
         <div className="mt-8 flex items-center justify-center gap-3">
           <Link
             href="/registro"
@@ -137,13 +170,8 @@ export default async function LandingPage() {
 
       <section className="border-t border-border bg-surface/60">
         <div className="mx-auto max-w-6xl px-6 py-20">
-          <h2 className="text-center text-2xl font-semibold text-foreground">
-            Uma esteira completa, do edital à proposta pronta
-          </h2>
-          <p className="mx-auto mt-3 max-w-xl text-center text-sm text-muted">
-            Cada agente tem uma função clara e passa o trabalho adiante — com um auditor sênior
-            conferindo tudo no final.
-          </p>
+          <h2 className="text-center text-2xl font-semibold text-foreground">{conteudo.agentesSecaoTitulo}</h2>
+          <p className="mx-auto mt-3 max-w-xl text-center text-sm text-muted">{conteudo.agentesSecaoDescricao}</p>
 
           <div className="mt-12 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {AGENTES.map((agente, i) => (
@@ -162,13 +190,8 @@ export default async function LandingPage() {
 
       <section className="border-t border-border">
         <div className="mx-auto max-w-6xl px-6 py-20">
-          <h2 className="text-center text-2xl font-semibold text-foreground">
-            Estudo de Viabilidade: saiba antes de participar
-          </h2>
-          <p className="mx-auto mt-3 max-w-2xl text-center text-sm text-muted">
-            Antes de investir tempo numa licitação, simule se ela vale a pena — com uma metodologia própria para cada
-            tipo de objeto, sempre auditável e nunca com alíquotas ou custos fixos no código.
-          </p>
+          <h2 className="text-center text-2xl font-semibold text-foreground">{conteudo.estudoSecaoTitulo}</h2>
+          <p className="mx-auto mt-3 max-w-2xl text-center text-sm text-muted">{conteudo.estudoSecaoDescricao}</p>
 
           <div className="mt-12 grid grid-cols-1 gap-5 sm:grid-cols-2">
             {ESTUDOS_VIABILIDADE.map((estudo) => (
@@ -184,6 +207,51 @@ export default async function LandingPage() {
           </div>
         </div>
       </section>
+
+      {planos.length > 0 && (
+        <section className="border-t border-border bg-surface/60">
+          <div className="mx-auto max-w-6xl px-6 py-20">
+            <h2 className="text-center text-2xl font-semibold text-foreground">Planos</h2>
+            <p className="mx-auto mt-3 max-w-xl text-center text-sm text-muted">
+              Escolha o plano que combina com o ritmo de licitações da sua empresa.
+            </p>
+
+            <div className="mt-12 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {planos.map((plano) => (
+                <div key={plano.id} className="flex flex-col rounded-xl border border-border bg-background p-6">
+                  <p className="text-sm font-semibold text-foreground">{plano.nome}</p>
+                  <p className="mt-2 text-3xl font-semibold text-foreground">
+                    {formatBRL(plano.precoMensal)}
+                    <span className="text-sm font-normal text-muted">/mês</span>
+                  </p>
+                  <ul className="mt-5 space-y-2 text-sm text-foreground">
+                    <li className="flex items-center gap-2">
+                      <Check className="h-4 w-4 shrink-0 text-brand" />
+                      {plano.maxEditaisAtivos != null ? `${plano.maxEditaisAtivos} editais ativos` : "Editais ativos ilimitados"}
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <Check className="h-4 w-4 shrink-0 text-brand" />
+                      {plano.maxAnalisesPorMes != null ? `${plano.maxAnalisesPorMes} análises/mês` : "Análises ilimitadas"}
+                    </li>
+                    {plano.features.map((pf) => (
+                      <li key={pf.feature.id} className="flex items-center gap-2">
+                        <Check className="h-4 w-4 shrink-0 text-brand" />
+                        {pf.feature.label}
+                      </li>
+                    ))}
+                  </ul>
+                  <Link
+                    href="/registro"
+                    className="mt-6 rounded-lg bg-brand px-4 py-2.5 text-center text-sm font-medium text-white shadow-sm hover:bg-brand/90"
+                  >
+                    Começar
+                  </Link>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       <footer className="border-t border-border">
         <div className="mx-auto max-w-6xl px-6 py-8 text-center text-xs text-muted">

@@ -16,6 +16,8 @@ import {
   linkBoletimSegmento,
   type LicitaNetPublication,
 } from "@/lib/agents/licitanet";
+import { buscarLicitacoesComprasGov, resolverUasg, linkComprasGov, type ComprasGovLicitacao } from "@/lib/agents/comprasgov";
+import { verificarAcessoPlano } from "@/lib/plano";
 import { classificarTipoObjeto, empresaAtende, type TipoObjeto } from "@/lib/agents/classificador-objeto";
 import { classificarEditaisEmLote } from "@/lib/agents/relevancia";
 import { askJSON, MODELO_HAIKU } from "@/lib/anthropic";
@@ -81,10 +83,25 @@ export async function baixarDocumentosPendentes(editalIds: string[]) {
 
 type CandidatoPncp = { fonte: "PNCP"; numeroControle: string; titulo: string; descricao: string; item: PncpSearchItem; keyword: string };
 type CandidatoLicitaNet = { fonte: "LICITANET"; numeroControle: string; titulo: string; descricao: string; item: LicitaNetPublication };
-type Candidato = CandidatoPncp | CandidatoLicitaNet;
+type CandidatoComprasGov = {
+  fonte: "COMPRASGOV";
+  numeroControle: string;
+  titulo: string;
+  descricao: string;
+  item: ComprasGovLicitacao;
+  keyword: string;
+};
+type Candidato = CandidatoPncp | CandidatoLicitaNet | CandidatoComprasGov;
 
 function tituloLicitaNet(item: LicitaNetPublication): string {
   return `${item.disputeModeText ?? "Licitação"} nº ${item.biddingProcess}`;
+}
+
+function normalizarBusca(s: string): string {
+  return s
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase();
 }
 
 /**
@@ -156,6 +173,39 @@ export async function executarAgente1(companyId: string) {
     } catch (err) {
       console.error(`Agente Comercial: falha ao buscar no LicitaNet (segmento ${company.licitanetSegmentoId}):`, err);
       falhaLicitaNet = err instanceof Error ? err.message : "erro desconhecido";
+    }
+  }
+
+  // 1c. Compras.gov.br (módulo legado, Lei 8.666/1993) — feature paga, só roda se o plano
+  // da empresa liberar (ver verificarAcessoPlano). Esta API não tem busca por palavra-chave
+  // livre como o PNCP, então o filtro por relevância de keyword acontece aqui mesmo,
+  // comparando contra o objeto; só aproveita quem ainda está com proposta em aberto (sem
+  // campo de "encerramento" nesta fonte, ver comprasgov.ts).
+  let falhaComprasGov: string | null = null;
+  if (company.keywords.length > 0 && (await verificarAcessoPlano(company.id, "CAPTACAO_COMPRASGOV"))) {
+    try {
+      const licitacoes = await buscarLicitacoesComprasGov();
+      const termos = company.keywords.map((k) => ({ termo: k.term, normalizado: normalizarBusca(k.term) }));
+      for (const item of licitacoes) {
+        if (item.data_abertura_proposta && new Date(item.data_abertura_proposta) < new Date()) continue;
+        const objetoNormalizado = normalizarBusca(item.objeto);
+        const match = termos.find((t) => objetoNormalizado.includes(t.normalizado));
+        if (!match) continue;
+        const numeroControle = `COMPRASGOV-${item.id_compra}`;
+        if (vistos.has(numeroControle)) continue;
+        vistos.add(numeroControle);
+        candidatos.push({
+          fonte: "COMPRASGOV",
+          numeroControle,
+          titulo: item.objeto.slice(0, 200),
+          descricao: item.objeto,
+          item,
+          keyword: match.termo,
+        });
+      }
+    } catch (err) {
+      console.error("Agente Comercial: falha ao buscar no Compras.gov.br:", err);
+      falhaComprasGov = err instanceof Error ? err.message : "erro desconhecido";
     }
   }
 
@@ -258,6 +308,7 @@ export async function executarAgente1(companyId: string) {
   const criadosIds: string[] = [];
   let criadosPncp = 0;
   let criadosLicitaNet = 0;
+  let criadosComprasGov = 0;
   await mapComLimite(aprovados, 8, async (c) => {
     const cl = classificacoes.get(c.numeroControle);
     const tipoObjeto = cl?.tipoObjeto ?? classificarTipoObjeto(c.titulo, c.descricao);
@@ -314,7 +365,7 @@ export async function executarAgente1(companyId: string) {
         keywordMatched: c.keyword,
         ordemKanban: Date.now(),
       };
-    } else {
+    } else if (c.fonte === "LICITANET") {
       const item = c.item;
       documentosParaCriar = [
         ...item.notices.map((n) => ({ nome: n.name, origemUrl: n.link, categoria: "EDITAL" as const })),
@@ -345,6 +396,39 @@ export async function executarAgente1(companyId: string) {
         keywordMatched: company.licitanetSegmentoNome,
         ordemKanban: Date.now(),
       };
+    } else {
+      // COMPRASGOV: esta API não tem endpoint de documento/anexo nenhum (ver
+      // comprasgov.ts) — sem Document pra criar, os agentes rodam em modo "sem texto
+      // completo" até o usuário anexar o edital manualmente, mesmo fallback já existente.
+      const item = c.item;
+      const uasg = await resolverUasg(item.uasg).catch(() => null);
+      documentosParaCriar = [];
+
+      dadosCriacao = {
+        companyId: company.id,
+        fonte: "COMPRASGOV",
+        numeroControlePNCP: c.numeroControle,
+        titulo: c.titulo,
+        descricao: c.descricao || "(sem descrição disponível)",
+        tipoObjeto,
+        orgaoNome: uasg?.nome ?? `UASG ${item.uasg}`,
+        orgaoCnpj: uasg?.cnpj ?? "",
+        municipio: uasg?.municipio,
+        uf: uasg?.uf,
+        modalidade: item.nome_modalidade,
+        situacao: item.situacao_aviso,
+        dataPublicacao: item.data_publicacao ? new Date(item.data_publicacao) : null,
+        dataAberturaProposta: item.data_abertura_proposta ? new Date(item.data_abertura_proposta) : null,
+        // Esta fonte não distingue "abertura" de "encerramento" da proposta — nunca
+        // inventa um valor pra esse campo, fica nulo (mesmo tratamento que a UI já dá
+        // pra qualquer edital sem data de encerramento informada).
+        dataEncerramentoProposta: null,
+        valorGlobal: item.valor_estimado_total,
+        orcamentoSigiloso: false,
+        linkPortal: linkComprasGov(item),
+        keywordMatched: c.keyword,
+        ordemKanban: Date.now(),
+      };
     }
 
     const edital = await prisma.edital
@@ -358,7 +442,8 @@ export async function executarAgente1(companyId: string) {
     if (!edital) return;
     criadosIds.push(edital.id);
     if (c.fonte === "PNCP") criadosPncp++;
-    else criadosLicitaNet++;
+    else if (c.fonte === "LICITANET") criadosLicitaNet++;
+    else criadosComprasGov++;
 
     for (const doc of documentosParaCriar) {
       await prisma.document.create({
@@ -381,12 +466,13 @@ export async function executarAgente1(companyId: string) {
   // .../documents/[docId]/download). A maioria dos editais captados nunca chega a ser
   // aberta, então não faz sentido baixar tudo aqui.
 
+  const fontesUsadas = [
+    company.keywords.length > 0 ? `${criadosPncp} do PNCP` : null,
+    company.licitanetSegmentoId ? `${criadosLicitaNet} do LicitaNet` : null,
+    criadosComprasGov > 0 ? `${criadosComprasGov} do Compras.gov.br` : null,
+  ].filter((s): s is string => s !== null);
   const partes = [`${criadosIds.length} novo(s) edital(is) captado(s)`];
-  if (company.keywords.length > 0 && company.licitanetSegmentoId) {
-    partes[0] += ` (${criadosPncp} do PNCP, ${criadosLicitaNet} do LicitaNet).`;
-  } else {
-    partes[0] += ".";
-  }
+  partes[0] += fontesUsadas.length > 1 ? ` (${fontesUsadas.join(", ")}).` : ".";
   const descartados = descartadosPerfil + descartadosRelevancia;
   if (descartados > 0) {
     partes.push(
@@ -395,6 +481,7 @@ export async function executarAgente1(companyId: string) {
   }
   if (falhasPncp > 0) partes.push(`${falhasPncp} palavra-chave indisponível no PNCP no momento.`);
   if (falhaLicitaNet) partes.push(`LicitaNet indisponível no momento (${falhaLicitaNet}).`);
+  if (falhaComprasGov) partes.push(`Compras.gov.br indisponível no momento (${falhaComprasGov}).`);
   if (retificados > 0) partes.push(`${retificados} edital(is) já capturado(s) foi(ram) retificado(s) pelo órgão — revise antes de prosseguir.`);
 
   return {

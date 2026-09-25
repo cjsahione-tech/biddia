@@ -7,12 +7,25 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// Tipo de conta: EMPRESA é o cadastro de sempre (1 User : 1 Company). ANALISTA é uma conta
+// sem Company própria — monta uma carteira de empresas-cliente (ver AnalistaCliente) e entra
+// no login de cada uma sob demanda (ver POST /api/analista/carteira/[companyId]/entrar).
+enum TipoConta {
+  EMPRESA
+  ANALISTA
+}
+
+enum TipoDocumentoAnalista {
+  CPF
+  CNPJ
+}
+
 model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
+  id           String    @id @default(cuid())
+  email        String    @unique
   passwordHash String
   name         String
-  createdAt    DateTime @default(now())
+  createdAt    DateTime  @default(now())
   company      Company?
 
   // Redefinição de senha via SMS: código de 6 dígitos hasheado (nunca guardado em texto
@@ -21,6 +34,18 @@ model User {
   resetCodeHash      String?
   resetCodeExpiresAt DateTime?
   resetCodeAttempts  Int       @default(0)
+
+  tipoConta             TipoConta               @default(EMPRESA)
+  // CPF ou CNPJ do próprio Analista (identidade da conta) — só preenchido quando
+  // tipoConta = ANALISTA. Empresa continua se identificando pelo Company.cnpj de sempre.
+  documentoAnalista     String?
+  tipoDocumentoAnalista TipoDocumentoAnalista?
+  carteiraClientes      AnalistaCliente[]       @relation("AnalistaDaCarteira")
+
+  // Plano do próprio Analista (ele não tem Company, então não usa Company.planId) — define
+  // o teto de maxEmpresas aplicado à carteira. Empresa continua usando Company.planId.
+  planId String?
+  plan   Plan?   @relation(fields: [planId], references: [id])
 }
 
 model Company {
@@ -62,6 +87,16 @@ model Company {
   // usado pela busca agendada (novos editais) e pelos alertas de prazo do checklist.
   whatsapp String?
 
+  // Plano assinado (ver Plan) — null enquanto o admin não atribuir um, ou pra empresas
+  // criadas antes deste recurso existir. verificarAcessoPlano() trata null como "sem
+  // nenhuma feature extra liberada", nunca quebra por falta de plano.
+  planId String?
+  plan   Plan?   @relation(fields: [planId], references: [id])
+
+  // Presente só quando esta empresa foi cadastrada por um Analista de Licitação, e é a
+  // fonte de verdade de quem pode "entrar" neste login (ver AnalistaCliente).
+  analistaCliente AnalistaCliente?
+
   editais            Edital[]
   editaisExcluidos   EditalExcluido[]
   estudosViabilidade EstudoViabilidade[]
@@ -90,6 +125,100 @@ model Keyword {
   createdAt DateTime @default(now())
 
   @@unique([companyId, term])
+}
+
+// ── Planos, Admin e Analista de Licitação ───────────────────────────────────
+// Controle de acesso administrativo (ver src/lib/admin.ts) vive só numa env var
+// ADMIN_EMAILS — sem role editável pela interface, nada aqui.
+
+// Vínculo do Analista com cada empresa-cliente da sua carteira — a empresa-cliente é um
+// User+Company normal e independente (login próprio); este registro só autoriza o Analista
+// a "entrar" nele (ver POST /api/analista/carteira/[companyId]/entrar) e guarda a tarifa
+// mensal cobrada desse cliente, consolidada na fatura do próprio Analista (sem cobrança real
+// integrada nesta entrega — é só o dado).
+model AnalistaCliente {
+  id           String   @id @default(cuid())
+  analistaId   String
+  analista     User     @relation("AnalistaDaCarteira", fields: [analistaId], references: [id], onDelete: Cascade)
+  companyId    String   @unique
+  company      Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  tarifaMensal Float
+  createdAt    DateTime @default(now())
+}
+
+// Separa a vitrine de preços pública (Empresa x Analista são produtos diferentes) e evita
+// o admin atribuir por engano um plano de um público a uma conta do outro.
+enum PublicoAlvoPlano {
+  EMPRESA
+  ANALISTA
+}
+
+model Plan {
+  id          String           @id @default(cuid())
+  nome        String
+  slug        String           @unique
+  publicoAlvo PublicoAlvoPlano @default(EMPRESA)
+
+  precoMensal Float
+  precoAnual  Float?
+
+  // null = ilimitado. maxEmpresas/maxUsuarios ficam como metadado reservado quando o plano
+  // é de uma Company (não há multiempresa real pra Empresa nesta entrega); quando o plano é
+  // de um Analista, maxEmpresas É o teto aplicado da carteira (ver verificarAcessoPlano).
+  maxEditaisAtivos  Int?
+  maxAnalisesPorMes Int?
+  maxEmpresas       Int?
+  maxUsuarios       Int?
+
+  ativo         Boolean @default(true)
+  ordemExibicao Int
+
+  features  PlanFeature[]
+  companies Company[]
+  analistas User[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Catálogo granular de funcionalidades reais do produto (uma entrada por função de cada
+// agente/aba) — não um enum fixo, pra o admin poder montar/limitar cada plano função a
+// função (ver /admin/planos). A maior parte fica só configurável aqui nesta entrega, sem
+// checagem em runtime ainda (ver comentário em src/lib/plano.ts sobre o que já é aplicado).
+model Feature {
+  id            String @id @default(cuid())
+  chave         String @unique
+  label         String
+  categoria     String
+  descricao     String?
+  ordemExibicao Int
+
+  planFeatures PlanFeature[]
+}
+
+model PlanFeature {
+  id        String  @id @default(cuid())
+  planId    String
+  plan      Plan    @relation(fields: [planId], references: [id], onDelete: Cascade)
+  featureId String
+  feature   Feature @relation(fields: [featureId], references: [id], onDelete: Cascade)
+
+  @@unique([planId, featureId])
+}
+
+// Conteúdo editável da home comercial pública (src/app/page.tsx) sem precisar de deploy —
+// singleton (sempre a linha mais recente); página pública cai pro texto hardcoded atual se
+// a tabela estiver vazia. Só as seções que já existem hoje, sem sistema de blocos genérico.
+model SiteContent {
+  id                    String   @id @default(cuid())
+  heroTitulo            String
+  heroSubtitulo         String
+  heroImagemUrl         String?
+  agentesSecaoTitulo    String
+  agentesSecaoDescricao String
+  estudoSecaoTitulo     String
+  estudoSecaoDescricao  String
+  updatedAt             DateTime @updatedAt
 }
 
 enum EditalStatus {

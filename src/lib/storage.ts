@@ -50,6 +50,24 @@ export function caminhoDocumentoEdital(companyId: string, editalId: string, docI
   return `${companyId}/${editalId}/documentos/${docId}/${Date.now()}-${sanitizarNomeArquivo(nomeArquivo)}`;
 }
 
+/** Caminho pra assets da home comercial pública (ver SiteContent/admin/site) — mesmo
+ * bucket dos demais documentos, segmento fixo "site" em vez de escopo por empresa. */
+export function caminhoSiteAsset(nomeArquivo: string): string {
+  return `site/${Date.now()}-${sanitizarNomeArquivo(nomeArquivo)}`;
+}
+
+/** URL assinada de duração longa (10 anos) — usada só pra assets da home pública: como a
+ * home é servida pra visitantes anônimos, não dá pra reassinar a cada carregamento de
+ * página como o resto do app faz (criarUrlDownload, 5min). Assinada UMA vez no momento do
+ * upload (ver PATCH /api/admin/site) e o resultado é guardado direto em SiteContent. */
+export async function criarUrlPublicaDeLongaDuracao(path: string) {
+  const { data, error } = await getClient()
+    .storage.from(BUCKET)
+    .createSignedUrl(path, 60 * 60 * 24 * 365 * 10);
+  if (error) throw error;
+  return data.signedUrl;
+}
+
 /** Gera uma URL assinada de upload — o navegador faz PUT direto nela, o arquivo nunca
  * passa pelo corpo da nossa função serverless. Token válido por tempo curto. */
 export async function criarUrlUpload(path: string) {
