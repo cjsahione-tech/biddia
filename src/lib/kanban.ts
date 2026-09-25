@@ -50,6 +50,53 @@ export function faixaCorCard(cor: CorCard | null): string {
   return CORES_CARD.find((c) => c.key === cor)?.faixa ?? "border-l-transparent";
 }
 
+// Agrupamento da coluna "Oportunidade" por modalidade (ver KanbanBoard.tsx) — ordem fixa
+// pedida pelo usuário, com "Outras modalidades" sempre por último pra nenhum card sumir
+// por não bater com nenhum grupo.
+export const GRUPOS_MODALIDADE = [
+  "Concorrência - Eletrônica",
+  "Concorrência - Presencial",
+  "Credenciamento",
+  "Dispensa",
+  "Inexigibilidade",
+  "Leilão - Eletrônico",
+  "Leilão - Presencial",
+  "Pré-qualificação",
+  "Pregão - Eletrônico",
+  "Pregão - Presencial",
+] as const;
+
+export const GRUPO_OUTRAS_MODALIDADES = "Outras modalidades";
+
+// A modalidade vem como texto livre do PNCP/LicitaNet/extração de PDF (ex: "Pregão
+// Eletrônico", "Concorrência - Eletrônica", "Dispensa de Licitação") — nunca bate 100%
+// com a grafia fixa dos grupos acima, então classifica por palavra-chave normalizada
+// (sem acento/maiúscula/hífen) em vez de comparação direta de string.
+function normalizarTexto(s: string): string {
+  return s
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+export function classificarModalidade(modalidadeBruta: string | null): string {
+  if (!modalidadeBruta) return GRUPO_OUTRAS_MODALIDADES;
+  const m = normalizarTexto(modalidadeBruta);
+  const presencial = m.includes("presencial");
+
+  if (m.includes("concorrencia")) return presencial ? "Concorrência - Presencial" : "Concorrência - Eletrônica";
+  if (m.includes("credenciamento")) return "Credenciamento";
+  if (m.includes("dispensa")) return "Dispensa";
+  if (m.includes("inexigibilidade")) return "Inexigibilidade";
+  if (m.includes("leilao")) return presencial ? "Leilão - Presencial" : "Leilão - Eletrônico";
+  if (m.includes("pre qualificacao")) return "Pré-qualificação";
+  if (m.includes("pregao")) return presencial ? "Pregão - Presencial" : "Pregão - Eletrônico";
+
+  return GRUPO_OUTRAS_MODALIDADES;
+}
+
 // Mesma paleta da tarja lateral do card, só que como preenchimento sólido — usada na
 // faixa horizontal fina no topo do modal de detalhes do card.
 export function topoCorCard(cor: CorCard | null): string {

@@ -27,9 +27,10 @@ export async function GET(req: Request) {
       companyId: company!.id,
       ...(status ? { status: status as "NOVO" | "APROVADO" | "REPROVADO" } : {}),
     },
-    // Ordem de arraste dentro da coluna do quadro Kanban (ver ordemKanban) — é o que o
-    // usuário controla manualmente arrastando os cards.
-    orderBy: { ordemKanban: "asc" },
+    // Ordem padrão fixa do quadro: data-limite de proposta mais próxima primeiro, em
+    // todas as colunas — não é mais o usuário quem controla a ordem arrastando (ver
+    // KanbanBoard.tsx). Sem data informada vai pro final, não pro topo.
+    orderBy: { dataEncerramentoProposta: { sort: "asc", nulls: "last" } },
     include: {
       analysis: true,
       proposal: true,

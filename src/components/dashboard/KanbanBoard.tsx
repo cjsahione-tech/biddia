@@ -4,7 +4,7 @@ import { useState } from "react";
 import { AlertTriangle, CheckSquare, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { empresaAtende } from "@/lib/agents/classificador-objeto";
-import { ETAPAS_KANBAN } from "@/lib/kanban";
+import { ETAPAS_KANBAN, classificarModalidade, GRUPOS_MODALIDADE, GRUPO_OUTRAS_MODALIDADES } from "@/lib/kanban";
 import { labelPortal } from "@/lib/fonte-edital";
 import type { EditalListItem, EtapaKanban } from "@/lib/types";
 import { KanbanCard } from "@/components/dashboard/KanbanCard";
@@ -61,12 +61,29 @@ export function KanbanBoard({
     setDragOverColumn(null);
   }
 
+  // Ordem já vem certa do backend (data-limite mais próxima primeiro, ver GET
+  // /api/editais) — só filtra aqui, sem reordenar de novo no client, pra ter uma única
+  // fonte de verdade pra ordem.
   function cardsDaColuna(etapa: EtapaKanban, excluirId?: string) {
     return editais
       .filter((e) => e.etapaKanban === etapa && e.id !== excluirId)
       .filter((e) => !filtroUf || e.uf === filtroUf)
-      .filter((e) => !filtroFonte || e.fonte === filtroFonte)
-      .sort((a, b) => a.ordemKanban - b.ordemKanban);
+      .filter((e) => !filtroFonte || e.fonte === filtroFonte);
+  }
+
+  // Coluna "Oportunidade": agrupa por modalidade na ordem fixa pedida, mantendo a ordem
+  // por data (já vinda do backend) dentro de cada grupo. "Outras modalidades" sempre por
+  // último, pra nenhum card sumir por não bater com nenhum grupo conhecido.
+  function agruparPorModalidade(cards: EditalListItem[]) {
+    const porGrupo = new Map<string, EditalListItem[]>();
+    for (const edital of cards) {
+      const grupo = classificarModalidade(edital.modalidade);
+      if (!porGrupo.has(grupo)) porGrupo.set(grupo, []);
+      porGrupo.get(grupo)!.push(edital);
+    }
+    return [...GRUPOS_MODALIDADE, GRUPO_OUTRAS_MODALIDADES]
+      .filter((grupo) => porGrupo.has(grupo))
+      .map((grupo) => ({ grupo, cards: porGrupo.get(grupo)! }));
   }
 
   async function moverCard(id: string, etapaDestino: EtapaKanban, insertBeforeId: string | null) {
@@ -187,6 +204,25 @@ export function KanbanBoard({
     } finally {
       setExcluindoLote(false);
     }
+  }
+
+  function renderCard(edital: EditalListItem) {
+    const foraDoPerfil = edital.tipoObjeto ? !empresaAtende(edital.tipoObjeto, perfil) : false;
+    return (
+      <KanbanCard
+        key={edital.id}
+        edital={edital}
+        foraDoPerfil={foraDoPerfil}
+        dragOverPos={dragOverId === edital.id ? dragOverPos : null}
+        modoSelecao={modoSelecao}
+        selecionado={selecionados.has(edital.id)}
+        onClick={() => (modoSelecao ? alternarSelecionado(edital.id) : setSelectedId(edital.id))}
+        onDragStart={() => handleDragStart(edital.id)}
+        onDragEnd={limparDrag}
+        onDragOverCard={(e) => handleDragOverCard(e, edital)}
+        onDropCard={(e) => handleDropOnCard(e, edital)}
+      />
+    );
   }
 
   return (
@@ -314,24 +350,17 @@ export function KanbanBoard({
               </div>
 
               <div className="flex min-h-[60px] flex-1 flex-col gap-2 overflow-y-auto px-2 pb-2" style={{ maxHeight: "calc(100vh - 320px)" }}>
-                {cards.map((edital) => {
-                  const foraDoPerfil = edital.tipoObjeto ? !empresaAtende(edital.tipoObjeto, perfil) : false;
-                  return (
-                    <KanbanCard
-                      key={edital.id}
-                      edital={edital}
-                      foraDoPerfil={foraDoPerfil}
-                      dragOverPos={dragOverId === edital.id ? dragOverPos : null}
-                      modoSelecao={modoSelecao}
-                      selecionado={selecionados.has(edital.id)}
-                      onClick={() => (modoSelecao ? alternarSelecionado(edital.id) : setSelectedId(edital.id))}
-                      onDragStart={() => handleDragStart(edital.id)}
-                      onDragEnd={limparDrag}
-                      onDragOverCard={(e) => handleDragOverCard(e, edital)}
-                      onDropCard={(e) => handleDropOnCard(e, edital)}
-                    />
-                  );
-                })}
+                {key === "OPORTUNIDADE"
+                  ? agruparPorModalidade(cards).map(({ grupo, cards: cardsGrupo }) => (
+                      <div key={grupo} className="flex flex-col gap-2">
+                        <div className="mt-1.5 flex items-center justify-between px-0.5 first:mt-0">
+                          <h4 className="text-[10px] font-semibold uppercase tracking-wide text-muted">{grupo}</h4>
+                          <span className="text-[10px] text-muted">{cardsGrupo.length}</span>
+                        </div>
+                        {cardsGrupo.map((edital) => renderCard(edital))}
+                      </div>
+                    ))
+                  : cards.map((edital) => renderCard(edital))}
                 {cards.length === 0 && (
                   <div className="rounded-lg border border-dashed border-border py-6 text-center text-[11px] text-muted">
                     Arraste um card para cá
