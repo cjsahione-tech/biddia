@@ -24,12 +24,17 @@ export function AppShell({
   companyName,
   isAdmin = false,
   operandoComoAnalista = false,
+  apenasAdmin = false,
 }: {
   children: React.ReactNode;
   userName: string;
   companyName: string;
   isAdmin?: boolean;
   operandoComoAnalista?: boolean;
+  // Conta admin sem empresa própria (ex: e-mail de suporte) — nenhuma das abas comuns
+  // funciona sem empresa, então o menu mostra só Admin + Sair, sem tentar renderizar
+  // Editais/Agenda/etc. que dariam erro de "empresa não cadastrada".
+  apenasAdmin?: boolean;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -85,7 +90,7 @@ export function AppShell({
         </div>
 
         <nav className="flex-1 space-y-1 px-3">
-          {(isAdmin ? [...NAV, NAV_ADMIN] : NAV).map((item) => {
+          {(apenasAdmin ? [NAV_ADMIN] : isAdmin ? [...NAV, NAV_ADMIN] : NAV).map((item) => {
             const active = pathname === item.href || pathname.startsWith(item.href + "/");
             return (
               <Link
