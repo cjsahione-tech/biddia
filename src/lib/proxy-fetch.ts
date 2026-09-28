@@ -1,4 +1,4 @@
-import { ProxyAgent } from "undici";
+import { ProxyAgent, fetch as undiciFetch } from "undici";
 
 // O PNCP bloqueia toda a infraestrutura de saída da Vercel (confirmado: compute regional
 // gru1 E a rede Edge global travam 100% das vezes; qualquer outro host .gov.br funciona
@@ -26,9 +26,15 @@ function obterProxyDispatcher(): ProxyAgent | null {
 
 /** Mesma assinatura do fetch nativo — só acrescenta o dispatcher do proxy quando
  * configurado (ver comentário acima). Usar só onde o destino precisa mesmo do proxy
- * (hoje, só o PNCP); não trocar o fetch global do app inteiro por isso. */
+ * (hoje, só o PNCP); não trocar o fetch global do app inteiro por isso.
+ *
+ * Importante: quando há proxy, usa o fetch do PRÓPRIO pacote `undici` (não o fetch
+ * nativo do Node) — o nativo embute sua própria cópia interna do undici, e passar um
+ * dispatcher de uma versão diferente pro fetch nativo quebra com "invalid
+ * onRequestStart method" (incompatibilidade entre as duas cópias). Usando o fetch do
+ * mesmo pacote que criou o ProxyAgent, as versões sempre batem. */
 export function fetchViaProxy(url: string, init: RequestInit & { signal?: AbortSignal }): Promise<Response> {
   const proxy = obterProxyDispatcher();
   if (!proxy) return fetch(url, init);
-  return fetch(url, { ...init, dispatcher: proxy } as RequestInit);
+  return undiciFetch(url, { ...init, dispatcher: proxy } as Parameters<typeof undiciFetch>[1]) as unknown as Promise<Response>;
 }
