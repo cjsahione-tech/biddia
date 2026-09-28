@@ -42,10 +42,18 @@ export async function GET() {
     }
   }
 
-  const [busca, oficial] = await Promise.all([
+  const [busca, oficial, comprasgov, ibge] = await Promise.all([
     testar("busca (não-oficial, usada hoje)", "https://pncp.gov.br/api/search/?q=laborat%C3%B3rio&tipos_documento=edital&ordenacao=-data&pagina=1&tam_pagina=3&status=recebendo_proposta"),
     testar("api oficial (consulta de processo)", "https://pncp.gov.br/api/pncp/v1/orgaos/46179941000135/compras/2026/429"),
+    testar("compras.gov.br (controle: outro host .gov.br)", "https://dadosabertos.compras.gov.br/modulo-uasg/1_consultarUasg?codigoUasg=925954&statusUasg=true"),
+    testar("ibge (controle: outro host .gov.br)", "https://servicodados.ibge.gov.br/api/v1/localidades/estados/35"),
   ]);
 
-  return NextResponse.json({ busca, oficial });
+  return NextResponse.json({
+    region: process.env.VERCEL_REGION ?? null,
+    busca,
+    oficial,
+    comprasgov,
+    ibge,
+  });
 }
