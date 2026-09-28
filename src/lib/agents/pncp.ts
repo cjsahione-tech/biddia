@@ -1,6 +1,7 @@
 // Cliente para a API pública do PNCP (Portal Nacional de Contratações Públicas).
 // Endpoints reais e não autenticados, confirmados em https://pncp.gov.br/api/search e
 // https://pncp.gov.br/pncp-consulta/v3/api-docs.
+import { fetchViaProxy } from "@/lib/proxy-fetch";
 
 const SEARCH_BASE = "https://pncp.gov.br/api/search/";
 const CONSULTA_BASE = "https://pncp.gov.br/pncp-consulta";
@@ -43,13 +44,14 @@ function sleep(ms: number) {
 /**
  * fetch com timeout: o PNCP às vezes não responde nem com erro nem com sucesso
  * (conexão fica pendurada) — sem isso, uma chamada travada deixaria a requisição
- * inteira do usuário presa indefinidamente.
+ * inteira do usuário presa indefinidamente. Passa por fetchViaProxy porque o PNCP
+ * bloqueia toda a infraestrutura de saída da Vercel (ver comentário em proxy-fetch.ts).
  */
 async function fetchComTimeout(url: string, timeoutMs = 10_000): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    return await fetch(url, { headers: PNCP_HEADERS, cache: "no-store", signal: controller.signal });
+    return await fetchViaProxy(url, { headers: PNCP_HEADERS, cache: "no-store", signal: controller.signal });
   } finally {
     clearTimeout(timer);
   }
