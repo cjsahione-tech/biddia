@@ -7,32 +7,45 @@ export async function GET() {
   const { error } = await requireAdmin();
   if (error) return error;
 
-  const url = "https://pncp.gov.br/api/search/?q=laborat%C3%B3rio&tipos_documento=edital&ordenacao=-data&pagina=1&tam_pagina=3&status=recebendo_proposta";
   const headers = {
     Accept: "application/json",
     "User-Agent":
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
   };
 
-  try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 10_000);
-    const res = await fetch(url, { headers, cache: "no-store", signal: controller.signal });
-    clearTimeout(timer);
-    const bodyText = await res.text();
-    return NextResponse.json({
-      ok: res.ok,
-      status: res.status,
-      statusText: res.statusText,
-      responseHeaders: Object.fromEntries(res.headers.entries()),
-      bodyPreview: bodyText.slice(0, 1000),
-    });
-  } catch (err) {
-    return NextResponse.json({
-      caught: true,
-      name: err instanceof Error ? err.name : typeof err,
-      message: err instanceof Error ? err.message : String(err),
-      cause: err instanceof Error && err.cause ? String(err.cause) : null,
-    });
+  async function testar(nome: string, url: string) {
+    const inicio = Date.now();
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 8_000);
+      const res = await fetch(url, { headers, cache: "no-store", signal: controller.signal });
+      clearTimeout(timer);
+      const bodyText = await res.text();
+      return {
+        nome,
+        url,
+        ms: Date.now() - inicio,
+        ok: res.ok,
+        status: res.status,
+        statusText: res.statusText,
+        bodyPreview: bodyText.slice(0, 300),
+      };
+    } catch (err) {
+      return {
+        nome,
+        url,
+        ms: Date.now() - inicio,
+        caught: true,
+        name: err instanceof Error ? err.name : typeof err,
+        message: err instanceof Error ? err.message : String(err),
+      };
+    }
   }
+
+  const [busca, oficial] = await Promise.all([
+    testar("busca (não-oficial, usada hoje)", "https://pncp.gov.br/api/search/?q=laborat%C3%B3rio&tipos_documento=edital&ordenacao=-data&pagina=1&tam_pagina=3&status=recebendo_proposta"),
+    testar("api oficial (consulta de processo)", "https://pncp.gov.br/api/pncp/v1/orgaos/46179941000135/compras/2026/429"),
+  ]);
+
+  return NextResponse.json({ busca, oficial });
 }
