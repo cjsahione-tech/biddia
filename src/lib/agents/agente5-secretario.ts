@@ -211,31 +211,45 @@ export async function executarAgente5(editalId: string) {
       .filter((nome) => novoNoEdital(nome) && !categoriaPorItem.has(nome));
     const categoriasSemCabecalho = await classificarItensSemCabecalho(itensSemCabecalho);
 
+    // upsert (não create) em ambos os laços abaixo: o Agente Auditor pode disparar uma
+    // nova execução deste agente enquanto uma anterior ainda está terminando (ver
+    // agente6-auditor.ts) — a restrição de unicidade (editalId, documentoNome) faz o
+    // upsert virar um no-op seguro pra quem perder a corrida, em vez de duplicar o item.
     let criados = 0;
     for (const nome of todosItens) {
       if (existentes.has(nome)) continue;
-      await prisma.checklistItem.create({
-        data: {
+      await prisma.checklistItem.upsert({
+        where: { editalId_documentoNome: { editalId, documentoNome: nome } },
+        create: {
           editalId,
           documentoNome: nome,
           obrigatorio: CHECKLIST_BASE.includes(nome),
           status: "FALTANTE",
           categoria: CATEGORIA_BASE[nome] ?? categoriaPorItem.get(nome) ?? categoriasSemCabecalho.get(nome) ?? null,
         },
+        update: {},
       });
       criados++;
     }
 
+    // Só os anexos GERADOS pela própria plataforma (declarações do Advogado, anexo de
+    // proposta comercial do Financeiro) viram item de checklist já como "OK" — os demais
+    // documentos do edital (PDF baixado, termo de referência, anexos do usuário) não são
+    // exigência de habilitação, e listá-los aqui inflaria o checklist com itens que não
+    // são exigência nenhuma, todos marcados como já atendidos.
     for (const doc of edital.documents) {
+      if (doc.tipo !== "ANEXO_GERADO") continue;
       if (!existentes.has(doc.nome)) {
-        await prisma.checklistItem.create({
-          data: {
+        await prisma.checklistItem.upsert({
+          where: { editalId_documentoNome: { editalId, documentoNome: doc.nome } },
+          create: {
             editalId,
             documentoNome: doc.nome,
             obrigatorio: true,
             status: "OK",
-            observacao: "Gerado automaticamente pelo Agente Advogado",
+            observacao: "Anexo gerado automaticamente pela plataforma",
           },
+          update: {},
         });
         criados++;
       }
@@ -265,7 +279,7 @@ export async function executarAgente5(editalId: string) {
 
     await logAudit(
       editalId,
-      "Agente Advogado",
+      "Agente Secretário",
       "Checklist de documentos",
       faltantes > 0 ? "ALERTA" : "OK",
       `${criados} item(ns) novo(s) no checklist. ${preenchidosDoDossie} item(ns) preenchido(s) automaticamente a partir do dossiê da empresa. ${faltantes} documento(s) obrigatório(s) ainda pendente(s) de envio. ${vencidos} vencido(s)${dossieVencidos > 0 ? ` (${dossieVencidos} deles com o documento correspondente vencido no dossiê — atualize lá)` : ""}.`
@@ -322,8 +336,13 @@ Se não houver nenhuma mudança clara a fazer, devolva "operacoes": [] e expliqu
     const alvo = itensAtuais.find((i) => i.documentoNome.toLowerCase() === op.nome.toLowerCase());
     if (op.tipo === "adicionar") {
       if (!alvo) {
-        await prisma.checklistItem.create({
-          data: { editalId, documentoNome: op.nome, obrigatorio: op.obrigatorio ?? true, status: "FALTANTE" },
+        // upsert: o casamento acima é case-insensitive, mas a restrição de unicidade no
+        // banco não é — evita um erro não tratado se o nome vindo da IA bater exatamente
+        // com um item criado entre a leitura de itensAtuais e esta escrita.
+        await prisma.checklistItem.upsert({
+          where: { editalId_documentoNome: { editalId, documentoNome: op.nome } },
+          create: { editalId, documentoNome: op.nome, obrigatorio: op.obrigatorio ?? true, status: "FALTANTE" },
+          update: {},
         });
       }
     } else if (op.tipo === "remover") {
@@ -342,7 +361,7 @@ Se não houver nenhuma mudança clara a fazer, devolva "operacoes": [] e expliqu
 
   await logAudit(
     editalId,
-    "Agente Advogado",
+    "Agente Secretário",
     "Correção via chat",
     "OK",
     `Observação do usuário: "${notaCorrecao}". ${resultado.resposta}`

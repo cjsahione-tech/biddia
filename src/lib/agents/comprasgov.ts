@@ -139,7 +139,11 @@ export async function resolverUasg(codigoUasg: number): Promise<ComprasGovUasg |
     cacheUasg.set(codigoUasg, uasg);
     return uasg;
   } catch {
-    cacheUasg.set(codigoUasg, null);
+    // Só cacheia "não encontrado" quando a API respondeu e realmente não tinha o
+    // registro (ramo acima) — uma falha de rede/timeout aqui é passageira, cachear
+    // como negativo faria toda licitação futura dessa UASG perder nome/CNPJ do órgão
+    // pelo resto de vida da instância serverless, mesmo com o Compras.gov.br já
+    // recuperado.
     return null;
   }
 }

@@ -125,18 +125,22 @@ export async function executarAgente1(companyId: string) {
     };
   }
 
-  // 1a. Busca no PNCP, preservando a ordem de cada busca (última atualização primeiro).
+  // 1a. Busca no PNCP — uma palavra-chave por vez era sequencial (cada uma pode levar
+  // ~10s com retry se o PNCP estiver lento/via proxy), o que sozinho já estourava o teto
+  // de 60s da rota com poucas palavras-chave configuradas. Agora roda em paralelo (com
+  // teto de concorrência), preservando a ordem de cada busca individual (última
+  // atualização primeiro) dentro do que cada palavra-chave devolve.
   let falhasPncp = 0;
   const vistos = new Set<string>();
   const candidatos: Candidato[] = [];
-  for (const kw of company.keywords) {
+  await mapComLimite(company.keywords, 4, async (kw) => {
     let items: PncpSearchItem[];
     try {
       items = await searchEditaisPorPalavraChave(kw.term, MAX_POR_PALAVRA_CHAVE);
     } catch (err) {
       console.error(`Agente Comercial: falha ao buscar "${kw.term}" no PNCP:`, err);
       falhasPncp++;
-      continue;
+      return;
     }
     for (const item of items) {
       if (vistos.has(item.numero_controle_pncp)) continue;
@@ -150,7 +154,7 @@ export async function executarAgente1(companyId: string) {
         keyword: kw.term,
       });
     }
-  }
+  });
 
   // 1b. Busca no LicitaNet pelo segmento cadastrado da empresa — fonte independente do
   // PNCP, então uma falha aqui não impede o restante da busca (e vice-versa).
@@ -219,7 +223,7 @@ export async function executarAgente1(companyId: string) {
         companyId: company.id,
         numeroControlePNCP: { in: candidatos.map((c) => c.numeroControle) },
       },
-      select: { id: true, numeroControlePNCP: true, dataAtualizacaoPncp: true },
+      select: { id: true, numeroControlePNCP: true, dataAtualizacaoPncp: true, orcamentoSigiloso: true },
     }),
     prisma.editalExcluido.findMany({
       where: {
@@ -247,34 +251,46 @@ export async function executarAgente1(companyId: string) {
     candidatos.filter((c): c is CandidatoPncp => c.fonte === "PNCP" && jaExistentes.has(c.numeroControle)),
     8,
     async (c) => {
-      const existente = jaExistentesPorChave.get(c.numeroControle);
-      if (!existente) return;
-      const item = c.item;
-      const novaData = item.data_atualizacao_pncp ? new Date(item.data_atualizacao_pncp) : null;
-      if (!houveRetificacao(existente.dataAtualizacaoPncp, novaData)) return;
+      try {
+        const existente = jaExistentesPorChave.get(c.numeroControle);
+        if (!existente) return;
+        const item = c.item;
+        const novaData = item.data_atualizacao_pncp ? new Date(item.data_atualizacao_pncp) : null;
+        if (!houveRetificacao(existente.dataAtualizacaoPncp, novaData)) return;
 
-      await prisma.edital.update({
-        where: { id: existente.id },
-        data: {
-          titulo: item.title,
-          descricao: item.description || "(sem descrição disponível)",
-          valorGlobal: item.valor_global,
-          dataAtualizacaoPncp: novaData,
-          dataAberturaProposta: item.data_inicio_vigencia ? new Date(item.data_inicio_vigencia) : null,
-          dataEncerramentoProposta: item.data_fim_vigencia ? new Date(item.data_fim_vigencia) : null,
-          visualizado: false,
-          visualizadoEm: null,
-          ultimaMovimentacao: new Date(),
-        },
-      });
-      await logAudit(
-        existente.id,
-        "Agente Comercial",
-        "Retificação detectada",
-        "ALERTA",
-        "O órgão atualizou este edital no PNCP desde a última captura (data/valor/anexo pode ter mudado) — revise antes de prosseguir."
-      );
-      retificados++;
+        await prisma.edital.update({
+          where: { id: existente.id },
+          data: {
+            titulo: item.title,
+            descricao: item.description || "(sem descrição disponível)",
+            // Só atualiza o valor com o que veio de graça na busca quando o edital NÃO
+            // é de orçamento sigiloso — a busca não reconfirma esse indicador (isso só
+            // vem do endpoint de detalhe, que esta atualização evita chamar de
+            // propósito), então nunca preenche um valor pra um edital marcado sigiloso
+            // na captura original.
+            ...(existente.orcamentoSigiloso ? {} : { valorGlobal: item.valor_global }),
+            dataAtualizacaoPncp: novaData,
+            dataAberturaProposta: item.data_inicio_vigencia ? new Date(item.data_inicio_vigencia) : null,
+            dataEncerramentoProposta: item.data_fim_vigencia ? new Date(item.data_fim_vigencia) : null,
+            visualizado: false,
+            visualizadoEm: null,
+            ultimaMovimentacao: new Date(),
+          },
+        });
+        await logAudit(
+          existente.id,
+          "Agente Comercial",
+          "Retificação detectada",
+          "ALERTA",
+          "O órgão atualizou este edital no PNCP desde a última captura (data/valor/anexo pode ter mudado) — revise antes de prosseguir."
+        );
+        retificados++;
+      } catch (err) {
+        // Isolado por candidato — igual à criação de editais mais abaixo. Uma falha
+        // pontual ao atualizar um edital já conhecido não pode derrubar a busca inteira
+        // e impedir a descoberta de editais novos nos passos seguintes.
+        console.error(`Falha ao atualizar retificação do edital ${c.numeroControle}:`, err);
+      }
     }
   );
 

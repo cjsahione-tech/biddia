@@ -14,6 +14,16 @@ import { prewarmTextoDocumentos } from "@/lib/agents/pdf-extract";
  */
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+// OK < ALERTA < ERRO — usado pra nunca deixar uma checagem posterior rebaixar a
+// severidade que uma checagem anterior já elevou (ver uso em `checar` abaixo).
+const ORDEM_SEVERIDADE = { OK: 0, ALERTA: 1, ERRO: 2 } as const;
+function elevarSeveridade(
+  atual: "OK" | "ALERTA" | "ERRO",
+  nova: "OK" | "ALERTA" | "ERRO"
+): "OK" | "ALERTA" | "ERRO" {
+  return ORDEM_SEVERIDADE[nova] > ORDEM_SEVERIDADE[atual] ? nova : atual;
+}
+
 export async function executarAgente6(editalId: string) {
   return withAgentRun(editalId, "agente6-auditor", async () => {
     const acoes: string[] = [];
@@ -48,13 +58,13 @@ export async function executarAgente6(editalId: string) {
         }
       }
 
-      severidadeFinal = "ALERTA";
+      severidadeFinal = elevarSeveridade(severidadeFinal, "ALERTA");
       acoes.push(`${nomeEtapa} ausente — reexecutando o agente responsável.`);
       try {
         await corrigir();
         acoes.push(`${nomeEtapa} corrigido com sucesso após nova execução.`);
       } catch (err) {
-        severidadeFinal = "ERRO";
+        severidadeFinal = elevarSeveridade(severidadeFinal, "ERRO");
         const msg = err instanceof Error ? err.message : "erro desconhecido";
         acoes.push(`Falha ao corrigir ${nomeEtapa.toLowerCase()}: ${msg}`);
       }
@@ -103,9 +113,25 @@ export async function executarAgente6(editalId: string) {
     );
 
     await checar(
-      "Checklist de documentos (Agente Advogado)",
+      "Checklist de documentos (Agente Secretário)",
       "agente5-secretario",
-      async () => (await prisma.checklistItem.count({ where: { editalId } })) > 0,
+      async () => {
+        const itemMaisRecente = await prisma.checklistItem.findFirst({
+          where: { editalId },
+          orderBy: { createdAt: "desc" },
+          select: { createdAt: true },
+        });
+        if (!itemMaisRecente) return false;
+        // Se a análise (fonte dos itens de habilitação específicos deste edital, ver
+        // agente5-secretario.ts) só ficou pronta DEPOIS que o checklist foi montado, o
+        // Secretário rodou cedo demais (ex: etapa de análise ainda em andamento quando o
+        // pipeline avançou, ver continuar-pipeline-analise/route.ts) e só criou os itens
+        // padrão — sem isso, um "existe algum item" raso nunca pegaria essa lacuna e o
+        // checklist ficaria incompleto pro resto da vida do edital.
+        const analysis = await prisma.analysis.findUnique({ where: { editalId }, select: { createdAt: true } });
+        if (analysis && itemMaisRecente.createdAt < analysis.createdAt) return false;
+        return true;
+      },
       () => executarAgente5(editalId)
     );
 

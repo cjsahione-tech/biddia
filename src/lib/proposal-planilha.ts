@@ -1,5 +1,5 @@
 import ExcelJS from "exceljs";
-import { parseItens, aplicarDesconto } from "@/lib/proposal";
+import { parseItens, parseLotesSelecionados, aplicarDesconto } from "@/lib/proposal";
 
 const MOEDA = "#,##0.00";
 
@@ -10,10 +10,17 @@ const MOEDA = "#,##0.00";
  */
 export async function gerarPlanilhaProposta(
   edital: { titulo: string; fonte: string; numeroControlePNCP: string; orgaoNome: string },
-  proposal: { itensJson: string; descontoPercentual: number },
+  proposal: { itensJson: string; descontoPercentual: number; lotesSelecionadosJson: string | null },
   company: { razaoSocial: string }
 ): Promise<{ buffer: Buffer; nomeArquivo: string }> {
-  const itens = aplicarDesconto(parseItens(proposal.itensJson), proposal.descontoPercentual);
+  const lotesSelecionados = parseLotesSelecionados(proposal.lotesSelecionadosJson);
+  const todosItens = parseItens(proposal.itensJson);
+  // Mesmo filtro do anexo oficial (ver gerarAnexoPropostaComercial) — null = todos os
+  // lotes selecionados; itens sem lote sempre entram, independente da seleção.
+  const itensFiltrados = lotesSelecionados
+    ? todosItens.filter((it) => !it.lote || lotesSelecionados.includes(it.lote))
+    : todosItens;
+  const itens = aplicarDesconto(itensFiltrados, proposal.descontoPercentual);
   const somaSemDesconto = itens.reduce((acc, i) => acc + i.valorTotal, 0);
   const somaComDesconto = itens.reduce((acc, i) => acc + i.valorTotalComDesconto, 0);
 

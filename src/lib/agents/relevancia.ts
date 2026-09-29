@@ -1,5 +1,6 @@
 import { askJSON, isAIConfigured, MODELO_HAIKU } from "@/lib/anthropic";
 import { classificarTipoObjeto, type TipoObjeto } from "@/lib/agents/classificador-objeto";
+import { mapComLimite } from "@/lib/concorrencia";
 
 export type ClassificacaoEdital = {
   relevante: boolean;
@@ -19,8 +20,12 @@ type RespostaItemIA = {
 };
 
 // Quantos editais mandar por chamada de IA. Grupos pequenos mantêm a resposta curta e
-// confiável; vários grupos rodam em paralelo, então o custo em tempo é o do maior grupo.
+// confiável; os grupos rodam em paralelo com um teto de concorrência (ver
+// LIMITE_GRUPOS_PARALELOS) — sem isso, uma empresa com muitas palavras-chave (até ~100
+// candidatos cada) podia disparar dezenas de chamadas à IA de uma vez, estourando limite
+// de taxa da Anthropic ou o teto de tempo da função serverless.
 const TAMANHO_GRUPO = 12;
+const LIMITE_GRUPOS_PARALELOS = 5;
 
 function normalizarTipo(t: RespostaItemIA["tipoObjeto"]): TipoObjeto {
   if (t === "SERVICO" || t === "BEM" || t === "AMBOS") return t;
@@ -115,22 +120,20 @@ export async function classificarEditaisEmLote(
     grupos.push(candidatos.slice(i, i + TAMANHO_GRUPO));
   }
 
-  const resultadosPorGrupo = await Promise.all(
-    grupos.map((grupo) =>
-      classificarGrupo(objetoSocial, grupo).catch((err) => {
-        console.error("Falha ao classificar grupo de editais:", err);
-        // Fallback do grupo: não descarta por relevância (não dá para avaliar), mas
-        // ainda tenta o tipo pela heurística para o filtro de perfil funcionar.
-        const fallback = new Map<string, ClassificacaoEdital>();
-        for (const c of grupo) {
-          fallback.set(c.numeroControle, {
-            relevante: true,
-            tipoObjeto: classificarTipoObjeto(c.titulo, c.descricao),
-          });
-        }
-        return fallback;
-      })
-    )
+  const resultadosPorGrupo = await mapComLimite(grupos, LIMITE_GRUPOS_PARALELOS, (grupo) =>
+    classificarGrupo(objetoSocial, grupo).catch((err) => {
+      console.error("Falha ao classificar grupo de editais:", err);
+      // Fallback do grupo: não descarta por relevância (não dá para avaliar), mas
+      // ainda tenta o tipo pela heurística para o filtro de perfil funcionar.
+      const fallback = new Map<string, ClassificacaoEdital>();
+      for (const c of grupo) {
+        fallback.set(c.numeroControle, {
+          relevante: true,
+          tipoObjeto: classificarTipoObjeto(c.titulo, c.descricao),
+        });
+      }
+      return fallback;
+    })
   );
 
   for (const mapaGrupo of resultadosPorGrupo) {

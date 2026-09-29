@@ -270,6 +270,12 @@ async function conferirComPncp(
   if (edital.fonte !== "PNCP") return itens;
   const ids = parseNumeroControlePNCP(edital.numeroControlePNCP);
   if (!ids) return itens;
+  // O numeroItem do PNCP é uma sequência única pra toda a compra, sem noção de lote —
+  // em edital com lote, o "item 1" do texto costuma reiniciar a numeração a cada lote
+  // (Lote 1: itens 1,2,3... Lote 2: itens 1,2,3... de novo). Casar só por número nesse
+  // caso pegaria o item errado (de outro lote) e injetaria quantidade/valor incorretos
+  // sem aviso nenhum — mais seguro pular a conferência inteira do que arriscar isso.
+  if (itens.some((it) => it.lote)) return itens;
 
   try {
     const itensPncp = await buscarItensCompra(ids.cnpj, ids.ano, ids.sequencial);
@@ -345,7 +351,7 @@ async function preencherPrecosFaltantes(
 ): Promise<{ itens: ItemProposta[]; qtdEstimados: number }> {
   const semPreco = itens
     .map((it, i) => ({ it, i }))
-    .filter(({ it }) => it.valorUnitario == null || Number.isNaN(it.valorUnitario));
+    .filter(({ it }) => it.valorUnitario == null || Number.isNaN(it.valorUnitario) || it.valorUnitario === 0);
   if (semPreco.length === 0) return { itens, qtdEstimados: 0 };
 
   const lista = semPreco.map(({ it, i }) => `[${i}] ${it.descricao} | ${it.unidade} | qtd ${it.quantidade}`).join("\n");
@@ -435,7 +441,7 @@ ${textoEdital ? `\n=== TRECHOS RELEVANTES DO EDITAL ===\n${textoEdital}` : ""}
 
       // Edital publicou a tabela sem coluna de preço (comum em registro de preços) —
       // sem isso, todo item ficaria com valorTotal zerado, o que é enganoso.
-      const semPrecoAntes = itens.filter((i) => i.valorUnitario == null).length;
+      const semPrecoAntes = itens.filter((i) => i.valorUnitario == null || i.valorUnitario === 0).length;
       let avisoPreco = "";
       if (itens.length > 0 && semPrecoAntes / itens.length > 0.5) {
         const { itens: preenchidos, qtdEstimados } = await preencherPrecosFaltantes(edital, itens);
@@ -524,7 +530,10 @@ Responda em JSON:
             quantidade: typeof c.quantidade === "number" ? c.quantidade : item.quantidade,
             valorUnitario: typeof c.valorUnitario === "number" ? c.valorUnitario : item.valorUnitario,
             lote: c.lote ?? item.lote,
-            camposExtras: c.camposExtras ?? item.camposExtras,
+            // Mescla campo a campo em vez de substituir o objeto inteiro — a correção
+            // pode mandar só a coluna extra que está errada, sem isso as outras
+            // (ex: prazoGarantiaMeses) seriam perdidas mesmo sem terem mudado.
+            camposExtras: c.camposExtras ? { ...item.camposExtras, ...c.camposExtras } : item.camposExtras,
           };
         });
 
@@ -718,7 +727,12 @@ Responda em JSON:
       quantidade: typeof c.quantidade === "number" ? c.quantidade : item.quantidade,
       valorUnitario: typeof c.valorUnitario === "number" ? c.valorUnitario : item.valorUnitario,
       lote: c.lote ?? item.lote,
-      camposExtras: c.camposExtras ?? item.camposExtras,
+      // Mescla campo a campo (ver mesmo padrão na revisão automática logo acima).
+      camposExtras: c.camposExtras ? { ...item.camposExtras, ...c.camposExtras } : item.camposExtras,
+      // A correção via chat sobrescreveu este item — deixa de ser um valor que o
+      // usuário editou manualmente (ver itensComTotal abaixo, que preserva esta flag
+      // pros itens que o diff não tocou).
+      editadoManualmente: false,
     };
   });
   const remover = new Set(diff.indicesParaRemover ?? []);
@@ -729,7 +743,7 @@ Responda em JSON:
 
   // Mesma checagem de "edital sem coluna de preço" da extração cheia — o usuário pode
   // estar reportando exatamente esse sintoma (proposta com tudo R$ 0,00) via chat.
-  const semPrecoAntes = itensFinais.filter((i) => i.valorUnitario == null).length;
+  const semPrecoAntes = itensFinais.filter((i) => i.valorUnitario == null || i.valorUnitario === 0).length;
   let qtdEstimados = 0;
   if (itensFinais.length > 0 && semPrecoAntes / itensFinais.length > 0.5) {
     const preenchido = await preencherPrecosFaltantes(edital, itensFinais);
@@ -746,7 +760,10 @@ Responda em JSON:
     valorTotal: Number((item.quantidade * item.valorUnitario).toFixed(2)),
     lote: item.lote ?? null,
     camposExtras: item.camposExtras,
-    editadoManualmente: false,
+    // Preserva a marcação de quem editou manualmente um preço via FinanceTab (ver
+    // PATCH /proposal/itens) pros itens que esta correção via chat não tocou —
+    // itens novos (faltantes) e os efetivamente corrigidos ficam false naturalmente.
+    editadoManualmente: "editadoManualmente" in item ? !!item.editadoManualmente : false,
   }));
   const somaItens = itensComTotal.reduce((acc, i) => acc + i.valorTotal, 0);
   const lotes = montarLotes(itensComTotal);

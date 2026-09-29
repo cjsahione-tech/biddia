@@ -475,6 +475,12 @@ model ChecklistItem {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  // Impede item duplicado quando duas execuções do Agente Secretário para o mesmo
+  // edital se sobrepõem (ver Agente Auditor, que pode disparar uma nova execução
+  // enquanto uma anterior ainda está terminando) — sem isso, as duas passavam pela
+  // mesma checagem em memória "já existe?" antes de qualquer uma escrever.
+  @@unique([editalId, documentoNome])
 }
 
 // Forma exigida/apresentada do documento (cópia simples, autenticado em cartório,

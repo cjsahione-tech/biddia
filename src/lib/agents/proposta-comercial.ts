@@ -90,10 +90,10 @@ async function buscarModeloDoEdital(
   somaComDesconto: number,
   descontoPercentual: number
 ): Promise<ModeloPropostaResult | null> {
-  const { textoEdital, textoTermoReferencia, temTextoCompleto } = await obterTextoCompletoEdital(editalId, {
-    palavrasChave: PALAVRAS_CHAVE_PROPOSTA_COMERCIAL,
-    tamanhoMax: 45_000,
-  });
+  const { textoEdital, textoTermoReferencia, textoAnexosPrecos, temTextoCompleto } = await obterTextoCompletoEdital(
+    editalId,
+    { palavrasChave: PALAVRAS_CHAVE_PROPOSTA_COMERCIAL, tamanhoMax: 45_000 }
+  );
   if (!temTextoCompleto) return null;
 
   const contexto = `
@@ -107,6 +107,7 @@ Sócio/responsável legal: ${company.socioNome} (CPF ${company.socioCpf})
 Valor global da proposta (já com desconto de ${descontoPercentual}% aplicado): ${formatBRL(somaComDesconto)}
 ${textoEdital ? `\n=== TEXTO COMPLETO DO EDITAL ===\n${textoEdital}` : ""}
 ${textoTermoReferencia ? `\n=== TEXTO COMPLETO DO TERMO DE REFERÊNCIA ===\n${textoTermoReferencia}` : ""}
+${textoAnexosPrecos ? `\n=== TEXTO DE OUTROS ANEXOS ===\n${textoAnexosPrecos}` : ""}
 `.trim();
 
   try {

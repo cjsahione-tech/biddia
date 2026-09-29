@@ -33,10 +33,10 @@ export async function executarAgente4(editalId: string, opts?: { notaCorrecao?: 
       include: { company: true, analysis: true },
     });
 
-    const { textoEdital, textoTermoReferencia, temTextoCompleto } = await obterTextoCompletoEdital(editalId, {
-      palavrasChave: PALAVRAS_CHAVE_ANEXOS,
-      tamanhoMax: 45_000,
-    });
+    const { textoEdital, textoTermoReferencia, textoAnexosPrecos, temTextoCompleto } = await obterTextoCompletoEdital(
+      editalId,
+      { palavrasChave: PALAVRAS_CHAVE_ANEXOS, tamanhoMax: 45_000 }
+    );
 
     const identificacaoEdital =
       edital.fonte === "PNCP"
@@ -61,11 +61,12 @@ Endereço: ${edital.company.logradouro}, ${edital.company.numero}, ${edital.comp
 Sócio/responsável legal: ${edital.company.socioNome} (CPF ${edital.company.socioCpf})
 ${textoEdital ? `\n=== TEXTO COMPLETO DO EDITAL ===\n${textoEdital}` : ""}
 ${textoTermoReferencia ? `\n=== TEXTO COMPLETO DO TERMO DE REFERÊNCIA ===\n${textoTermoReferencia}` : ""}
+${textoAnexosPrecos ? `\n=== TEXTO DE OUTROS ANEXOS ===\n${textoAnexosPrecos}` : ""}
 ${opts?.notaCorrecao ? `\n=== CORREÇÃO PEDIDA PELO USUÁRIO (sobre os anexos gerados antes) ===\n${opts.notaCorrecao}\nRefaça a extração levando isso em conta — é prioridade sobre o que você gerou antes.` : ""}
 `.trim();
 
     const instrucaoFonte = temTextoCompleto
-      ? `Você TEM ACESSO ao texto do edital e/ou termo de referência acima. Procure NELE por anexos que sejam MODELOS
+      ? `Você TEM ACESSO ao texto do edital e/ou termo de referência e/ou outros anexos acima. Procure NELE por anexos que sejam MODELOS
 DE DECLARAÇÃO prontos para a empresa preencher e assinar (ex: "ANEXO III – DECLARAÇÃO DE...", "MODELO DE
 DECLARAÇÃO DE..."). Não conte anexos que são só informativos (minuta de contrato, planilha de preços, termo de
 referência) nem exigências de habilitação descritas em texto corrido sem um modelo pronto para reproduzir.`
@@ -103,32 +104,45 @@ Responda em JSON:
 
     const todosAnexos = result.anexosEncontrados ?? [];
 
-    // Correção via chat: os anexos antigos ficariam duplicados com os novos se não
-    // fossem removidos antes — aqui é regeração completa, não um adicional.
-    if (opts?.notaCorrecao) {
-      await prisma.document.deleteMany({ where: { editalId, tipo: "ANEXO_GERADO" } });
-    }
-
-    // Gera os PDFs e grava em paralelo — são independentes entre si.
-    const criados = await Promise.all(
-      todosAnexos.map(async (anexo) => {
-        const bytes = await gerarPdfTimbrado({
+    // Gera todos os PDFs ANTES de tocar no banco — se a geração de algum anexo falhar,
+    // o Promise.all rejeita aqui, antes de apagar os anexos antigos (ver correção via
+    // chat abaixo), deixando o edital com o conjunto anterior intacto em vez de um
+    // conjunto pela metade (alguns novos, os demais simplesmente sumidos).
+    const gerados = await Promise.all(
+      todosAnexos.map(async (anexo) => ({
+        nome: anexo.nome,
+        bytes: await gerarPdfTimbrado({
           company: edital.company,
           titulo: anexo.nome,
           paragrafos: anexo.paragrafos,
           rodapeExtra: `Modelo extraído do texto do edital "${edital.titulo}" — ${edital.orgaoNome} — e preenchido automaticamente pelo Agente Advogado. Confira os dados preenchidos e o texto original antes do envio.`,
-        });
-        return prisma.document.create({
-          data: {
-            editalId,
-            nome: anexo.nome,
-            tipo: "ANEXO_GERADO",
-            status: "GERADO",
-            conteudoBase64: bytesToDataUrl(bytes),
-          },
-        });
-      })
+        }),
+      }))
     );
+
+    // Correção via chat: os anexos antigos ficariam duplicados com os novos se não
+    // fossem removidos antes — aqui é regeração completa, não um adicional. Apagar e
+    // recriar juntos numa transação evita um estado intermediário sem nenhum anexo caso
+    // a criação falhe no meio (a geração dos PDFs, o passo mais sujeito a falhar, já
+    // terminou com sucesso pra todos antes de chegar aqui).
+    const criados = await prisma.$transaction(async (tx) => {
+      if (opts?.notaCorrecao) {
+        await tx.document.deleteMany({ where: { editalId, tipo: "ANEXO_GERADO" } });
+      }
+      return Promise.all(
+        gerados.map((g) =>
+          tx.document.create({
+            data: {
+              editalId,
+              nome: g.nome,
+              tipo: "ANEXO_GERADO",
+              status: "GERADO",
+              conteudoBase64: bytesToDataUrl(g.bytes),
+            },
+          })
+        )
+      );
+    });
 
     await logAudit(
       editalId,
