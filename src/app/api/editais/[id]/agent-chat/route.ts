@@ -4,7 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { requireCompany } from "@/lib/api-utils";
 import { AGENTES_CHAT, isAgentChatKey, processarMensagemChat } from "@/lib/agents/agent-chat";
 import { extrairTrechoDeAnexoParaCorrecao, base64ParaBytes } from "@/lib/agents/pdf-extract";
-import { tocarEdital } from "@/lib/agents/run-tracker";
+import { tocarEdital, logAudit } from "@/lib/agents/run-tracker";
+import { comRetry, descreverErro, ehErroTransiente } from "@/lib/ia-erros";
 
 // Mesmo teto prático usado nos outros uploads da plataforma (corpo em base64, ~33%
 // maior que o arquivo, contra o limite fixo de ~4,5MB da Vercel).
@@ -120,12 +121,38 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       : "");
 
   let respostaTexto: string;
+  let tentativasFeitas = 0;
   try {
-    respostaTexto = await processarMensagemChat(id, agentKey, notaOuMensagem);
+    // Repete sozinho enquanto o erro for passageiro (sobrecarga/limite de taxa/resposta
+    // da IA cortada) — erro determinístico (ex: bug de encoding) sobe na hora, repetir
+    // não resolveria. Só depois de esgotar as tentativas o usuário vê um motivo.
+    respostaTexto = await comRetry(
+      () => {
+        tentativasFeitas++;
+        return processarMensagemChat(id, agentKey, notaOuMensagem);
+      },
+      {
+        tentativas: 3,
+        esperaMs: 2500,
+        aoFalhar: (e, t) => console.error(`Chat ${agentKey} (edital ${id}) — tentativa ${t} falhou, repetindo:`, e),
+      }
+    );
   } catch (err) {
     console.error(`Falha ao processar mensagem do chat (${agentKey}, edital ${id}):`, err);
+    const motivo = descreverErro(err);
+    await logAudit(
+      id,
+      AGENTES_CHAT[agentKey].label,
+      "Chat — falha ao atender pedido",
+      "ALERTA",
+      `Não foi possível atender o pedido do usuário no chat após ${tentativasFeitas} tentativa(s): ${motivo}.`
+    ).catch(() => {});
     respostaTexto =
-      "Não consegui responder agora — pode ser instabilidade do modelo ou do texto do edital. Tente de novo em instantes.";
+      `Não consegui concluir esse pedido, e já tentei ${tentativasFeitas} vez(es). Motivo: ${motivo}. ` +
+      "Nada do que já estava salvo foi alterado por essa tentativa. " +
+      (ehErroTransiente(err)
+        ? "Como é uma instabilidade do serviço, tente de novo em alguns minutos — ou me peça de outro jeito (por exemplo, dividindo o pedido em partes menores)."
+        : "Isso não é uma instabilidade passageira, então repetir o mesmo pedido não vai resolver — avise o suporte com essa mensagem que a causa é corrigida no sistema.");
   }
 
   const agentMessage = await prisma.agentMessage.create({

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireCompany } from "@/lib/api-utils";
 import { conversarComFerramentas } from "@/lib/anthropic";
 import { systemPromptAssistente, FERRAMENTAS_ASSISTENTE, criarExecutorAssistente } from "@/lib/assistente";
+import { comRetry, descreverErro, ehErroTransiente } from "@/lib/ia-erros";
 
 export const maxDuration = 60;
 
@@ -26,18 +27,36 @@ export async function POST(req: Request) {
   const parsed = schema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Dados inválidos" }, { status: 400 });
 
+  let tentativas = 0;
   try {
-    const { texto, arquivos } = await conversarComFerramentas(
-      systemPromptAssistente(company!.razaoSocial),
-      parsed.data.mensagens,
-      FERRAMENTAS_ASSISTENTE,
-      criarExecutorAssistente(company!.id)
+    // O assistente só LÊ dados e gera arquivos (nunca altera nada), então repetir o pedido
+    // inteiro numa falha passageira é seguro.
+    const { texto, arquivos } = await comRetry(
+      () => {
+        tentativas++;
+        return conversarComFerramentas(
+          systemPromptAssistente(company!.razaoSocial),
+          parsed.data.mensagens,
+          FERRAMENTAS_ASSISTENTE,
+          criarExecutorAssistente(company!.id)
+        );
+      },
+      {
+        tentativas: 2,
+        esperaMs: 2000,
+        aoFalhar: (e, t) => console.error(`Assistente Bidd.IA — tentativa ${t} falhou, repetindo:`, e),
+      }
     );
     return NextResponse.json({ resposta: texto, arquivos });
   } catch (err) {
     console.error("Falha no assistente Bidd.IA:", err);
+    const motivo = descreverErro(err);
     return NextResponse.json(
-      { error: "Não consegui responder agora — pode ser instabilidade do modelo. Tente de novo em instantes." },
+      {
+        error: ehErroTransiente(err)
+          ? `Não consegui responder (tentei ${tentativas} vez(es)): ${motivo}. Tente de novo em alguns minutos ou divida o pedido em partes menores.`
+          : `Não consegui responder: ${motivo}.`,
+      },
       { status: 500 }
     );
   }

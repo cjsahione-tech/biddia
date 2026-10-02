@@ -343,7 +343,7 @@ export function OnboardingWizard() {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field label="Razão social" htmlFor="razaoSocial">
               <TextInput
                 id="razaoSocial"
@@ -364,7 +364,7 @@ export function OnboardingWizard() {
           </div>
 
           <p className="text-sm font-medium text-foreground">Endereço completo</p>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <Field label="Logradouro" htmlFor="logradouro">
               <TextInput
                 id="logradouro"
@@ -389,7 +389,7 @@ export function OnboardingWizard() {
               />
             </Field>
           </div>
-          <div className="grid grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             <Field label="Bairro" htmlFor="bairro">
               <TextInput
                 id="bairro"
@@ -439,7 +439,7 @@ export function OnboardingWizard() {
           </div>
 
           <p className="text-sm font-medium text-foreground">Dados bancários</p>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <Field label="Banco" htmlFor="banco">
               <TextInput
                 id="banco"
@@ -467,7 +467,7 @@ export function OnboardingWizard() {
           </div>
 
           <p className="text-sm font-medium text-foreground">Sócio e responsável legal</p>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field label="Nome completo" htmlFor="socioNome">
               <TextInput
                 id="socioNome"

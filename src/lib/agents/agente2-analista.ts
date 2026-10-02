@@ -10,6 +10,11 @@ import { withAgentRun, logAudit } from "@/lib/agents/run-tracker";
 // em vez de reclassificar cada item isoladamente.
 export type GrupoHabilitacao = { categoriaEdital: string; itens: string[] };
 
+// Um prazo do edital: "tipo" é o que o prazo representa (ex: "Entrega do objeto"), "prazo" o
+// valor exatamente como o edital escreve (ex: "30 dias corridos após a ordem de serviço" ou
+// "15/10/2026 às 09:00"), "referencia" a cláusula/seção de onde veio (null quando não há).
+export type PrazoEdital = { tipo: string; prazo: string; referencia: string | null };
+
 type AnalysisResult = {
   resumoObjeto: string;
   obrigacoesContratada: string[];
@@ -18,7 +23,37 @@ type AnalysisResult = {
   requisitosAdicionais: string[];
   riscos: string[];
   parecer: string;
+  prazos: PrazoEdital[];
 };
+
+// Prazos ficam espalhados pelo edital inteiro (sessão, impugnação, recursos, entrega,
+// pagamento, garantia...) — sem estas palavras-chave, o corte de documentos longos
+// mantinha só começo e fim do texto e perdia justamente o miolo onde as cláusulas de
+// prazo estão. Mistura também os termos das demais seções da análise.
+const PALAVRAS_CHAVE_ANALISE = [
+  "prazo",
+  "dias",
+  "data",
+  "horas",
+  "vigência",
+  "validade",
+  "entrega",
+  "pagamento",
+  "recurso",
+  "impugna",
+  "esclarecimento",
+  "sessão",
+  "abertura",
+  "garantia",
+  "assinatura",
+  "habilitação",
+  "objeto",
+  "obrigações",
+  "contratada",
+  "penalidade",
+  "sanção",
+  "multa",
+];
 
 export async function executarAgente2(editalId: string, opts?: { notaCorrecao?: string }) {
   return withAgentRun(editalId, "agente2-analista", async () => {
@@ -28,7 +63,7 @@ export async function executarAgente2(editalId: string, opts?: { notaCorrecao?: 
     // edital e o texto completo do PDF (abaixo) cobre objeto/informação complementar
     // com muito mais precisão — a chamada extra ao PNCP só somava latência.
     const { textoEdital, textoTermoReferencia, temTextoCompleto } =
-      await obterTextoCompletoEdital(editalId);
+      await obterTextoCompletoEdital(editalId, { palavrasChave: PALAVRAS_CHAVE_ANALISE, tamanhoMax: 70_000 });
 
     const contexto = `
 Título: ${edital.titulo}
@@ -76,6 +111,19 @@ Retorne um objeto JSON com exatamente estas chaves:
   "requisitosObrigatorios": string[] (requisitos obrigatórios identificados no texto, ou típicos da modalidade se não houver texto),
   "requisitosAdicionais": string[] (requisitos adicionais desejáveis, mas não eliminatórios),
   "riscos": string[] (riscos e pontos de atenção para a empresa concorrente),
+  "prazos": [ { "tipo": string, "prazo": string, "referencia": string | null } ] — TODOS os prazos e datas do
+    edital, sem deixar nenhum de fora, em ordem aproximadamente cronológica do processo. Procure ATIVAMENTE no
+    texto inteiro (não só nos trechos de destaque) por cada um destes e inclua o que existir: data/hora de abertura
+    da sessão e de recebimento/envio de propostas; prazo para pedidos de esclarecimento e impugnação; prazo para
+    envio de documentos de habilitação / proposta ajustada após a disputa; prazo para recursos e contrarrazões;
+    validade da proposta; prazo para assinatura do contrato/ata e para retirada da nota de empenho; vigência do
+    contrato/ata; prazo de execução; prazo de entrega (e prazo para troca/reposição de item recusado); prazo para
+    recebimento provisório/definitivo; prazo de pagamento; prazo de garantia (produto e/ou contratual); prazo para
+    amostras/demonstração/visita técnica; prazos de regularização fiscal (ME/EPP) e de sanções/penalidades quando
+    houver prazo. Copie o prazo EXATAMENTE como o edital escreve (número, unidade, "dias úteis" ou "corridos",
+    marco de contagem), e em "referencia" cite a cláusula/seção/item (ex: "item 11.2") ou null se não houver. Se um
+    dos prazos acima não aparecer no texto, NÃO invente — simplesmente não o liste. Se o texto do edital não
+    estiver disponível, liste só as datas dos metadados fornecidos acima.
   "parecer": string (parecer final em 2-3 frases: vale a pena avaliar participar, e por quê)
 }`,
       contexto,
@@ -96,6 +144,7 @@ Retorne um objeto JSON com exatamente estas chaves:
         requisitosAdicionais: JSON.stringify(result.requisitosAdicionais),
         riscos: JSON.stringify(result.riscos),
         parecer: result.parecer,
+        prazos: JSON.stringify(Array.isArray(result.prazos) ? result.prazos.filter((x) => x && x.tipo && x.prazo) : []),
         baseadoEmTextoCompleto: temTextoCompleto,
       },
       update: {
@@ -106,6 +155,7 @@ Retorne um objeto JSON com exatamente estas chaves:
         requisitosAdicionais: JSON.stringify(result.requisitosAdicionais),
         riscos: JSON.stringify(result.riscos),
         parecer: result.parecer,
+        prazos: JSON.stringify(Array.isArray(result.prazos) ? result.prazos.filter((x) => x && x.tipo && x.prazo) : []),
         baseadoEmTextoCompleto: temTextoCompleto,
       },
     });

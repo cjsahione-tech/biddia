@@ -60,7 +60,7 @@ export function EstudoDetailClient({ estudoId }: { estudoId: string }) {
   const etapa = etapaAtualDoEstudo(estudo);
 
   return (
-    <div className="mx-auto max-w-4xl px-8 py-10">
+    <div className="mx-auto max-w-4xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8 lg:py-10">
       <Link
         href="/estudo-viabilidade"
         className="inline-flex items-center gap-1.5 text-sm text-muted hover:text-foreground"

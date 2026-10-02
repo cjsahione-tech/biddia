@@ -105,7 +105,7 @@ export function ParametrosTributariosClient() {
     "w-24 rounded-lg border border-border bg-background px-2 py-1 text-right text-sm text-foreground focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20";
 
   return (
-    <div className="mx-auto max-w-4xl px-8 py-10">
+    <div className="mx-auto max-w-4xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8 lg:py-10">
       <Link href="/empresa" className="inline-flex items-center gap-1.5 text-sm text-muted hover:text-foreground">
         <ArrowLeft className="h-4 w-4" /> Voltar
       </Link>

@@ -330,7 +330,7 @@ export function KanbanBoard({
         )}
       </div>
 
-      <div className="mt-3 flex gap-4 overflow-x-auto pb-4">
+      <div className="mt-3 flex snap-x snap-proximity gap-3 overflow-x-auto pb-4 sm:gap-4">
         {ETAPAS_KANBAN.map(({ key, label }) => {
           const cards = cardsDaColuna(key);
           return (
@@ -338,7 +338,7 @@ export function KanbanBoard({
               key={key}
               onDragOver={(e) => handleColumnDragOver(e, key)}
               onDrop={(e) => handleColumnDrop(e, key)}
-              className={`flex w-72 shrink-0 flex-col rounded-xl border bg-surface/50 transition ${
+              className={`flex w-[82vw] max-w-72 shrink-0 snap-start flex-col rounded-xl border bg-surface/50 transition sm:w-72 ${
                 dragOverColumn === key ? "border-brand/50 bg-brand-light/30" : "border-border"
               }`}
             >

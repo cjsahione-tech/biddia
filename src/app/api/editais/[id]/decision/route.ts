@@ -6,9 +6,8 @@ import { dispararPipeline } from "@/lib/agents/pipeline";
 
 const schema = z.object({ decision: z.enum(["APROVADO", "REPROVADO"]) });
 
-// Analista, Financeiro e Advogado rodam em paralelo aqui, lendo o PDF real do edital —
-// isso ainda pode chegar perto de 60s (teto do plano Hobby da Vercel). O Secretário e o
-// Auditor rodam numa segunda chamada (continuar-pipeline), com orçamento próprio.
+// A esteira de agentes roda em etapas sequenciais, cada uma na sua própria invocação (ver
+// pipeline.ts) — esta rota só registra a decisão e dispara a primeira.
 export const maxDuration = 60;
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {

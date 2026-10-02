@@ -163,7 +163,7 @@ export function EmpresaClient() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl px-8 py-10">
+    <div className="mx-auto max-w-3xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8 lg:py-10">
       <h1 className="text-2xl font-semibold text-foreground">Empresa</h1>
       <p className="mt-1 text-sm text-muted">
         Estes dados alimentam os agentes — do timbrado dos documentos às buscas automáticas.
@@ -310,7 +310,7 @@ export function EmpresaClient() {
           </div>
         </Field>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field label="Razão social" htmlFor="razaoSocial">
             <TextInput
               id="razaoSocial"
@@ -324,7 +324,7 @@ export function EmpresaClient() {
         </div>
 
         <p className="text-sm font-medium text-foreground">Endereço completo</p>
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <Field label="Logradouro" htmlFor="logradouro">
             <TextInput
               id="logradouro"
@@ -343,7 +343,7 @@ export function EmpresaClient() {
             />
           </Field>
         </div>
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
           <Field label="Bairro" htmlFor="bairro">
             <TextInput id="bairro" value={company.bairro} onChange={(e) => set("bairro", e.target.value)} />
           </Field>
@@ -364,7 +364,7 @@ export function EmpresaClient() {
         </div>
 
         <p className="text-sm font-medium text-foreground">Dados bancários</p>
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <Field label="Banco" htmlFor="banco">
             <TextInput id="banco" value={company.banco} onChange={(e) => set("banco", e.target.value)} />
           </Field>
@@ -377,7 +377,7 @@ export function EmpresaClient() {
         </div>
 
         <p className="text-sm font-medium text-foreground">Sócio e responsável legal</p>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field label="Nome completo" htmlFor="socioNome">
             <TextInput
               id="socioNome"
@@ -403,7 +403,7 @@ export function EmpresaClient() {
           Só pré-preenche um novo estudo de viabilidade — cada estudo pode usar outro regime para simulações, sem
           alterar este cadastro.
         </p>
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <Field label="Regime" htmlFor="regimeTributarioPadrao">
             <select
               id="regimeTributarioPadrao"

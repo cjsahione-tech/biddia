@@ -1,4 +1,5 @@
-import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import { PDFDocument, rgb } from "pdf-lib";
+import { embutirFontes } from "@/lib/agents/pdf-fontes";
 import type { Company } from "@prisma/client";
 
 const MARGIN = 56;
@@ -88,8 +89,7 @@ export async function gerarPdfTimbrado(opts: {
   const { company, titulo, paragrafos, tabela, rodapeExtra } = opts;
 
   const pdfDoc = await PDFDocument.create();
-  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-  const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  const { font, fontBold } = await embutirFontes(pdfDoc);
 
   let page = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
   let cursorY = PAGE_HEIGHT - MARGIN;
@@ -253,8 +253,7 @@ export async function gerarPdfRelatorio(opts: {
   const { company, titulo, subtitulo, secoes } = opts;
 
   const pdfDoc = await PDFDocument.create();
-  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-  const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  const { font, fontBold } = await embutirFontes(pdfDoc);
 
   let page = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
   let cursorY = PAGE_HEIGHT - MARGIN;

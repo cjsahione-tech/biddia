@@ -130,7 +130,7 @@ function ResumoRequisitos({
         <p className="mt-2 text-sm text-foreground/80">{requisitos.objeto}</p>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Campo label="Critério de julgamento" valor={requisitos.criterioJulgamento} />
         <Campo label="Prazo de execução" valor={requisitos.prazoExecucao} />
         <Campo label="Local de entrega" valor={requisitos.localEntrega} />
@@ -140,7 +140,7 @@ function ResumoRequisitos({
       </div>
 
       {ramo === "SERVICO" ? (
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <ListaCampo label="Equipe mínima" itens={requisitos.equipeMinima} />
           <ListaCampo label="Certificações exigidas" itens={requisitos.certificacoesExigidas} />
         </div>
@@ -251,7 +251,7 @@ function FormularioRequisitos({
         <TextArea id="objeto" rows={2} value={form.objeto} onChange={(e) => set("objeto", e.target.value)} />
       </Field>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label="Critério de julgamento" htmlFor="criterioJulgamento">
           <TextInput
             id="criterioJulgamento"
@@ -288,7 +288,7 @@ function FormularioRequisitos({
       </Field>
 
       {ramo === "SERVICO" ? (
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field label="Equipe mínima" htmlFor="equipeMinima" hint="Um item por linha">
             <TextArea
               id="equipeMinima"
@@ -307,7 +307,7 @@ function FormularioRequisitos({
           </Field>
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field label="Especificação técnica" htmlFor="especificacaoTecnica">
             <TextArea
               id="especificacaoTecnica"

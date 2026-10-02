@@ -80,7 +80,7 @@ export function AgendaClient() {
   const eventosDoDiaSelecionado = diaSelecionado ? (eventosPorDia.get(diaSelecionado) ?? []) : [];
 
   return (
-    <div className="mx-auto max-w-[1400px] px-8 py-10">
+    <div className="mx-auto max-w-[1400px] px-4 py-6 sm:px-6 sm:py-8 lg:px-8 lg:py-10">
       <div>
         <h1 className="text-2xl font-semibold text-foreground">Agenda</h1>
         <p className="mt-1 text-sm text-muted">
@@ -89,7 +89,7 @@ export function AgendaClient() {
         </p>
       </div>
 
-      <div className="mt-6 flex items-center justify-between">
+      <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2">
           <button
             onClick={() => setMesAtual((m) => subMonths(m, 1))}
@@ -140,7 +140,7 @@ export function AgendaClient() {
                   key={chave}
                   onClick={() => eventos.length > 0 && setDiaSelecionado(chave)}
                   disabled={eventos.length === 0}
-                  className={`flex min-h-24 flex-col items-start gap-1 border-b border-r border-border p-2 text-left last:border-r-0 ${
+                  className={`flex min-h-16 flex-col items-start gap-1 border-b border-r border-border p-1.5 text-left sm:min-h-24 sm:p-2 last:border-r-0 ${
                     foraDoMes ? "bg-surface/30 text-muted/50" : "text-foreground"
                   } ${eventos.length > 0 ? "hover:bg-surface" : "cursor-default"}`}
                 >

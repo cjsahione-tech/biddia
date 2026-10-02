@@ -125,7 +125,7 @@ export async function executarAgente6(editalId: string) {
         // Se a análise (fonte dos itens de habilitação específicos deste edital, ver
         // agente5-secretario.ts) só ficou pronta DEPOIS que o checklist foi montado, o
         // Secretário rodou cedo demais (ex: etapa de análise ainda em andamento quando o
-        // pipeline avançou, ver continuar-pipeline-analise/route.ts) e só criou os itens
+        // pipeline avançou, ver pipeline/[etapa]/route.ts) e só criou os itens
         // padrão — sem isso, um "existe algum item" raso nunca pegaria essa lacuna e o
         // checklist ficaria incompleto pro resto da vida do edital.
         const analysis = await prisma.analysis.findUnique({ where: { editalId }, select: { createdAt: true } });

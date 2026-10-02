@@ -184,7 +184,7 @@ function FormularioTributos({
       </Field>
 
       {regime === "SIMPLES_NACIONAL" && (
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field label="Anexo" htmlFor="anexo">
             <select id="anexo" value={anexo} onChange={(e) => setAnexo(e.target.value as AnexoSimples)} className={selectClass}>
               <option value="">Selecione</option>

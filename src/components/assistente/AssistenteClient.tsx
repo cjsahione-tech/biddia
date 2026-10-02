@@ -61,7 +61,7 @@ export function AssistenteClient() {
   }
 
   return (
-    <div className="mx-auto flex h-[calc(100vh-2rem)] max-w-3xl flex-col px-8 py-6">
+    <div className="mx-auto flex h-[calc(100dvh-5rem)] max-w-3xl flex-col px-4 py-4 sm:px-6 sm:py-6 lg:h-[calc(100vh-2rem)] lg:px-8">
       <div className="flex items-center gap-2">
         <div className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-light text-brand">
           <Sparkles className="h-4.5 w-4.5" />

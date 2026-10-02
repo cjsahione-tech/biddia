@@ -429,10 +429,12 @@ export function FinanceTab({ edital, onUpdate }: { edital: EditalDetail; onUpdat
                     <span className="text-xs text-muted">Ref.: {formatBRL(lote.valorReferencia)}</span>
                   )}
                 </label>
-                <table className={`w-full text-sm ${marcado ? "" : "opacity-50"}`}>
-                  {tabelaHeader}
-                  <tbody className="divide-y divide-border">{itensDoLote.map(renderLinhaItem)}</tbody>
-                </table>
+                <div className="overflow-x-auto">
+                  <table className={`w-full min-w-[640px] text-sm ${marcado ? "" : "opacity-50"}`}>
+                    {tabelaHeader}
+                    <tbody className="divide-y divide-border">{itensDoLote.map(renderLinhaItem)}</tbody>
+                  </table>
+                </div>
               </div>
             );
           })}
@@ -442,17 +444,19 @@ export function FinanceTab({ edital, onUpdate }: { edital: EditalDetail; onUpdat
             return (
               <div className="overflow-hidden rounded-2xl border border-border">
                 <div className="bg-surface px-4 py-3 text-sm font-medium text-foreground">Sem lote</div>
-                <table className="w-full text-sm">
-                  {tabelaHeader}
-                  <tbody className="divide-y divide-border">{semLote.map(renderLinhaItem)}</tbody>
-                </table>
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[640px] text-sm">
+                    {tabelaHeader}
+                    <tbody className="divide-y divide-border">{semLote.map(renderLinhaItem)}</tbody>
+                  </table>
+                </div>
               </div>
             );
           })()}
         </div>
       ) : (
         <div className="overflow-x-auto rounded-2xl border border-border">
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[640px] text-sm">
             {tabelaHeader}
             <tbody className="divide-y divide-border">{itensComDesconto.map(renderLinhaItem)}</tbody>
           </table>

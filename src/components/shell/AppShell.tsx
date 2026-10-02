@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutGrid, Building2, Bell, Calculator, BarChart3, FileStack, LogOut, Calendar, Sparkles, ShieldCheck, Undo2 } from "lucide-react";
+import { LayoutGrid, Building2, Bell, Calculator, BarChart3, FileStack, LogOut, Calendar, Sparkles, ShieldCheck, Undo2, Menu, X } from "lucide-react";
 
 const NAV = [
   { href: "/bidd-ia", label: "Bidd.IA", icon: Sparkles },
@@ -40,6 +40,8 @@ export function AppShell({
   const router = useRouter();
   const [totalNotificacoes, setTotalNotificacoes] = useState(0);
   const [voltando, setVoltando] = useState(false);
+  // Em telas estreitas o menu lateral vira uma gaveta aberta pelo botão "hambúrguer".
+  const [menuAberto, setMenuAberto] = useState(false);
 
   useEffect(() => {
     fetch("/api/notificacoes")
@@ -67,10 +69,55 @@ export function AppShell({
     }
   }
 
+  const conteudoMenu = (
+    <>
+      <nav className="flex-1 space-y-1 overflow-y-auto px-3">
+        {(apenasAdmin ? [NAV_ADMIN] : isAdmin ? [...NAV, NAV_ADMIN] : NAV).map((item) => {
+          const active = pathname === item.href || pathname.startsWith(item.href + "/");
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition ${
+                active ? "bg-brand-light text-brand" : "text-muted hover:bg-border/30 hover:text-foreground"
+              }`}
+            >
+              <item.icon className="h-4 w-4" />
+              {item.label}
+              {item.href === "/notificacoes" && totalNotificacoes > 0 && (
+                <span className="ml-auto rounded-full bg-danger px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                  {totalNotificacoes}
+                </span>
+              )}
+            </Link>
+          );
+        })}
+      </nav>
+
+      <div className="border-t border-border px-4 py-4">
+        <p className="truncate text-sm font-medium text-foreground">{companyName}</p>
+        <p className="truncate text-xs text-muted">{userName}</p>
+        <button
+          onClick={handleLogout}
+          className="mt-3 flex items-center gap-2 text-xs font-medium text-muted hover:text-danger"
+        >
+          <LogOut className="h-3.5 w-3.5" />
+          Sair
+        </button>
+      </div>
+    </>
+  );
+
+  const logo = (
+    <Link href="/dashboard" className="text-lg font-semibold tracking-tight text-foreground">
+      Bidd<span className="text-brand">.IA</span>
+    </Link>
+  );
+
   return (
     <div className="flex min-h-screen flex-1 flex-col">
       {operandoComoAnalista && (
-        <div className="flex items-center justify-between bg-brand px-6 py-2 text-sm font-medium text-white">
+        <div className="flex flex-wrap items-center justify-between gap-2 bg-brand px-4 py-2 text-sm font-medium text-white sm:px-6">
           <span>Operando como {companyName}</span>
           <button
             onClick={handleVoltarCarteira}
@@ -81,51 +128,54 @@ export function AppShell({
           </button>
         </div>
       )}
-      <div className="flex flex-1">
-      <aside className="flex w-64 shrink-0 flex-col border-r border-border bg-surface/50">
-        <div className="px-6 py-6">
-          <Link href="/dashboard" className="text-lg font-semibold tracking-tight text-foreground">
-            Bidd<span className="text-brand">.IA</span>
-          </Link>
-        </div>
+      {/* Barra superior — só em telas estreitas (o menu lateral fixo some abaixo de 1024px) */}
+      <header className="flex items-center justify-between border-b border-border bg-surface/50 px-4 py-3 lg:hidden">
+        {logo}
+        <button
+          onClick={() => setMenuAberto(true)}
+          aria-label="Abrir menu"
+          className="rounded-lg p-2 text-muted hover:bg-border/30 hover:text-foreground"
+        >
+          <Menu className="h-5 w-5" />
+        </button>
+      </header>
 
-        <nav className="flex-1 space-y-1 px-3">
-          {(apenasAdmin ? [NAV_ADMIN] : isAdmin ? [...NAV, NAV_ADMIN] : NAV).map((item) => {
-            const active = pathname === item.href || pathname.startsWith(item.href + "/");
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition ${
-                  active ? "bg-brand-light text-brand" : "text-muted hover:bg-border/30 hover:text-foreground"
-                }`}
-              >
-                <item.icon className="h-4 w-4" />
-                {item.label}
-                {item.href === "/notificacoes" && totalNotificacoes > 0 && (
-                  <span className="ml-auto rounded-full bg-danger px-1.5 py-0.5 text-[10px] font-semibold text-white">
-                    {totalNotificacoes}
-                  </span>
-                )}
-              </Link>
-            );
-          })}
-        </nav>
-
-        <div className="border-t border-border px-4 py-4">
-          <p className="truncate text-sm font-medium text-foreground">{companyName}</p>
-          <p className="truncate text-xs text-muted">{userName}</p>
+      {menuAberto && (
+        <div className="fixed inset-0 z-50 lg:hidden">
           <button
-            onClick={handleLogout}
-            className="mt-3 flex items-center gap-2 text-xs font-medium text-muted hover:text-danger"
+            aria-label="Fechar menu"
+            onClick={() => setMenuAberto(false)}
+            className="absolute inset-0 bg-black/40"
+          />
+          <aside
+            // Fecha a gaveta ao tocar em qualquer link do menu (a navegação acontece normalmente).
+            onClick={(e) => {
+              if ((e.target as HTMLElement).closest("a")) setMenuAberto(false);
+            }}
+            className="relative flex h-full w-64 max-w-[85vw] flex-col bg-background shadow-xl"
           >
-            <LogOut className="h-3.5 w-3.5" />
-            Sair
-          </button>
+            <div className="flex items-center justify-between px-6 py-5">
+              {logo}
+              <button
+                onClick={() => setMenuAberto(false)}
+                aria-label="Fechar menu"
+                className="rounded-lg p-1.5 text-muted hover:bg-border/30 hover:text-foreground"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            {conteudoMenu}
+          </aside>
         </div>
-      </aside>
+      )}
 
-      <main className="flex-1 overflow-y-auto bg-background">{children}</main>
+      <div className="flex min-w-0 flex-1">
+        <aside className="hidden w-64 shrink-0 flex-col border-r border-border bg-surface/50 lg:flex">
+          <div className="px-6 py-6">{logo}</div>
+          {conteudoMenu}
+        </aside>
+
+        <main className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden bg-background">{children}</main>
       </div>
     </div>
   );

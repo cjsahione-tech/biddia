@@ -99,6 +99,7 @@ model Company {
 
   editais            Edital[]
   editaisExcluidos   EditalExcluido[]
+  captacaoRuns       CaptacaoRun[]
   estudosViabilidade EstudoViabilidade[]
   // Dossiê de documentos reutilizáveis da empresa (certidões, contrato social...) — ver
   // CompanyDocument. O Agente Secretário usa isso pra preencher sozinho os itens padrão
@@ -219,6 +220,31 @@ model SiteContent {
   estudoSecaoTitulo     String
   estudoSecaoDescricao  String
   updatedAt             DateTime @updatedAt
+}
+
+enum CaptacaoStatus {
+  RUNNING
+  DONE
+  ERROR
+}
+
+// Uma busca do Agente Comercial (PNCP/LicitaNet/Compras.gov.br) disparada pelo botão
+// "Buscar novos editais": roda em segundo plano e a tela acompanha o progresso por aqui
+// (fase/novos) em vez de ficar presa esperando a requisição terminar — que podia passar do
+// teto de 60s da função e cair em erro mesmo com parte dos editais já criada.
+model CaptacaoRun {
+  id        String         @id @default(cuid())
+  companyId String
+  company   Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  status    CaptacaoStatus @default(RUNNING)
+  fase      String         @default("buscando")
+  analisados Int           @default(0)
+  novos     Int            @default(0)
+  mensagem  String?
+  startedAt DateTime       @default(now())
+  finishedAt DateTime?
+
+  @@index([companyId, startedAt])
 }
 
 enum EditalStatus {
@@ -368,6 +394,10 @@ model Analysis {
   riscos                 String
   parecer                String
   baseadoEmTextoCompleto Boolean @default(false)
+
+  // Todos os prazos do edital organizados (JSON: [{ tipo, prazo, referencia }]) — null em
+  // análises anteriores a esta coluna, que continuam válidas e só não mostram a seção.
+  prazos String?
 
   createdAt DateTime @default(now())
 }

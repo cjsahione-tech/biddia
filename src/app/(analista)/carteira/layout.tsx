@@ -13,7 +13,7 @@ export default async function CarteiraLayout({ children }: { children: React.Rea
 
   return (
     <div className="flex min-h-screen flex-1 flex-col">
-      <header className="flex items-center justify-between border-b border-border px-8 py-4">
+      <header className="flex items-center justify-between border-b border-border px-4 py-4 sm:px-6 lg:px-8">
         <Link href="/carteira" className="text-lg font-semibold tracking-tight text-foreground">
           Bidd<span className="text-brand">.IA</span>
         </Link>

@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { comRetry, extrairJSON } from "@/lib/ia-erros";
 
 // Modelos usados pelos agentes.
 // - SONNET: raciocínio/exatidão que não pode escorregar (proposta financeira).
@@ -21,7 +22,9 @@ function getClient(): Anthropic {
       "ANTHROPIC_API_KEY não configurada. Adicione sua chave no arquivo .env para ativar os agentes de IA."
     );
   }
-  if (!client) client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  // maxRetries: o SDK já repete sozinho (com espera crescente) em 429/5xx/529 e queda de
+  // conexão — o padrão (2) era curto pra picos de sobrecarga, que duram dezenas de segundos.
+  if (!client) client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY, maxRetries: 4 });
   return client;
 }
 
@@ -36,26 +39,33 @@ export async function askJSON<T>(
 ): Promise<T> {
   const anthropic = getClient();
 
-  const message = await anthropic.messages.create({
-    model: opts?.model ?? MODELO_SONNET,
-    max_tokens: opts?.maxTokens ?? 4000,
-    system: `${system}\n\nResponda ESTRITAMENTE com um objeto JSON válido, sem markdown, sem texto antes ou depois.`,
-    messages: [{ role: "user", content: userPrompt }],
-  });
+  // Além das tentativas do próprio SDK (erro de rede/sobrecarga), repete quando a resposta
+  // volta cortada ou fora do formato JSON — falha intermitente do modelo, não do edital.
+  return comRetry(
+    async () => {
+      const message = await anthropic.messages.create({
+        model: opts?.model ?? MODELO_SONNET,
+        max_tokens: opts?.maxTokens ?? 4000,
+        system: `${system}\n\nResponda ESTRITAMENTE com um objeto JSON válido, sem markdown, sem texto antes ou depois.`,
+        messages: [{ role: "user", content: userPrompt }],
+      });
 
-  const block = message.content[0];
-  if (block.type !== "text") throw new Error("Resposta inesperada do modelo");
+      const block = message.content[0];
+      if (!block || block.type !== "text") throw new Error("Resposta inesperada do modelo");
 
-  let raw = block.text.trim();
-  if (raw.startsWith("```")) {
-    raw = raw.replace(/^```(json)?/, "").replace(/```$/, "").trim();
-  }
-
-  try {
-    return JSON.parse(raw) as T;
-  } catch {
-    throw new Error("Não foi possível interpretar a resposta da IA como JSON.");
-  }
+      try {
+        return extrairJSON(block.text) as T;
+      } catch (err) {
+        if (message.stop_reason === "max_tokens") {
+          throw new Error(
+            "A resposta da IA foi cortada por exceder o tamanho máximo permitido (interpretar a resposta da IA como JSON falhou)."
+          );
+        }
+        throw err;
+      }
+    },
+    { tentativas: 3, esperaMs: 1200 }
+  );
 }
 
 /**
@@ -91,7 +101,7 @@ export type ResultadoFerramenta = {
 
 export type ExecutarFerramenta = (name: string, input: Record<string, unknown>) => Promise<ResultadoFerramenta>;
 
-const MAX_ITERACOES_FERRAMENTAS = 6;
+const MAX_ITERACOES_FERRAMENTAS = 10;
 
 /**
  * Conversa com o modelo permitindo que ele chame ferramentas (tool use) antes de
@@ -149,7 +159,30 @@ export async function conversarComFerramentas(
     mensagens.push({ role: "user", content: resultados });
   }
 
-  return { texto: "Não consegui concluir sua solicitação — tente reformular ou dividir em passos menores.", arquivos };
+  // Estourou o número de rodadas de ferramenta: em vez de desistir com uma mensagem
+  // genérica, faz uma última chamada SEM ferramentas pedindo pro modelo responder com o
+  // que já conseguiu levantar/gerar e dizer exatamente o que faltou.
+  try {
+    const final = await anthropic.messages.create({
+      model: opts?.model ?? MODELO_SONNET,
+      max_tokens: opts?.maxTokens ?? 1500,
+      system: `${system}\n\nAs consultas já foram feitas — responda AGORA ao usuário com o que foi possível levantar ou gerar, e diga com clareza o que ficou faltando e por quê. Não chame mais ferramentas.`,
+      messages: mensagens,
+    });
+    const texto = final.content
+      .filter((b): b is Anthropic.TextBlock => b.type === "text")
+      .map((b) => b.text)
+      .join("\n")
+      .trim();
+    if (texto) return { texto, arquivos };
+  } catch (err) {
+    console.error("Falha na resposta final do assistente após o limite de ferramentas:", err);
+  }
+  return {
+    texto:
+      "Fiz várias consultas mas o pedido envolve passos demais para concluir de uma vez. Me diga qual parte é a prioridade (ex: só os editais de uma etapa, ou só um edital específico) que eu resolvo em seguida.",
+    arquivos,
+  };
 }
 
 // Tetos de segurança para o OCR via visão (ver transcreverPdfViaVisao): acima disso, o

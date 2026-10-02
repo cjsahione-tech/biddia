@@ -13,6 +13,44 @@ function parseList(json: string | undefined): string[] {
 }
 
 type GrupoHabilitacao = { categoriaEdital: string | null; itens: string[] };
+type PrazoEdital = { tipo: string; prazo: string; referencia: string | null };
+
+function parsePrazos(json: string | null | undefined): PrazoEdital[] {
+  if (!json) return [];
+  try {
+    const parsed = JSON.parse(json);
+    return Array.isArray(parsed) ? parsed.filter((p) => p && p.tipo && p.prazo) : [];
+  } catch {
+    return [];
+  }
+}
+
+function SectionPrazos({ prazos, analiseAntiga }: { prazos: PrazoEdital[]; analiseAntiga: boolean }) {
+  return (
+    <div className="rounded-2xl border border-border bg-surface/50 p-5">
+      <h4 className="text-sm font-semibold text-foreground">Prazos do edital</h4>
+      {prazos.length === 0 ? (
+        <p className="mt-2 text-sm text-muted">
+          {analiseAntiga
+            ? "Esta análise foi feita antes da lista de prazos existir. Peça no chat abaixo para o Agente Analista refazer a análise listando todos os prazos."
+            : "Nenhum prazo foi encontrado no texto do edital disponível."}
+        </p>
+      ) : (
+        <ul className="mt-3 divide-y divide-border">
+          {prazos.map((p, i) => (
+            <li key={i} className="flex flex-col gap-0.5 py-2 text-sm sm:flex-row sm:items-baseline sm:gap-4">
+              <span className="font-medium text-foreground sm:w-56 sm:shrink-0">{p.tipo}</span>
+              <span className="text-foreground/80">
+                {p.prazo}
+                {p.referencia && <span className="ml-2 text-xs text-muted">({p.referencia})</span>}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
 
 // A habilitação vem agrupada exatamente como o próprio edital organiza suas seções (ex:
 // "13.1 Regularidade Fiscal..." vira um grupo só) — mas análises antigas ainda têm o
@@ -100,7 +138,9 @@ export function AnalysisTab({ edital, onUpdate }: { edital: EditalDetail; onUpda
             <p className="mt-2 text-sm text-foreground/80">{analysis.resumoObjeto}</p>
           </div>
 
-          <div className="grid grid-cols-2 gap-8">
+          <SectionPrazos prazos={parsePrazos(analysis.prazos)} analiseAntiga={analysis.prazos == null} />
+
+          <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
             <Section title="Obrigações da contratada" items={parseList(analysis.obrigacoesContratada)} />
             <SectionHabilitacao grupos={parseHabilitacaoGrupos(analysis.habilitacao)} />
             <Section title="Requisitos obrigatórios" items={parseList(analysis.requisitosObrigatorios)} />

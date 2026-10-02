@@ -195,6 +195,8 @@ export type EditalDetail = Omit<EditalListItem, "analysis" | "proposal" | "docum
     riscos: string;
     parecer: string;
     baseadoEmTextoCompleto: boolean;
+    // JSON [{ tipo, prazo, referencia }] — null em análises anteriores a este campo.
+    prazos: string | null;
   } | null;
   proposal: {
     valorGlobalReferencia: number;

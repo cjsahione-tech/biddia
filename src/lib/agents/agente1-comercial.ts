@@ -13,7 +13,7 @@ import {
 import {
   buscarPublicacoesLicitaNet,
   parseDataBr,
-  linkBoletimSegmento,
+  linkLicitacaoLicitaNet,
   type LicitaNetPublication,
 } from "@/lib/agents/licitanet";
 import { buscarLicitacoesComprasGov, resolverUasg, linkComprasGov, type ComprasGovLicitacao } from "@/lib/agents/comprasgov";
@@ -111,7 +111,13 @@ function normalizarBusca(s: string): string {
  * a empresa declarou atender no cadastro, nem os que a IA considera sem relação direta
  * com o objeto social.
  */
-export async function executarAgente1(companyId: string) {
+export type ProgressoCaptacao = { fase: "buscando" | "classificando" | "criando"; analisados: number; novos: number };
+
+export async function executarAgente1(
+  companyId: string,
+  onProgresso?: (p: ProgressoCaptacao) => void | Promise<void>
+) {
+  const inicioBusca = Date.now();
   const company = await prisma.company.findUnique({
     where: { id: companyId },
     include: { keywords: true },
@@ -130,10 +136,14 @@ export async function executarAgente1(companyId: string) {
   // de 60s da rota com poucas palavras-chave configuradas. Agora roda em paralelo (com
   // teto de concorrência), preservando a ordem de cada busca individual (última
   // atualização primeiro) dentro do que cada palavra-chave devolve.
+  //
+  // As 3 fontes (PNCP, LicitaNet, Compras.gov.br) são independentes entre si e rodavam uma
+  // depois da outra — o tempo total era a SOMA de todas. Agora as três começam juntas
+  // (buscaPncp/buscaLicitaNet/buscaComprasGov) e o passo seguinte espera as três.
   let falhasPncp = 0;
   const vistos = new Set<string>();
   const candidatos: Candidato[] = [];
-  await mapComLimite(company.keywords, 4, async (kw) => {
+  const buscaPncp = mapComLimite(company.keywords, 4, async (kw) => {
     let items: PncpSearchItem[];
     try {
       items = await searchEditaisPorPalavraChave(kw.term, MAX_POR_PALAVRA_CHAVE);
@@ -159,7 +169,8 @@ export async function executarAgente1(companyId: string) {
   // 1b. Busca no LicitaNet pelo segmento cadastrado da empresa — fonte independente do
   // PNCP, então uma falha aqui não impede o restante da busca (e vice-versa).
   let falhaLicitaNet: string | null = null;
-  if (company.licitanetSegmentoId) {
+  const buscaLicitaNet = (async () => {
+    if (!company.licitanetSegmentoId) return;
     try {
       const publicacoes = await buscarPublicacoesLicitaNet(company.licitanetSegmentoId, MAX_POR_SEGMENTO_LICITANET);
       for (const item of publicacoes) {
@@ -178,7 +189,7 @@ export async function executarAgente1(companyId: string) {
       console.error(`Agente Comercial: falha ao buscar no LicitaNet (segmento ${company.licitanetSegmentoId}):`, err);
       falhaLicitaNet = err instanceof Error ? err.message : "erro desconhecido";
     }
-  }
+  })();
 
   // 1c. Compras.gov.br (módulo legado, Lei 8.666/1993) — feature paga, só roda se o plano
   // da empresa liberar (ver verificarAcessoPlano). Esta API não tem busca por palavra-chave
@@ -186,7 +197,8 @@ export async function executarAgente1(companyId: string) {
   // comparando contra o objeto; só aproveita quem ainda está com proposta em aberto (sem
   // campo de "encerramento" nesta fonte, ver comprasgov.ts).
   let falhaComprasGov: string | null = null;
-  if (company.keywords.length > 0 && (await verificarAcessoPlano(company.id, "CAPTACAO_COMPRASGOV"))) {
+  const buscaComprasGov = (async () => {
+    if (company.keywords.length === 0 || !(await verificarAcessoPlano(company.id, "CAPTACAO_COMPRASGOV"))) return;
     try {
       const licitacoes = await buscarLicitacoesComprasGov();
       const termos = company.keywords.map((k) => ({ termo: k.term, normalizado: normalizarBusca(k.term) }));
@@ -211,7 +223,13 @@ export async function executarAgente1(companyId: string) {
       console.error("Agente Comercial: falha ao buscar no Compras.gov.br:", err);
       falhaComprasGov = err instanceof Error ? err.message : "erro desconhecido";
     }
-  }
+  })();
+
+  await Promise.all([buscaPncp, buscaLicitaNet, buscaComprasGov]);
+  console.log(
+    `Agente Comercial (empresa ${company.id}): busca nas fontes concluída em ${Date.now() - inicioBusca}ms — ${candidatos.length} candidato(s), ${falhasPncp} falha(s) PNCP`
+  );
+  await onProgresso?.({ fase: "classificando", analisados: candidatos.length, novos: 0 });
 
   const analisados = candidatos.length;
 
@@ -408,7 +426,7 @@ export async function executarAgente1(companyId: string) {
         // já trata como "Não informado") em vez de inventar um número.
         valorGlobal: null,
         orcamentoSigiloso: false,
-        linkPortal: linkBoletimSegmento(company.licitanetSegmentoId!),
+        linkPortal: linkLicitacaoLicitaNet(item.identifier),
         keywordMatched: company.licitanetSegmentoNome,
         ordemKanban: Date.now(),
       };
@@ -460,6 +478,9 @@ export async function executarAgente1(companyId: string) {
     if (c.fonte === "PNCP") criadosPncp++;
     else if (c.fonte === "LICITANET") criadosLicitaNet++;
     else criadosComprasGov++;
+    // Progresso incremental — a tela atualiza o quadro enquanto os cards vão sendo criados,
+    // sem esperar a busca terminar (ver CaptacaoRun e GET /api/editais/search).
+    void Promise.resolve(onProgresso?.({ fase: "criando", analisados, novos: criadosIds.length })).catch(() => {});
 
     for (const doc of documentosParaCriar) {
       await prisma.document.create({

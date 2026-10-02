@@ -107,7 +107,7 @@ export function CarteiraClient() {
   const noLimite = plano?.maxEmpresas != null && carteira.length >= plano.maxEmpresas;
 
   return (
-    <div className="mx-auto max-w-[1000px] px-8 py-10">
+    <div className="mx-auto max-w-[1000px] px-4 py-6 sm:px-6 sm:py-8 lg:px-8 lg:py-10">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold text-foreground">Minha carteira</h1>

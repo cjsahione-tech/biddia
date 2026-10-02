@@ -63,7 +63,10 @@ export function EditalDetailClient({ editalId }: { editalId: string }) {
     const pipelineDone = edital?.agentRuns?.some(
       (r) => r.agentKey === "agente6-auditor" && r.status !== "RUNNING"
     );
-    const shouldPoll = edital?.status === "APROVADO" && !pipelineDone;
+    // Também acompanha quando o card volta para Qualificação e a esteira roda de novo: o
+    // Auditor da rodada anterior já está "concluído", mas há agentes novos em execução.
+    const algumRodando = edital?.agentRuns?.some((r) => r.status === "RUNNING");
+    const shouldPoll = edital?.status === "APROVADO" && (!pipelineDone || !!algumRodando);
 
     if (shouldPoll && !pollRef.current) {
       pollRef.current = setInterval(load, 2500);
@@ -91,14 +94,14 @@ export function EditalDetailClient({ editalId }: { editalId: string }) {
   const pipelineRunning = edital.status === "APROVADO" && edital.agentRuns.length > 0;
 
   return (
-    <div className="mx-auto max-w-5xl px-8 py-10">
+    <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8 lg:py-10">
       <Link href="/dashboard" className="inline-flex items-center gap-1.5 text-sm text-muted hover:text-foreground">
         <ArrowLeft className="h-4 w-4" /> Voltar
       </Link>
 
-      <div className="mt-4 flex items-start justify-between gap-6">
-        <div>
-          <div className="flex items-center gap-2">
+      <div className="mt-4 flex flex-col gap-4 md:flex-row md:items-start md:justify-between md:gap-6">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="rounded-full bg-brand-light px-2.5 py-0.5 text-xs font-medium text-brand">
               {edital.modalidade ?? "Modalidade não informada"}
             </span>
@@ -106,7 +109,7 @@ export function EditalDetailClient({ editalId }: { editalId: string }) {
               {edital.fonte === "MANUAL" ? "Adicionado manualmente" : edital.numeroControlePNCP}
             </span>
           </div>
-          <h1 className="mt-2 text-2xl font-semibold text-foreground">{edital.titulo}</h1>
+          <h1 className="mt-2 break-words text-xl font-semibold text-foreground sm:text-2xl">{edital.titulo}</h1>
           <p className="mt-1 text-sm text-muted">
             {edital.orgaoNome} — {edital.municipio ?? "?"}/{edital.uf ?? "?"}
           </p>
@@ -132,11 +135,11 @@ export function EditalDetailClient({ editalId }: { editalId: string }) {
           </div>
           {edital.status === "NOVO" && (
             <p className="mt-1.5 text-xs text-muted">
-              Os agentes de IA começam a analisar assim que este card sai de &ldquo;Oportunidade&rdquo;.
+              Os agentes de IA começam a analisar assim que este card vai para &ldquo;Qualificação&rdquo;.
             </p>
           )}
         </div>
-        <div className="shrink-0 text-right">
+        <div className="shrink-0 md:text-right">
           <p
             className={`text-xl font-semibold ${edital.orcamentoSigiloso ? "text-muted italic" : "text-foreground"}`}
           >
@@ -162,12 +165,12 @@ export function EditalDetailClient({ editalId }: { editalId: string }) {
         </div>
       )}
 
-      <div className="mt-8 flex items-center gap-1 border-b border-border">
+      <div className="mt-8 flex items-center gap-1 overflow-x-auto border-b border-border">
         {TABS.map((t) => (
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
-            className={`-mb-px border-b-2 px-4 py-2.5 text-sm font-medium transition ${
+            className={`-mb-px shrink-0 whitespace-nowrap border-b-2 px-3 py-2.5 text-sm font-medium transition sm:px-4 ${
               tab === t.key
                 ? "border-brand text-brand"
                 : "border-transparent text-muted hover:text-foreground"

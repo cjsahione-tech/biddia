@@ -73,6 +73,7 @@ Habilitação exigida: ${a.habilitacao}
 Requisitos obrigatórios: ${a.requisitosObrigatorios}
 Requisitos adicionais: ${a.requisitosAdicionais}
 Riscos: ${a.riscos}
+Prazos do edital: ${a.prazos ?? "(análise anterior à lista de prazos)"}
 Parecer: ${a.parecer}`;
     }
     case "agente3-financeiro": {

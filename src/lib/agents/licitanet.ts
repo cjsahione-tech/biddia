@@ -153,9 +153,15 @@ export function parseDataBr(valor: string | null): Date | null {
   return Number.isNaN(data.getTime()) ? null : data;
 }
 
-/** Link de referência à origem — o LicitaNet não expõe uma página pública por
- * publicação (a área do comprador fica atrás de login), então apontamos para o próprio
- * boletim filtrado pelo segmento, onde a oportunidade aparece. */
-export function linkBoletimSegmento(segmentoId: number) {
-  return `${BASE_URL}/boletim?codSegments=${segmentoId}`;
+/**
+ * Link DIRETO da licitação específica. O boletim (/boletim) é uma listagem — filtrá-lo
+ * por segmento cai numa busca genérica com centenas de resultados, não na licitação. A
+ * única página pública que o próprio LicitaNet endereça por identificador de licitação é
+ * a de impugnação/esclarecimento (é o link que o card de cada publicação no boletim usa),
+ * então é ela que abrimos: já é exatamente a licitação do identificador, sem login.
+ * O identificador é o mesmo `identifier` de LicitaNetPublication (e do numeroControle
+ * "LICITANET-<identifier>" gravado no edital).
+ */
+export function linkLicitacaoLicitaNet(identifier: number | string) {
+  return `https://portal.licitanet.com.br/publico-impugnacao-esclarecimento/${identifier}`;
 }
