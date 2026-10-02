@@ -15,7 +15,7 @@ const LICITANET_HEADERS = {
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
 };
 
-export type LicitaNetNotice = { identifier: number; name: string; link: string };
+export type LicitaNetNotice = { identifier: number; name: string; link: string; datUpload?: string | null };
 
 export type LicitaNetPublication = {
   identifier: number;
@@ -154,14 +154,14 @@ export function parseDataBr(valor: string | null): Date | null {
 }
 
 /**
- * Link DIRETO da licitação específica. O boletim (/boletim) é uma listagem — filtrá-lo
- * por segmento cai numa busca genérica com centenas de resultados, não na licitação. A
- * única página pública que o próprio LicitaNet endereça por identificador de licitação é
- * a de impugnação/esclarecimento (é o link que o card de cada publicação no boletim usa),
- * então é ela que abrimos: já é exatamente a licitação do identificador, sem login.
- * O identificador é o mesmo `identifier` de LicitaNetPublication (e do numeroControle
- * "LICITANET-<identifier>" gravado no edital).
+ * Link do EDITAL FINAL da licitação. O boletim (/boletim) é só uma listagem e as páginas
+ * do portal exigem login — o que o usuário precisa abrir é o próprio edital. O órgão pode
+ * enviar o edital mais de uma vez (retificações), então "final" é o envio MAIS RECENTE da
+ * lista `notices` (campo datUpload; na falta dele, o último da lista). Sem nenhum edital
+ * anexado, cai no boletim — melhor que um link quebrado.
  */
-export function linkLicitacaoLicitaNet(identifier: number | string) {
-  return `https://portal.licitanet.com.br/publico-impugnacao-esclarecimento/${identifier}`;
+export function linkEditalFinalLicitaNet(notices: LicitaNetNotice[]): string {
+  if (notices.length === 0) return `${BASE_URL}/boletim`;
+  const maisRecente = notices.reduce((a, b) => ((b.datUpload ?? "") >= (a.datUpload ?? "") ? b : a));
+  return maisRecente.link;
 }

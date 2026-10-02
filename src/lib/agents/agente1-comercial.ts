@@ -13,7 +13,7 @@ import {
 import {
   buscarPublicacoesLicitaNet,
   parseDataBr,
-  linkLicitacaoLicitaNet,
+  linkEditalFinalLicitaNet,
   type LicitaNetPublication,
 } from "@/lib/agents/licitanet";
 import { buscarLicitacoesComprasGov, resolverUasg, linkComprasGov, type ComprasGovLicitacao } from "@/lib/agents/comprasgov";
@@ -426,7 +426,7 @@ export async function executarAgente1(
         // já trata como "Não informado") em vez de inventar um número.
         valorGlobal: null,
         orcamentoSigiloso: false,
-        linkPortal: linkLicitacaoLicitaNet(item.identifier),
+        linkPortal: linkEditalFinalLicitaNet(item.notices),
         keywordMatched: company.licitanetSegmentoNome,
         ordemKanban: Date.now(),
       };

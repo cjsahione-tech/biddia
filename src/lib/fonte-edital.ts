@@ -10,5 +10,7 @@ export function labelPortal(fonte: string): string {
 }
 
 export function labelVerNoPortal(fonte: string): string {
+  // No LicitaNet o link abre direto o edital final (arquivo), não uma página do portal.
+  if (fonte === "LICITANET") return "Baixar edital (LicitaNet)";
   return `Ver no ${labelPortal(fonte)}`;
 }
