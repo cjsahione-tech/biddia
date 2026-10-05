@@ -34,9 +34,53 @@ const DEFINICAO_ETAPA: Record<EtapaPipeline, { nome: string; executar: (editalId
   auditor: { nome: "Agente Auditor", executar: (id) => executarAgente6(id) },
 };
 
-export function proximaEtapa(etapa: EtapaPipeline): EtapaPipeline | null {
-  const i = ETAPAS_PIPELINE.indexOf(etapa);
-  return ETAPAS_PIPELINE[i + 1] ?? null;
+const AGENTKEY_ETAPA: Partial<Record<EtapaPipeline, string>> = {
+  analista: "agente2-analista",
+  financeiro: "agente3-financeiro",
+  advogado: "agente4-advogado",
+  secretario: "agente5-secretario",
+};
+
+/**
+ * Última execução registrada de uma etapa (ou null). Usado só pra decidir quando a esteira
+ * pode seguir adiante.
+ */
+async function ultimaExecucao(editalId: string, etapa: EtapaPipeline) {
+  const agentKey = AGENTKEY_ETAPA[etapa];
+  if (!agentKey) return null;
+  return prisma.agentRun.findFirst({ where: { editalId, agentKey }, orderBy: { startedAt: "desc" } });
+}
+
+/**
+ * Quais etapas disparar depois de `etapa` terminar. A Vercel recusa (HTTP 508) uma corrente
+ * de chamadas entre funções com mais de 4 saltos — com 5 etapas em fila o Auditor nunca
+ * iniciava em produção. Por isso o Financeiro e o Advogado, que só dependem da análise e
+ * não um do outro, rodam em PARALELO (cada um na sua invocação, com os 60s só dele):
+ *   Analista → [Financeiro ∥ Advogado] → Secretário → Auditor  (4 saltos).
+ * O Secretário precisa dos anexos do Advogado e da proposta do Financeiro: quem termina
+ * por último dos dois é quem dispara o Secretário.
+ */
+export async function etapasSeguintes(editalId: string, etapa: EtapaPipeline): Promise<EtapaPipeline[]> {
+  if (etapa === "analista") return ["financeiro", "advogado"];
+  if (etapa === "secretario") return ["auditor"];
+  if (etapa === "financeiro" || etapa === "advogado") {
+    const irma: EtapaPipeline = etapa === "financeiro" ? "advogado" : "financeiro";
+    const [analista, outra] = await Promise.all([ultimaExecucao(editalId, "analista"), ultimaExecucao(editalId, irma)]);
+    // A irmã só conta se já começou NESTA rodada (depois do início do Analista) e já terminou.
+    const outraTerminou = !!outra && outra.status !== "RUNNING" && (!analista || outra.startedAt >= analista.startedAt);
+    return outraTerminou ? ["secretario"] : [];
+  }
+  return [];
+}
+
+/** true se o Secretário já foi iniciado nesta rodada — evita rodar duas vezes quando
+ * Financeiro e Advogado terminam quase juntos e os dois tentam dispará-lo. */
+export async function secretarioJaIniciado(editalId: string): Promise<boolean> {
+  const [analista, secretario] = await Promise.all([
+    ultimaExecucao(editalId, "analista"),
+    ultimaExecucao(editalId, "secretario"),
+  ]);
+  return !!secretario && (!analista || secretario.startedAt >= analista.startedAt);
 }
 
 // Teto de espera de UM agente antes de seguir pra próxima etapa: a função serverless morre

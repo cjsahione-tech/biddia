@@ -1,12 +1,18 @@
 import { NextResponse, after } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireCompany } from "@/lib/api-utils";
-import { isEtapaPipeline, executarEtapa, proximaEtapa, dispararEtapa } from "@/lib/agents/pipeline";
+import {
+  isEtapaPipeline,
+  executarEtapa,
+  etapasSeguintes,
+  dispararEtapa,
+  secretarioJaIniciado,
+} from "@/lib/agents/pipeline";
 
-// Uma etapa da esteira por invocação (Analista → Financeiro → Advogado → Secretário →
+// Uma etapa da esteira por invocação (Analista → Financeiro ∥ Advogado → Secretário →
 // Auditor, ver pipeline.ts): cada agente ganha o teto de 60s só pra ele, em vez de dividir
 // o mesmo orçamento com os demais. Ao terminar (ou falhar — falha num agente não trava a
-// esteira, fica registrada na aba Auditoria), dispara a etapa seguinte.
+// esteira, fica registrada na aba Auditoria), dispara a(s) etapa(s) seguinte(s).
 export const maxDuration = 60;
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string; etapa: string }> }) {
@@ -22,10 +28,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const cookie = req.headers.get("cookie") ?? "";
   const origin = new URL(req.url).origin;
 
+  // Financeiro e Advogado terminam quase juntos e ambos tentam disparar o Secretário —
+  // só o primeiro a chegar o executa.
+  if (etapa === "secretario" && (await secretarioJaIniciado(id))) {
+    return NextResponse.json({ ok: true, etapa, ignorada: "já iniciada nesta rodada" });
+  }
+
   after(async () => {
     await executarEtapa(id, etapa);
-    const proxima = proximaEtapa(etapa);
-    if (proxima) await dispararEtapa(origin, cookie, id, proxima);
+    const proximas = await etapasSeguintes(id, etapa);
+    await Promise.all(proximas.map((p) => dispararEtapa(origin, cookie, id, p)));
   });
 
   return NextResponse.json({ ok: true, etapa });
