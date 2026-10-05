@@ -241,7 +241,7 @@ export async function executarAgente1(
         companyId: company.id,
         numeroControlePNCP: { in: candidatos.map((c) => c.numeroControle) },
       },
-      select: { id: true, numeroControlePNCP: true, dataAtualizacaoPncp: true, orcamentoSigiloso: true },
+      select: { id: true, numeroControlePNCP: true, dataAtualizacaoPncp: true, orcamentoSigiloso: true, linkPortal: true },
     }),
     prisma.editalExcluido.findMany({
       where: {
@@ -308,6 +308,54 @@ export async function executarAgente1(
         // pontual ao atualizar um edital já conhecido não pode derrubar a busca inteira
         // e impedir a descoberta de editais novos nos passos seguintes.
         console.error(`Falha ao atualizar retificação do edital ${c.numeroControle}:`, err);
+      }
+    }
+  );
+
+  // 2c. Para editais do LicitaNet já capturados: quando o órgão retifica, ele envia um
+  // edital NOVO e o arquivo antigo é retirado do ar — o link guardado na captura passa a
+  // dar "Acesso negado". Como o boletim traz os editais atuais de cada licitação em aberto,
+  // aproveita a busca pra manter o link do card apontando pro edital final e registrar o
+  // arquivo novo como documento (o download só acontece quando a esteira roda).
+  await mapComLimite(
+    candidatos.filter((c): c is CandidatoLicitaNet => c.fonte === "LICITANET" && jaExistentes.has(c.numeroControle)),
+    8,
+    async (c) => {
+      try {
+        const existente = jaExistentesPorChave.get(c.numeroControle);
+        if (!existente || c.item.notices.length === 0) return;
+        const linkFinal = linkEditalFinalLicitaNet(c.item.notices);
+        if (linkFinal === existente.linkPortal) return;
+
+        const jaRegistrados = new Set(
+          (await prisma.document.findMany({ where: { editalId: existente.id }, select: { origemUrl: true } })).map(
+            (d) => d.origemUrl
+          )
+        );
+        for (const n of c.item.notices) {
+          if (jaRegistrados.has(n.link)) continue;
+          await prisma.document.create({
+            data: {
+              editalId: existente.id,
+              nome: n.name,
+              tipo: "DOCUMENTO_LICITANET",
+              categoria: "EDITAL",
+              status: "DISPONIVEL",
+              origemUrl: n.link,
+              conteudoBase64: null,
+            },
+          });
+        }
+        await prisma.edital.update({ where: { id: existente.id }, data: { linkPortal: linkFinal } });
+        await logAudit(
+          existente.id,
+          "Agente Comercial",
+          "Edital retificado no LicitaNet",
+          "ALERTA",
+          "O órgão enviou um novo edital no LicitaNet desde a última captura — o link do card foi atualizado para o edital mais recente. Revise as mudanças antes de prosseguir."
+        );
+      } catch (err) {
+        console.error(`Falha ao atualizar o link do edital LicitaNet ${c.numeroControle}:`, err);
       }
     }
   );
