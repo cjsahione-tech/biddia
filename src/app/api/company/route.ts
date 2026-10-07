@@ -43,6 +43,27 @@ export const companySchema = z.object({
   rbt12Padrao: z.number().min(0).optional().nullable(),
 });
 
+// Empresas-cliente cadastradas por um Analista nascem só com razão social e CNPJ — o resto
+// pode ficar em branco ("") e ser completado depois, então estes campos aceitam vazio OU
+// um valor válido. Empresa comum (onboarding) continua usando companySchema, com tudo obrigatório.
+const textoOuVazio = (min: number, mensagem: string) =>
+  z.string().refine((v) => v.trim() === "" || v.trim().length >= min, mensagem);
+
+export const companySchemaCliente = companySchema.extend({
+  objetoSocial: textoOuVazio(5, "Descreva o objeto da empresa").optional(),
+  logradouro: textoOuVazio(2, "Logradouro inválido").optional(),
+  numero: z.string().optional(),
+  bairro: textoOuVazio(2, "Bairro inválido").optional(),
+  cidade: textoOuVazio(2, "Cidade inválida").optional(),
+  uf: z.string().refine((v) => v.trim() === "" || v.trim().length === 2, "UF deve ter 2 letras").optional(),
+  cep: textoOuVazio(8, "CEP inválido").optional(),
+  banco: z.string().optional(),
+  agencia: z.string().optional(),
+  conta: z.string().optional(),
+  socioNome: textoOuVazio(2, "Nome do responsável inválido").optional(),
+  socioCpf: textoOuVazio(11, "CPF do responsável inválido").optional(),
+});
+
 function validarTipoAtuacao(data: { atendeServico?: boolean; atendeBem?: boolean }) {
   if (data.atendeServico === undefined && data.atendeBem === undefined) return true;
   return data.atendeServico !== false || data.atendeBem !== false;
@@ -120,13 +141,18 @@ export async function PUT(req: Request) {
   const { user, error } = await requireUser();
   if (error) return error;
 
-  const existing = await prisma.company.findUnique({ where: { userId: user!.id } });
+  const existing = await prisma.company.findUnique({
+    where: { userId: user!.id },
+    include: { analistaCliente: { select: { id: true } } },
+  });
   if (!existing) {
     return NextResponse.json({ error: "Empresa ainda não cadastrada" }, { status: 404 });
   }
 
   const body = await req.json().catch(() => null);
-  const parsed = companySchema.omit({ keywords: true }).partial().safeParse(body);
+  // Cliente de Analista pode ter campos em branco enquanto o cadastro não é completado.
+  const schemaPut = existing.analistaCliente ? companySchemaCliente : companySchema;
+  const parsed = schemaPut.omit({ keywords: true }).partial().safeParse(body);
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Dados inválidos" }, { status: 400 });
   }

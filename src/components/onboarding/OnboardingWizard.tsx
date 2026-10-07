@@ -3,10 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { X, Upload, Check, Loader2 } from "lucide-react";
-import { Field, TextInput, TextArea, Select } from "@/components/ui/Field";
+import { Field, TextInput, TextArea } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
 import { buscarEnderecoPorCep } from "@/lib/cep";
-import { SEGMENTOS_LICITANET } from "@/lib/licitanet-segmentos";
+import { SegmentoLicitaNetSelect } from "@/components/empresa/SegmentoLicitaNetSelect";
 
 const UF_LIST = [
   "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG",
@@ -280,18 +280,11 @@ export function OnboardingWizard() {
             htmlFor="licitanetSegmento"
             hint="Além do PNCP, o Agente Comercial também pode buscar editais no portal LicitaNet, filtrados por este segmento."
           >
-            <Select
+            <SegmentoLicitaNetSelect
               id="licitanetSegmento"
-              value={licitanetSegmentoId ?? ""}
-              onChange={(e) => setLicitanetSegmentoId(e.target.value ? Number(e.target.value) : null)}
-            >
-              <option value="">Não buscar no LicitaNet</option>
-              {SEGMENTOS_LICITANET.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.nome}
-                </option>
-              ))}
-            </Select>
+              value={licitanetSegmentoId}
+              onChange={setLicitanetSegmentoId}
+            />
           </Field>
 
           <Field

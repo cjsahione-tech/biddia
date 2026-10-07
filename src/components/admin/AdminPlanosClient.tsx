@@ -6,12 +6,20 @@ import { Button } from "@/components/ui/Button";
 import { Field, TextInput, Select } from "@/components/ui/Field";
 import { formatBRL } from "@/lib/format";
 
+type PublicoAlvo = "EMPRESA" | "ANALISTA" | "EMPRESA_ANALISTA";
+
+const ROTULO_PUBLICO: Record<PublicoAlvo, string> = {
+  EMPRESA: "Empresa",
+  ANALISTA: "Analista de Licitação",
+  EMPRESA_ANALISTA: "Empresas do analista de licitação",
+};
+
 type Feature = { id: string; chave: string; label: string; categoria: string };
 type Plano = {
   id: string;
   nome: string;
   slug: string;
-  publicoAlvo: "EMPRESA" | "ANALISTA";
+  publicoAlvo: PublicoAlvo;
   precoMensal: number;
   precoAnual: number | null;
   maxEditaisAtivos: number | null;
@@ -27,7 +35,7 @@ type Plano = {
 type FormState = {
   nome: string;
   slug: string;
-  publicoAlvo: "EMPRESA" | "ANALISTA";
+  publicoAlvo: PublicoAlvo;
   precoMensal: string;
   precoAnual: string;
   maxEditaisAtivos: string;
@@ -225,7 +233,11 @@ export function AdminPlanosClient() {
                 <Field label="Nome" htmlFor="nome">
                   <TextInput id="nome" value={form.nome} onChange={(e) => setForm((f) => ({ ...f, nome: e.target.value }))} />
                 </Field>
-                <Field label="Slug" htmlFor="slug">
+                <Field
+                  label="Identificador (slug)"
+                  htmlFor="slug"
+                  hint={criando ? "Opcional — em branco, é gerado a partir do nome." : undefined}
+                >
                   <TextInput
                     id="slug"
                     value={form.slug}
@@ -237,10 +249,11 @@ export function AdminPlanosClient() {
                   <Select
                     id="publicoAlvo"
                     value={form.publicoAlvo}
-                    onChange={(e) => setForm((f) => ({ ...f, publicoAlvo: e.target.value as "EMPRESA" | "ANALISTA" }))}
+                    onChange={(e) => setForm((f) => ({ ...f, publicoAlvo: e.target.value as PublicoAlvo }))}
                   >
-                    <option value="EMPRESA">Empresa</option>
-                    <option value="ANALISTA">Analista de Licitação</option>
+                    <option value="EMPRESA">{ROTULO_PUBLICO.EMPRESA}</option>
+                    <option value="ANALISTA">{ROTULO_PUBLICO.ANALISTA}</option>
+                    <option value="EMPRESA_ANALISTA">{ROTULO_PUBLICO.EMPRESA_ANALISTA}</option>
                   </Select>
                 </Field>
                 <Field label="Preço mensal (R$)" htmlFor="precoMensal">
@@ -367,7 +380,7 @@ export function AdminPlanosClient() {
                 <div className="flex items-center gap-2">
                   <p className="text-sm font-semibold text-foreground">{p.nome}</p>
                   <span className="rounded-full bg-surface px-1.5 py-0.5 text-[10px] font-medium text-muted">
-                    {p.publicoAlvo === "EMPRESA" ? "Empresa" : "Analista"}
+                    {ROTULO_PUBLICO[p.publicoAlvo]}
                   </span>
                   {!p.ativo && (
                     <span className="rounded-full bg-warning/10 px-1.5 py-0.5 text-[10px] font-medium text-warning">Inativo</span>

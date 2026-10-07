@@ -2,14 +2,17 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin";
+import { gerarSlug } from "@/lib/slug";
 
 const planoSchema = z.object({
-  nome: z.string().min(1),
+  nome: z.string().trim().min(1, "Informe o nome do plano"),
+  // Opcional: em branco, é gerado sozinho a partir do nome (ex.: "Plano Ouro" -> "plano-ouro").
   slug: z
     .string()
-    .min(1)
-    .regex(/^[a-z0-9-]+$/, "Use só letras minúsculas, números e hífen"),
-  publicoAlvo: z.enum(["EMPRESA", "ANALISTA"]),
+    .trim()
+    .regex(/^[a-z0-9-]*$/, "O identificador (slug) aceita só letras minúsculas, números e hífen")
+    .optional(),
+  publicoAlvo: z.enum(["EMPRESA", "ANALISTA", "EMPRESA_ANALISTA"]),
   precoMensal: z.number().nonnegative(),
   precoAnual: z.number().nonnegative().nullable().optional(),
   maxEditaisAtivos: z.number().int().nonnegative().nullable().optional(),
@@ -41,15 +44,25 @@ export async function POST(req: Request) {
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Dados inválidos" }, { status: 400 });
   }
-  const { featureIds, ...dados } = parsed.data;
+  const { featureIds, slug: slugInformado, ...dados } = parsed.data;
 
-  const existente = await prisma.plan.findUnique({ where: { slug: dados.slug } });
-  if (existente) {
-    return NextResponse.json({ error: "Já existe um plano com este slug" }, { status: 409 });
+  const base = slugInformado || gerarSlug(dados.nome);
+  if (!base) {
+    return NextResponse.json({ error: "Informe um nome com letras ou números para o plano" }, { status: 400 });
+  }
+  let slug = base;
+  if (slugInformado) {
+    // Slug digitado à mão: se já existe, avisa em vez de trocar por baixo dos panos.
+    if (await prisma.plan.findUnique({ where: { slug } })) {
+      return NextResponse.json({ error: "Já existe um plano com este identificador (slug)" }, { status: 409 });
+    }
+  } else {
+    // Gerado a partir do nome: se já existe, acrescenta -2, -3... até ficar único.
+    for (let n = 2; await prisma.plan.findUnique({ where: { slug } }); n++) slug = `${base}-${n}`;
   }
 
   const plano = await prisma.plan.create({
-    data: { ...dados, features: { create: featureIds.map((featureId) => ({ featureId })) } },
+    data: { ...dados, slug, features: { create: featureIds.map((featureId) => ({ featureId })) } },
     include: { features: { include: { feature: true } } },
   });
   return NextResponse.json({ plano });

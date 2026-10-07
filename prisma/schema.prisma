@@ -21,11 +21,11 @@ enum TipoDocumentoAnalista {
 }
 
 model User {
-  id           String    @id @default(cuid())
-  email        String    @unique
+  id           String   @id @default(cuid())
+  email        String   @unique
   passwordHash String
   name         String
-  createdAt    DateTime  @default(now())
+  createdAt    DateTime @default(now())
   company      Company?
 
   // Redefinição de senha via SMS: código de 6 dígitos hasheado (nunca guardado em texto
@@ -35,12 +35,12 @@ model User {
   resetCodeExpiresAt DateTime?
   resetCodeAttempts  Int       @default(0)
 
-  tipoConta             TipoConta               @default(EMPRESA)
+  tipoConta             TipoConta              @default(EMPRESA)
   // CPF ou CNPJ do próprio Analista (identidade da conta) — só preenchido quando
   // tipoConta = ANALISTA. Empresa continua se identificando pelo Company.cnpj de sempre.
   documentoAnalista     String?
   tipoDocumentoAnalista TipoDocumentoAnalista?
-  carteiraClientes      AnalistaCliente[]       @relation("AnalistaDaCarteira")
+  carteiraClientes      AnalistaCliente[]      @relation("AnalistaDaCarteira")
 
   // Plano do próprio Analista (ele não tem Company, então não usa Company.planId) — define
   // o teto de maxEmpresas aplicado à carteira. Empresa continua usando Company.planId.
@@ -133,25 +133,56 @@ model Keyword {
 // ADMIN_EMAILS — sem role editável pela interface, nada aqui.
 
 // Vínculo do Analista com cada empresa-cliente da sua carteira — a empresa-cliente é um
-// User+Company normal e independente (login próprio); este registro só autoriza o Analista
-// a "entrar" nele (ver POST /api/analista/carteira/[companyId]/entrar) e guarda a tarifa
-// mensal cobrada desse cliente, consolidada na fatura do próprio Analista (sem cobrança real
-// integrada nesta entrega — é só o dado).
+// User+Company normal e independente (login próprio); este registro autoriza o Analista a
+// "entrar" nele (ver POST /api/analista/carteira/[companyId]/entrar) e controla a cobrança
+// adicional por cliente (ver PeriodoCobrancaCliente e src/lib/cobranca-carteira.ts).
 model AnalistaCliente {
-  id           String   @id @default(cuid())
-  analistaId   String
-  analista     User     @relation("AnalistaDaCarteira", fields: [analistaId], references: [id], onDelete: Cascade)
-  companyId    String   @unique
-  company      Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  tarifaMensal Float
-  createdAt    DateTime @default(now())
+  id         String  @id @default(cuid())
+  analistaId String
+  analista   User    @relation("AnalistaDaCarteira", fields: [analistaId], references: [id], onDelete: Cascade)
+  companyId  String  @unique
+  company    Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  // DESCONTINUADO: era o valor que o Analista cobrava do próprio cliente (campo removido da
+  // tela "Novo cliente"). Nada mais lê nem grava isto; a coluna fica só para preservar os
+  // dados já cadastrados — pode ser apagada numa limpeza futura, depois de conferida.
+  tarifaMensal Float?
+
+  // false = Analista desativou o cliente (não aparece na carteira ativa, não entra mais e a
+  // cobrança dele para — ver PATCH /api/analista/carteira/[companyId]). Nada é apagado.
+  ativo        Boolean   @default(true)
+  desativadoEm DateTime?
+
+  periodosCobranca PeriodoCobrancaCliente[]
+
+  createdAt DateTime @default(now())
+}
+
+// Histórico de cobrança do cliente da carteira (o que o Bidd.IA cobra do Analista): cada
+// linha é um intervalo em que o cliente esteve ativo — "fim" nulo = ainda ativo. Se o
+// cliente for desativado e reativado depois, ganha uma linha nova. É a base para calcular e
+// auditar a fatura de qualquer mês, inclusive com cliente que entrou ou saiu no meio dele.
+model PeriodoCobrancaCliente {
+  id                String          @id @default(cuid())
+  analistaClienteId String
+  analistaCliente   AnalistaCliente @relation(fields: [analistaClienteId], references: [id], onDelete: Cascade)
+  inicio            DateTime
+  fim               DateTime?
+
+  @@index([analistaClienteId])
 }
 
 // Separa a vitrine de preços pública (Empresa x Analista são produtos diferentes) e evita
 // o admin atribuir por engano um plano de um público a uma conta do outro.
+//   EMPRESA          — empresa que se cadastra sozinha (vitrine pública de preços)
+//   ANALISTA         — a conta do Analista de Licitação (teto da carteira)
+//   EMPRESA_ANALISTA — "Plano mensal" das empresas-cliente cadastradas por um Analista:
+//                      o analista escolhe um destes planos ao cadastrar o cliente e o valor
+//                      do plano é cobrado mensalmente direto do cliente (não do analista).
 enum PublicoAlvoPlano {
   EMPRESA
   ANALISTA
+  EMPRESA_ANALISTA
 }
 
 model Plan {
@@ -162,6 +193,7 @@ model Plan {
 
   precoMensal Float
   precoAnual  Float?
+
 
   // null = ilimitado. maxEmpresas/maxUsuarios ficam como metadado reservado quando o plano
   // é de uma Company (não há multiempresa real pra Empresa nesta entrega); quando o plano é
@@ -187,8 +219,8 @@ model Plan {
 // função (ver /admin/planos). A maior parte fica só configurável aqui nesta entrega, sem
 // checagem em runtime ainda (ver comentário em src/lib/plano.ts sobre o que já é aplicado).
 model Feature {
-  id            String @id @default(cuid())
-  chave         String @unique
+  id            String  @id @default(cuid())
+  chave         String  @unique
   label         String
   categoria     String
   descricao     String?
@@ -233,15 +265,15 @@ enum CaptacaoStatus {
 // (fase/novos) em vez de ficar presa esperando a requisição terminar — que podia passar do
 // teto de 60s da função e cair em erro mesmo com parte dos editais já criada.
 model CaptacaoRun {
-  id        String         @id @default(cuid())
-  companyId String
-  company   Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  status    CaptacaoStatus @default(RUNNING)
-  fase      String         @default("buscando")
-  analisados Int           @default(0)
-  novos     Int            @default(0)
-  mensagem  String?
-  startedAt DateTime       @default(now())
+  id         String         @id @default(cuid())
+  companyId  String
+  company    Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  status     CaptacaoStatus @default(RUNNING)
+  fase       String         @default("buscando")
+  analisados Int            @default(0)
+  novos      Int            @default(0)
+  mensagem   String?
+  startedAt  DateTime       @default(now())
   finishedAt DateTime?
 
   @@index([companyId, startedAt])
@@ -305,11 +337,11 @@ model Edital {
   dataPrazoHabilitacao DateTime?
   dataVisitaTecnica    DateTime?
   dataPrazoImpugnacao  DateTime?
-  valorGlobal              Float?
-  orcamentoSigiloso        Boolean   @default(false)
-  tipoObjeto               String?
-  linkPortal               String
-  keywordMatched           String?
+  valorGlobal          Float?
+  orcamentoSigiloso    Boolean   @default(false)
+  tipoObjeto           String?
+  linkPortal           String
+  keywordMatched       String?
 
   status    EditalStatus @default(NOVO)
   decidedAt DateTime?

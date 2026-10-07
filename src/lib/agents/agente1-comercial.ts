@@ -362,8 +362,18 @@ export async function executarAgente1(
 
   // 3. Classifica em lote (relevância + tipo do objeto) com IA — mesmo pipeline para as
   // duas fontes, já que ambas chegam normalizadas em {numeroControle, titulo, descricao}.
+  // Cliente cadastrado por um Analista pode ainda não ter "objeto social" preenchido: nesse
+  // caso a relevância é julgada pelo que o próprio cadastro informa (palavras-chave e segmento
+  // do LicitaNet), em vez de comparar com um texto vazio.
+  const objetoParaRelevancia =
+    company.objetoSocial.trim() !== ""
+      ? company.objetoSocial
+      : `(objeto social ainda não informado) Empresa que busca licitações sobre: ${[
+          ...company.keywords.map((k) => k.term),
+          ...(company.licitanetSegmentoNome ? [company.licitanetSegmentoNome] : []),
+        ].join("; ")}`;
   const classificacoes = await classificarEditaisEmLote(
-    company.objetoSocial,
+    objetoParaRelevancia,
     novosCandidatos.map((c) => ({ numeroControle: c.numeroControle, titulo: c.titulo, descricao: c.descricao }))
   );
 

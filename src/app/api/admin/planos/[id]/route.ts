@@ -4,8 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin";
 
 const patchSchema = z.object({
-  nome: z.string().min(1).optional(),
-  publicoAlvo: z.enum(["EMPRESA", "ANALISTA"]).optional(),
+  nome: z.string().trim().min(1, "Informe o nome do plano").optional(),
+  publicoAlvo: z.enum(["EMPRESA", "ANALISTA", "EMPRESA_ANALISTA"]).optional(),
   precoMensal: z.number().nonnegative().optional(),
   precoAnual: z.number().nonnegative().nullable().optional(),
   maxEditaisAtivos: z.number().int().nonnegative().nullable().optional(),

@@ -1,13 +1,16 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Loader2, Upload, X, Check, Settings2 } from "lucide-react";
-import { Field, TextInput, TextArea, Select } from "@/components/ui/Field";
+import { Loader2, Check, Settings2, Info } from "lucide-react";
+import { Field, TextInput, TextArea } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
 import { REGIMES_TRIBUTARIOS, ANEXOS_SIMPLES, type RegimeTributario, type AnexoSimples } from "@/lib/tributos";
 import { buscarEnderecoPorCep } from "@/lib/cep";
-import { SEGMENTOS_LICITANET } from "@/lib/licitanet-segmentos";
+import { SegmentoLicitaNetSelect } from "@/components/empresa/SegmentoLicitaNetSelect";
+import { LogoUpload } from "@/components/empresa/LogoUpload";
+import { KeywordsInput } from "@/components/empresa/KeywordsInput";
+import { camposPendentes } from "@/lib/empresa-pendencias";
 
 type Company = {
   objetoSocial: string;
@@ -42,9 +45,7 @@ export function EmpresaClient() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [keywordDraft, setKeywordDraft] = useState("");
   const [buscandoCep, setBuscandoCep] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     fetch("/api/company")
@@ -126,33 +127,27 @@ export function EmpresaClient() {
     }
   }
 
-  function handleLogoChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => set("logoUrl", reader.result as string);
-    reader.readAsDataURL(file);
-  }
-
-  async function addKeyword() {
-    const term = keywordDraft.trim();
-    if (!term || !company) return;
+  async function addKeyword(term: string): Promise<boolean> {
+    if (!company) return false;
     const res = await fetch("/api/keywords", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ term }),
     });
     const data = await res.json();
-    if (res.ok) {
-      setCompany((c) => (c ? { ...c, keywords: [...c.keywords, data.keyword] } : c));
-      setKeywordDraft("");
-    }
+    if (!res.ok) return false;
+    setCompany((c) => (c ? { ...c, keywords: [...c.keywords, data.keyword] } : c));
+    return true;
   }
 
   async function removeKeyword(id: string) {
     await fetch(`/api/keywords?id=${id}`, { method: "DELETE" });
     setCompany((c) => (c ? { ...c, keywords: c.keywords.filter((k) => k.id !== id) } : c));
   }
+
+  const pendencias = company
+    ? camposPendentes({ ...company, totalKeywords: company.keywords.length })
+    : [];
 
   if (loading || !company) {
     return (
@@ -169,44 +164,26 @@ export function EmpresaClient() {
         Estes dados alimentam os agentes — do timbrado dos documentos às buscas automáticas.
       </p>
 
+      {pendencias.length > 0 && (
+        <div className="mt-4 flex items-start gap-2 rounded-lg border border-warning/30 bg-warning/5 px-4 py-3 text-sm text-warning">
+          <Info className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>
+            Informações ainda pendentes: <strong>{pendencias.join(", ")}</strong>. Preencha quando puder — os
+            agentes usam esses dados nos documentos e nas buscas.
+          </span>
+        </div>
+      )}
+
       <section className="mt-8 rounded-2xl border border-border p-6">
         <h2 className="text-sm font-semibold text-foreground">Palavras-chave de pesquisa</h2>
         <p className="mt-1 text-xs text-muted">
           Usadas pelo Agente Comercial para buscar editais no PNCP.
         </p>
-        <div className="mt-3 flex gap-2">
-          <TextInput
-            value={keywordDraft}
-            onChange={(e) => setKeywordDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                addKeyword();
-              }
-            }}
-            placeholder="Nova palavra-chave"
-            className="mt-0"
-          />
-          <Button type="button" variant="secondary" onClick={addKeyword}>
-            Adicionar
-          </Button>
-        </div>
-        <div className="mt-3 flex flex-wrap gap-2">
-          {company.keywords.map((k) => (
-            <span
-              key={k.id}
-              className="inline-flex items-center gap-1.5 rounded-full bg-brand-light px-3 py-1 text-xs font-medium text-brand"
-            >
-              {k.term}
-              <button onClick={() => removeKeyword(k.id)} className="text-brand/60 hover:text-brand">
-                <X className="h-3 w-3" />
-              </button>
-            </span>
-          ))}
-          {company.keywords.length === 0 && (
-            <p className="text-xs text-muted">Nenhuma palavra-chave cadastrada ainda.</p>
-          )}
-        </div>
+        <KeywordsInput
+          items={company.keywords.map((k) => ({ key: k.id, term: k.term }))}
+          onAdd={addKeyword}
+          onRemove={removeKeyword}
+        />
 
         <div className="mt-6 border-t border-border pt-6">
           <Field
@@ -214,18 +191,11 @@ export function EmpresaClient() {
             htmlFor="licitanetSegmento"
             hint="Além do PNCP, o Agente Comercial também pode buscar editais no portal LicitaNet, filtrados por este segmento."
           >
-            <Select
+            <SegmentoLicitaNetSelect
               id="licitanetSegmento"
-              value={company.licitanetSegmentoId ?? ""}
-              onChange={(e) => set("licitanetSegmentoId", e.target.value ? Number(e.target.value) : null)}
-            >
-              <option value="">Não buscar no LicitaNet</option>
-              {SEGMENTOS_LICITANET.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.nome}
-                </option>
-              ))}
-            </Select>
+              value={company.licitanetSegmentoId}
+              onChange={(id) => set("licitanetSegmentoId", id)}
+            />
           </Field>
         </div>
 
@@ -246,31 +216,7 @@ export function EmpresaClient() {
       </section>
 
       <form onSubmit={handleSave} className="mt-6 space-y-6 rounded-2xl border border-border p-6">
-        <div className="flex items-center gap-4">
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-dashed border-border bg-surface text-muted hover:border-brand hover:text-brand"
-          >
-            {company.logoUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={company.logoUrl} alt="Logo" className="h-full w-full object-contain" />
-            ) : (
-              <Upload className="h-5 w-5" />
-            )}
-          </button>
-          <div>
-            <p className="text-sm font-medium text-foreground">Logo da empresa</p>
-            <p className="text-xs text-muted">Usada no timbrado dos documentos gerados.</p>
-          </div>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/png,image/jpeg"
-            className="hidden"
-            onChange={handleLogoChange}
-          />
-        </div>
+        <LogoUpload value={company.logoUrl} onChange={(dataUrl) => set("logoUrl", dataUrl)} />
 
         <Field label="Objeto da empresa" htmlFor="objetoSocial">
           <TextArea

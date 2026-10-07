@@ -23,6 +23,9 @@ export async function POST(_req: Request, { params }: { params: Promise<{ compan
   if (!vinculo || vinculo.analistaId !== user!.id) {
     return NextResponse.json({ error: "Esta empresa não está na sua carteira" }, { status: 403 });
   }
+  if (!vinculo.ativo) {
+    return NextResponse.json({ error: "Este cliente está desativado. Reative-o para entrar." }, { status: 403 });
+  }
 
   const store = await cookies();
   const sessaoAtual = store.get(COOKIE_NAME)?.value;
