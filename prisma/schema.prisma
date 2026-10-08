@@ -569,6 +569,11 @@ model CompanyDocument {
   tipo      String
   categoria HabilitacaoCategoria?
 
+  // Chave do item do catálogo fixo de documentação (ver src/lib/catalogo-documentos.ts) a que
+  // este arquivo corresponde. null = documento personalizado ("Outros") ou enviado antes do
+  // catálogo existir — nesse caso o item é reconhecido pelo nome do tipo, sem reescrever nada.
+  catalogoChave String?
+
   nome        String
   forma       FormaDocumento @default(COPIA_SIMPLES)
   dataEmissao DateTime?
@@ -582,6 +587,7 @@ model CompanyDocument {
   updatedAt DateTime @updatedAt
 
   @@index([companyId])
+  @@index([companyId, catalogoChave])
 }
 
 enum AuditSeverity {

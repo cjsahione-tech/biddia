@@ -69,6 +69,7 @@ export type CompanyDocumentItem = {
   id: string;
   tipo: string;
   categoria: HabilitacaoCategoria | null;
+  catalogoChave: string | null;
   nome: string;
   forma: FormaDocumento;
   dataEmissao: string | null;

@@ -4,6 +4,7 @@ import { askJSON, MODELO_HAIKU } from "@/lib/anthropic";
 import { withAgentRun, logAudit } from "@/lib/agents/run-tracker";
 import { dentroDaValidadeComMargem, FORMA_LABEL } from "@/lib/documentos-empresa";
 import { CHECKLIST_BASE, CATEGORIA_BASE } from "@/lib/checklist-base";
+import { CHECKLIST_BASE_PARA_CATALOGO, chaveEfetivaDoDocumento } from "@/lib/catalogo-documentos";
 
 export { CHECKLIST_BASE, CATEGORIA_BASE };
 
@@ -99,16 +100,33 @@ async function preencherChecklistComDossie(
   });
   if (itensBaseFaltantes.length === 0) return { preenchidosDoDossie: 0, dossieVencidos: 0 };
 
-  const docsDossie = await prisma.companyDocument.findMany({
-    where: { companyId: edital.companyId, tipo: { in: itensBaseFaltantes.map((i) => i.documentoNome) } },
+  // Casa cada item padrão com o documento do dossiê: pelo nome exato do tipo (como sempre
+  // foi) OU por um dos itens equivalentes do catálogo da tela Documentos (ex.: a certidão
+  // estadual de produtos ou de serviços). Primeiro só os metadados, para não carregar o
+  // conteúdo (base64) de todos os arquivos da empresa.
+  const metadados = await prisma.companyDocument.findMany({
+    where: { companyId: edital.companyId },
+    select: { id: true, tipo: true, catalogoChave: true },
   });
-  const dossiePorTipo = new Map(docsDossie.map((d) => [d.tipo, d]));
+  const idPorItem = new Map<string, string>();
+  for (const item of itensBaseFaltantes) {
+    const chaves = CHECKLIST_BASE_PARA_CATALOGO[item.documentoNome] ?? [];
+    const achado =
+      metadados.find((d) => d.tipo === item.documentoNome) ??
+      metadados.find((d) => chaves.includes(chaveEfetivaDoDocumento(d) ?? ""));
+    if (achado) idPorItem.set(item.documentoNome, achado.id);
+  }
+  const docsDossie = await prisma.companyDocument.findMany({
+    where: { companyId: edital.companyId, id: { in: Array.from(new Set(idPorItem.values())) } },
+  });
+  const dossiePorId = new Map(docsDossie.map((d) => [d.id, d]));
 
   let preenchidosDoDossie = 0;
   let dossieVencidos = 0;
 
   for (const item of itensBaseFaltantes) {
-    const docDossie = dossiePorTipo.get(item.documentoNome);
+    const docId = idPorItem.get(item.documentoNome);
+    const docDossie = docId ? dossiePorId.get(docId) : undefined;
     if (!docDossie) continue;
 
     if (dentroDaValidadeComMargem(docDossie.validade, dataReferencia)) {
