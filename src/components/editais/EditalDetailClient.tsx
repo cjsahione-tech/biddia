@@ -15,9 +15,11 @@ import { DocumentsTab } from "@/components/editais/tabs/DocumentsTab";
 import { ChecklistTab } from "@/components/editais/tabs/ChecklistTab";
 import { AuditTab } from "@/components/editais/tabs/AuditTab";
 import { SeloHabilitacao } from "@/components/editais/SeloHabilitacao";
+import { HabilitacaoTab } from "@/components/editais/tabs/HabilitacaoTab";
 
 const TABS = [
   { key: "analise", label: "Análise" },
+  { key: "habilitacao", label: "Habilitação" },
   { key: "financeiro", label: "Financeiro" },
   { key: "documentos", label: "Documentos" },
   { key: "checklist", label: "Checklist" },
@@ -110,6 +112,11 @@ export function EditalDetailClient({ editalId }: { editalId: string }) {
               {edital.fonte === "MANUAL" ? "Adicionado manualmente" : edital.numeroControlePNCP}
             </span>
             <SeloHabilitacao status={edital.habilitacaoStatus} percentual={edital.habilitacaoPercentual} tamanho="normal" />
+            {["HABILITADA_RESSALVAS", "NAO_HABILITADA"].includes(edital.habilitacaoStatus) && (
+              <button onClick={() => setTab("habilitacao")} className="text-xs font-medium text-brand hover:underline">
+                Ver pendências
+              </button>
+            )}
           </div>
           <h1 className="mt-2 break-words text-xl font-semibold text-foreground sm:text-2xl">{edital.titulo}</h1>
           <p className="mt-1 text-sm text-muted">
@@ -185,6 +192,7 @@ export function EditalDetailClient({ editalId }: { editalId: string }) {
 
       <div className="mt-6">
         {tab === "analise" && <AnalysisTab edital={edital} onUpdate={load} />}
+        {tab === "habilitacao" && <HabilitacaoTab editalId={edital.id} />}
         {tab === "financeiro" && <FinanceTab edital={edital} onUpdate={load} />}
         {tab === "documentos" && (
           <DocumentsTab editalId={edital.id} documents={edital.documents} onUpdate={load} />

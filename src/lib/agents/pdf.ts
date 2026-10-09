@@ -36,7 +36,10 @@ function desenharTabela(
   font: import("pdf-lib").PDFFont,
   fontBold: import("pdf-lib").PDFFont,
   colunas: { label: string; largura: number }[],
-  linhas: string[][]
+  linhas: string[][],
+  // true = o texto de cada célula quebra em várias linhas (a célula cresce); false (padrão) =
+  // uma linha só, cortada com "…" — comportamento original, usado pelos outros relatórios.
+  quebrarLinhas = false
 ): void {
   const novaPaginaSeNecessario = (alturaNecessaria: number) => {
     if (ctx.cursorY < MARGIN + alturaNecessaria) {
@@ -61,6 +64,26 @@ function desenharTabela(
   ctx.cursorY -= 4;
 
   for (const linha of linhas) {
+    if (quebrarLinhas) {
+      const celulas = linha.map((valor, i) => wrapText(valor || "—", font, 8, (colunas[i]?.largura ?? 60) - 6));
+      const alturaLinha = Math.max(...celulas.map((c) => c.length)) * 10 + 5;
+      novaPaginaSeNecessario(alturaLinha + 6);
+      let xQuebra = MARGIN;
+      celulas.forEach((linhasDaCelula, i) => {
+        linhasDaCelula.forEach((trecho, k) => {
+          ctx.page.drawText(trecho, { x: xQuebra, y: ctx.cursorY - k * 10, size: 8, font, color: rgb(0.15, 0.15, 0.15) });
+        });
+        xQuebra += colunas[i]?.largura ?? 60;
+      });
+      ctx.cursorY -= alturaLinha;
+      ctx.page.drawLine({
+        start: { x: MARGIN, y: ctx.cursorY + 6 },
+        end: { x: PAGE_WIDTH - MARGIN, y: ctx.cursorY + 6 },
+        thickness: 0.3,
+        color: rgb(0.9, 0.9, 0.9),
+      });
+      continue;
+    }
     novaPaginaSeNecessario(18);
     let xCel = MARGIN;
     linha.forEach((valor, i) => {
@@ -224,7 +247,7 @@ export function bytesToDataUrl(bytes: Uint8Array) {
 export type SecaoRelatorio =
   | { tipo: "campos"; titulo: string; campos: { label: string; valor: string }[] }
   | { tipo: "texto"; titulo: string; texto: string }
-  | { tipo: "tabela"; titulo: string; colunas: { label: string; largura: number }[]; linhas: string[][] }
+  | { tipo: "tabela"; titulo: string; colunas: { label: string; largura: number }[]; linhas: string[][]; quebrarLinhas?: boolean }
   // Gráfico de barras horizontais desenhado com retângulos do próprio pdf-lib (sem
   // depender de rasterizar imagem nenhuma) — usado pelo Dashboard de Resultados para dar
   // uma leitura visual rápida de distribuições (funil de etapas, por portal, por UF...).
@@ -379,7 +402,7 @@ export async function gerarPdfRelatorio(opts: {
       }
     } else {
       const ctx = { pdfDoc, page, cursorY };
-      desenharTabela(ctx, font, fontBold, secao.colunas, secao.linhas);
+      desenharTabela(ctx, font, fontBold, secao.colunas, secao.linhas, secao.quebrarLinhas ?? false);
       page = ctx.page;
       cursorY = ctx.cursorY;
     }

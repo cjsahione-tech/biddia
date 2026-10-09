@@ -3,12 +3,24 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { executarAuditoriaHabilitacao } from "@/lib/agents/auditoria-habilitacao";
 import { tokenInternoValido } from "@/lib/agents/auditoria-dispatch";
+import { requireCompany } from "@/lib/api-utils";
+import { montarRelatorioHabilitacao } from "@/lib/habilitacao-relatorio";
 
 // Executa a auditoria de habilitação de UM edital. Não tem botão na tela: é chamada pelo
 // próprio sistema (depois da captação, ao continuar a leitura de um edital grande e ao
 // reconferir quando a documentação da empresa muda), com um token assinado e restrito a este
 // edital. O dono da conta também pode chamar (usado para testes e suporte).
 export const maxDuration = 60;
+
+/** Relatório de habilitação do edital (aba "Habilitação"): resumo, pendências por categoria etc. */
+export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { company, error } = await requireCompany();
+  if (error) return error;
+  const { id } = await params;
+  const relatorio = await montarRelatorioHabilitacao(id, company!.id);
+  if (!relatorio) return NextResponse.json({ error: "Edital não encontrado" }, { status: 404 });
+  return NextResponse.json({ relatorio });
+}
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
