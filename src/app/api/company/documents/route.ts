@@ -1,8 +1,9 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireCompany } from "@/lib/api-utils";
 import { apagarAnexo } from "@/lib/storage";
+import { reavaliarEditaisDaEmpresa } from "@/lib/agents/auditoria-habilitacao";
 import { itemPorChave, chaveEfetivaDoDocumento } from "@/lib/catalogo-documentos";
 
 const CATEGORIAS = [
@@ -112,6 +113,13 @@ export async function POST(req: Request) {
       nome,
       conteudoBase64: conteudoBase64 ?? null,
     },
+  });
+
+
+  // A documentação mudou: refaz a conferência de habilitação dos editais abertos (em segundo plano).
+  const origem = new URL(req.url).origin;
+  after(async () => {
+    await reavaliarEditaisDaEmpresa(company!.id, origem);
   });
 
   // Não devolve o conteúdo do arquivo de volta (pode ter vários MB).

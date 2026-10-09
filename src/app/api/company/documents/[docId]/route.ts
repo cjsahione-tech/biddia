@@ -1,8 +1,9 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireCompany } from "@/lib/api-utils";
 import { apagarAnexo } from "@/lib/storage";
+import { reavaliarEditaisDaEmpresa } from "@/lib/agents/auditoria-habilitacao";
 import { itemPorChave, chaveEfetivaDoDocumento } from "@/lib/catalogo-documentos";
 
 const CATEGORIAS = [
@@ -71,12 +72,19 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ docId:
     },
   });
 
+
+  // A documentação mudou: refaz a conferência de habilitação dos editais abertos (em segundo plano).
+  const origem = new URL(req.url).origin;
+  after(async () => {
+    await reavaliarEditaisDaEmpresa(company!.id, origem);
+  });
+
   const { conteudoBase64: _conteudo, ...semConteudo } = atualizado;
   void _conteudo;
   return NextResponse.json({ documento: semConteudo });
 }
 
-export async function DELETE(_req: Request, { params }: { params: Promise<{ docId: string }> }) {
+export async function DELETE(req: Request, { params }: { params: Promise<{ docId: string }> }) {
   const { company, error } = await requireCompany();
   if (error) return error;
   const { docId } = await params;
@@ -86,6 +94,12 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ docI
 
   await prisma.companyDocument.delete({ where: { id: docId } });
   if (documento.storagePath) await apagarAnexo(documento.storagePath).catch(() => null);
+
+  // A documentação mudou: refaz a conferência de habilitação dos editais abertos (em segundo plano).
+  const origem = new URL(req.url).origin;
+  after(async () => {
+    await reavaliarEditaisDaEmpresa(company!.id, origem);
+  });
 
   return NextResponse.json({ ok: true });
 }

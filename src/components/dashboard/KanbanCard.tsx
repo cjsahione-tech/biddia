@@ -4,6 +4,7 @@ import { formatValorEdital, formatDate, formatDateTime } from "@/lib/format";
 import { faixaCorCard } from "@/lib/kanban";
 import { calcularEstadoInatividade } from "@/lib/kanban-atividade";
 import type { EditalListItem } from "@/lib/types";
+import { SeloHabilitacao } from "@/components/editais/SeloHabilitacao";
 
 const TIPO_OBJETO_LABEL: Record<"SERVICO" | "BEM" | "AMBOS", string> = {
   SERVICO: "Serviço",
@@ -135,6 +136,7 @@ export function KanbanCard({
             {TIPO_OBJETO_LABEL[edital.tipoObjeto]}
           </span>
         )}
+        <SeloHabilitacao status={edital.habilitacaoStatus} percentual={edital.habilitacaoPercentual} />
         {foraDoPerfil && (
           <span className="inline-flex items-center gap-0.5 rounded-full bg-warning/10 px-1.5 py-0.5 text-[10px] font-medium text-warning">
             <AlertTriangle className="h-2.5 w-2.5" /> Fora do perfil

@@ -28,6 +28,9 @@ function getClient(): Anthropic {
   return client;
 }
 
+/** Contador de tokens consumidos — somado a cada chamada (inclusive as repetidas por falha). */
+export type UsoTokens = { entrada: number; saida: number };
+
 /**
  * Chama o modelo pedindo uma resposta estritamente em JSON e faz o parse.
  * Usado pelos agentes analista, financeiro, advogado e auditor.
@@ -35,7 +38,7 @@ function getClient(): Anthropic {
 export async function askJSON<T>(
   system: string,
   userPrompt: string,
-  opts?: { model?: string; maxTokens?: number }
+  opts?: { model?: string; maxTokens?: number; uso?: UsoTokens }
 ): Promise<T> {
   const anthropic = getClient();
 
@@ -49,6 +52,11 @@ export async function askJSON<T>(
         system: `${system}\n\nResponda ESTRITAMENTE com um objeto JSON válido, sem markdown, sem texto antes ou depois.`,
         messages: [{ role: "user", content: userPrompt }],
       });
+
+      if (opts?.uso) {
+        opts.uso.entrada += message.usage?.input_tokens ?? 0;
+        opts.uso.saida += message.usage?.output_tokens ?? 0;
+      }
 
       const block = message.content[0];
       if (!block || block.type !== "text") throw new Error("Resposta inesperada do modelo");

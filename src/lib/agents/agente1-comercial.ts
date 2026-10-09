@@ -27,6 +27,8 @@ import { baixarEPersistirDocumento } from "@/lib/agents/document-download";
 import { logAudit } from "@/lib/agents/run-tracker";
 import { houveRetificacao } from "@/lib/edital-retificacao";
 import { mapComLimite } from "@/lib/concorrencia";
+import { dispararAuditoriaHabilitacao } from "@/lib/agents/auditoria-dispatch";
+import { AUDITORIA_HABILITACAO_DESDE } from "@/lib/habilitacao";
 
 // Quantos editais trazer por palavra-chave (PNCP) ou por segmento (LicitaNet), na ordem
 // de cada fonte — o mesmo recorte que os sites de origem mostram nas primeiras páginas.
@@ -115,7 +117,10 @@ export type ProgressoCaptacao = { fase: "buscando" | "classificando" | "criando"
 
 export async function executarAgente1(
   companyId: string,
-  onProgresso?: (p: ProgressoCaptacao) => void | Promise<void>
+  onProgresso?: (p: ProgressoCaptacao) => void | Promise<void>,
+  // Endereço do próprio app (da requisição que iniciou a busca) — usado para disparar a
+  // auditoria de habilitação de cada edital novo como uma execução própria.
+  origem?: string
 ) {
   const inicioBusca = Date.now();
   const company = await prisma.company.findUnique({
@@ -398,6 +403,7 @@ export async function executarAgente1(
   // arquivos em si fica para o passo 6). PNCP precisa de duas chamadas extras (valor e
   // lista de arquivos); o LicitaNet já traz tudo na própria busca.
   const criadosIds: string[] = [];
+  const disparosAuditoria: Promise<boolean>[] = [];
   let criadosPncp = 0;
   let criadosLicitaNet = 0;
   let criadosComprasGov = 0;
@@ -553,7 +559,18 @@ export async function executarAgente1(
         },
       });
     }
+
+    // Auditoria de habilitação automática: assim que o edital (e a lista de documentos dele)
+    // existe, pede a leitura completa e a conferência com a documentação da empresa. É uma
+    // execução separada — não atrasa nem pode derrubar a busca. Editais sem documentos (ex.:
+    // Compras.gov.br) não têm o que ler.
+    if (documentosParaCriar.length > 0 && Date.now() >= AUDITORIA_HABILITACAO_DESDE.getTime()) {
+      disparosAuditoria.push(dispararAuditoriaHabilitacao(edital.id, { origem }));
+    }
   });
+
+  // Espera só o "aceito" de cada disparo (a auditoria em si segue em segundo plano).
+  await Promise.allSettled(disparosAuditoria);
 
   // 6. O download dos documentos e a extração do texto só acontecem quando o usuário
   // demonstra interesse de verdade — ver dispararPipeline em pipeline.ts (disparado ao

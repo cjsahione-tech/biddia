@@ -14,6 +14,14 @@ export type EtapaKanban =
 
 export type CorCard = "azul" | "verde" | "amarelo" | "laranja" | "vermelho" | "roxo" | "rosa" | "cinza";
 
+export type HabilitacaoStatusTipo =
+  | "AGUARDANDO"
+  | "AUDITANDO"
+  | "HABILITADA"
+  | "HABILITADA_RESSALVAS"
+  | "NAO_HABILITADA"
+  | "ERRO";
+
 export type EditalListItem = {
   id: string;
   fonte: string;
@@ -34,6 +42,10 @@ export type EditalListItem = {
   notasInternas: string | null;
   keywordMatched: string | null;
   linkPortal: string;
+  // Resultado da auditoria automática de habilitação (documentos exigidos x documentação da empresa).
+  habilitacaoStatus: HabilitacaoStatusTipo;
+  habilitacaoPercentual: number | null;
+  habilitacaoAuditadaEm: string | null;
   analysis: { resumoObjeto: string } | null;
   proposal: { valorGlobalReferencia: number } | null;
   documents: { id: string; nome: string; categoria: "EDITAL" | "TERMO_REFERENCIA" | "ANEXO_PRECOS" | "PROPOSTA_COMERCIAL" | null }[];

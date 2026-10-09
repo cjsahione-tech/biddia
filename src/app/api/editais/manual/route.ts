@@ -1,8 +1,9 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { z } from "zod";
 import { requireCompany } from "@/lib/api-utils";
 import { capturarEditalManual } from "@/lib/agents/agente1-comercial";
 import { dispararPipeline } from "@/lib/agents/pipeline";
+import { dispararAuditoriaHabilitacao } from "@/lib/agents/auditoria-dispatch";
 
 // Extração do texto/dados do PDF + chamada de IA para estruturar os campos do edital
 // acontecem antes de responder; o restante do pipeline (Analista, Financeiro,
@@ -45,6 +46,12 @@ export async function POST(req: Request) {
   // A captação manual já nasce aprovada (o usuário escolheu este edital ao enviá-lo),
   // então o pipeline completo dispara na hora, sem precisar de um clique extra.
   dispararPipeline(edital.id, req);
+
+  // E a auditoria de habilitação (leitura completa do PDF e conferência com a documentação).
+  const origem = new URL(req.url).origin;
+  after(async () => {
+    await dispararAuditoriaHabilitacao(edital.id, { origem });
+  });
 
   return NextResponse.json({ edital });
 }

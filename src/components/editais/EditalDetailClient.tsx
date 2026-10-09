@@ -14,6 +14,7 @@ import { FinanceTab } from "@/components/editais/tabs/FinanceTab";
 import { DocumentsTab } from "@/components/editais/tabs/DocumentsTab";
 import { ChecklistTab } from "@/components/editais/tabs/ChecklistTab";
 import { AuditTab } from "@/components/editais/tabs/AuditTab";
+import { SeloHabilitacao } from "@/components/editais/SeloHabilitacao";
 
 const TABS = [
   { key: "analise", label: "Análise" },
@@ -108,6 +109,7 @@ export function EditalDetailClient({ editalId }: { editalId: string }) {
             <span className="text-xs text-muted">
               {edital.fonte === "MANUAL" ? "Adicionado manualmente" : edital.numeroControlePNCP}
             </span>
+            <SeloHabilitacao status={edital.habilitacaoStatus} percentual={edital.habilitacaoPercentual} tamanho="normal" />
           </div>
           <h1 className="mt-2 break-words text-xl font-semibold text-foreground sm:text-2xl">{edital.titulo}</h1>
           <p className="mt-1 text-sm text-muted">

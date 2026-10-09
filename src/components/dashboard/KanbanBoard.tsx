@@ -9,6 +9,8 @@ import { labelPortal } from "@/lib/fonte-edital";
 import type { EditalListItem, EtapaKanban } from "@/lib/types";
 import { KanbanCard } from "@/components/dashboard/KanbanCard";
 import { KanbanCardModal } from "@/components/dashboard/KanbanCardModal";
+import { ROTULO_STATUS_HABILITACAO } from "@/lib/habilitacao";
+import type { HabilitacaoStatusTipo } from "@/lib/types";
 
 type DragOverPos = "before" | "after";
 
@@ -41,6 +43,7 @@ export function KanbanBoard({
   const [excluindoLote, setExcluindoLote] = useState(false);
   const [filtroUf, setFiltroUf] = useState<string | null>(null);
   const [filtroFonte, setFiltroFonte] = useState<string | null>(null);
+  const [filtroHabilitacao, setFiltroHabilitacao] = useState<HabilitacaoStatusTipo | null>(null);
 
   const contagemAbertasPorUf = editais.reduce<Record<string, number>>((acc, e) => {
     if (e.uf && estaAberta(e)) acc[e.uf] = (acc[e.uf] ?? 0) + 1;
@@ -68,7 +71,8 @@ export function KanbanBoard({
     return editais
       .filter((e) => e.etapaKanban === etapa && e.id !== excluirId)
       .filter((e) => !filtroUf || e.uf === filtroUf)
-      .filter((e) => !filtroFonte || e.fonte === filtroFonte);
+      .filter((e) => !filtroFonte || e.fonte === filtroFonte)
+      .filter((e) => !filtroHabilitacao || e.habilitacaoStatus === filtroHabilitacao);
   }
 
   // Coluna "Oportunidade": agrupa por modalidade na ordem fixa pedida, mantendo a ordem
@@ -267,6 +271,25 @@ export function KanbanBoard({
             </select>
           </div>
 
+          <div className="flex items-center gap-2">
+            <label htmlFor="filtroHabilitacao" className="text-xs font-medium text-muted">
+              Habilitação
+            </label>
+            <select
+              id="filtroHabilitacao"
+              value={filtroHabilitacao ?? ""}
+              onChange={(e) => setFiltroHabilitacao((e.target.value || null) as HabilitacaoStatusTipo | null)}
+              className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs font-medium text-foreground focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
+            >
+              <option value="">Todas</option>
+              {(["HABILITADA", "HABILITADA_RESSALVAS", "NAO_HABILITADA", "AGUARDANDO", "AUDITANDO", "ERRO"] as const).map((st) => (
+                <option key={st} value={st}>
+                  {ROTULO_STATUS_HABILITACAO[st]}
+                </option>
+              ))}
+            </select>
+          </div>
+
           {!modoSelecao ? (
             <Button variant="secondary" onClick={() => setModoSelecao(true)}>
               <CheckSquare className="h-4 w-4" /> Selecionar
@@ -281,6 +304,7 @@ export function KanbanBoard({
                       editais
                         .filter((e) => !filtroUf || e.uf === filtroUf)
                         .filter((e) => !filtroFonte || e.fonte === filtroFonte)
+                        .filter((e) => !filtroHabilitacao || e.habilitacaoStatus === filtroHabilitacao)
                         .map((e) => e.id)
                     )
                   )

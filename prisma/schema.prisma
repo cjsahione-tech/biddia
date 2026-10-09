@@ -373,6 +373,15 @@ model Edital {
   checklistItems     ChecklistItem[]
   auditLogs          AuditLog[]
   agentRuns          AgentRun[]
+
+  // Habilitação da empresa neste edital (ver AuditoriaHabilitacao): resultado da conferência
+  // automática dos documentos exigidos contra a documentação da empresa. AGUARDANDO = ainda
+  // não auditado (não é um resultado).
+  habilitacaoStatus      HabilitacaoStatus @default(AGUARDANDO)
+  habilitacaoPercentual  Float?
+  habilitacaoAuditadaEm  DateTime?
+  auditoriaHabilitacao   AuditoriaHabilitacao?
+  exigenciasHabilitacao  ExigenciaHabilitacao[]
   agentMessages      AgentMessage[]
   estudosViabilidade EstudoViabilidade[]
 
@@ -588,6 +597,111 @@ model CompanyDocument {
 
   @@index([companyId])
   @@index([companyId, catalogoChave])
+}
+
+// ── Auditoria de habilitação ───────────────────────────────────────────────
+// 100% das exigências atendidas = HABILITADA; 70% a 99% = HABILITADA_RESSALVAS; abaixo de
+// 70% = NAO_HABILITADA. AUDITANDO = em andamento; ERRO = não foi possível ler/auditar (tenta
+// de novo sozinho) — nunca vira um resultado de habilitação.
+enum HabilitacaoStatus {
+  AGUARDANDO
+  AUDITANDO
+  HABILITADA
+  HABILITADA_RESSALVAS
+  NAO_HABILITADA
+  ERRO
+}
+
+enum SituacaoExigencia {
+  ATENDIDA
+  NAO_ENVIADA
+  VENCIDA
+  VERIFICAR
+  // Exigência que só vale para outro tipo de empresa (ex.: "para cooperativa") — fica fora da porcentagem.
+  NAO_SE_APLICA
+}
+
+enum AuditoriaHabilitacaoEstado {
+  RODANDO
+  CONCLUIDA
+  ERRO
+}
+
+// Uma auditoria por edital (a mais recente). Guarda o progresso da leitura em pedaços (para
+// editais grandes, que levam mais de uma execução), a "impressão digital" da documentação
+// da empresa no momento da conferência e o consumo de IA, para medir o custo real.
+model AuditoriaHabilitacao {
+  id       String @id @default(cuid())
+  editalId String @unique
+  edital   Edital @relation(fields: [editalId], references: [id], onDelete: Cascade)
+
+  estado     AuditoriaHabilitacaoEstado @default(RODANDO)
+  mensagem   String?
+  tentativas Int                        @default(0)
+
+  // Data usada para decidir se um documento está válido: abertura da sessão (ou hoje, se o
+  // edital não informa).
+  dataReferencia DateTime?
+
+  totalExigencias Int @default(0)
+  atendidas       Int @default(0)
+  pendentes       Int @default(0)
+  // false = algum documento do processo não pôde ser lido por inteiro (escaneado demais,
+  // formato não suportado) — nunca permite "Habilitada" sem ressalva.
+  leituraCompleta Boolean @default(true)
+  documentosLidos String? // JSON: [{ nome, caracteres, ok }]
+
+  // Leitura em pedaços: JSON { chunksTotal, feitos: number[], brutas: Exigencia[] }.
+  progresso String?
+  // Mudou a documentação da empresa desde a última conferência? (sha1 de id+atualização)
+  docsFingerprint String?
+
+  // Consumo de IA desta auditoria (tokens) e custo estimado em dólares.
+  haikuEntrada  Int   @default(0)
+  haikuSaida    Int   @default(0)
+  sonnetEntrada Int   @default(0)
+  sonnetSaida   Int   @default(0)
+  custoUsd      Float @default(0)
+
+  iniciadaEm  DateTime  @default(now())
+  concluidaEm DateTime?
+  updatedAt   DateTime  @updatedAt
+}
+
+// Cada documento de habilitação exigido pelo edital/termo de referência e o resultado da
+// conferência com a documentação da empresa. Guarda onde a exigência aparece (item/página).
+model ExigenciaHabilitacao {
+  id       String @id @default(cuid())
+  editalId String
+  edital   Edital @relation(fields: [editalId], references: [id], onDelete: Cascade)
+
+  ordem     Int
+  categoria String // id de CategoriaCatalogo (ex.: "fiscal") ou "outros"
+  documento String // como o edital descreve o documento exigido
+  // Item do catálogo da tela Documentos que atende esta exigência (null = fora do catálogo).
+  catalogoChave String?
+  origem        String // nome do arquivo em que a exigência foi lida (edital, TR, anexo)
+  localizacao   String? // item/cláusula e página, quando constam
+  condicao      String? // condição informativa (ex.: "índices maiores que 1,00") — não bloqueia
+  // Quando a exigência só vale para certo tipo de empresa/situação (ex.: "apenas cooperativas").
+  aplicavelSe   String?
+
+  situacao  SituacaoExigencia
+  // A conferência tem certeza de que o documento enviado é o que a exigência pede? false = VERIFICAR.
+  certezaMapeamento Boolean @default(true)
+  // Documento da empresa que atende (catálogo ou personalizado) e a validade dele.
+  documentoEmpresaId String?
+  validade           DateTime?
+  // Explicação em português simples e ação sugerida para resolver a pendência.
+  observacao String?
+  acaoSugerida String?
+  // Vence poucos dias (até 7) ANTES da sessão — gera aviso por e-mail/WhatsApp, uma vez.
+  venceAntesDaSessao Boolean   @default(false)
+  alertadoEm         DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([editalId])
 }
 
 enum AuditSeverity {

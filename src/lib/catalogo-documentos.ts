@@ -499,3 +499,18 @@ export const ROTULO_APLICACAO: Record<Aplicacao, string> = { P: "Produtos", S: "
 export function itensDaCategoria(id: CategoriaCatalogo): ItemCatalogo[] {
   return CATALOGO_DOCUMENTOS.filter((i) => i.categoria === id);
 }
+
+/**
+ * Itens que são, no mundo real, a mesma certidão em "versões" de produto e de serviço. Um
+ * documento enviado numa versão pode servir à outra, mas a auditoria nunca assume isso sozinha:
+ * marca como "verificar manualmente".
+ */
+export const EQUIVALENTES_CATALOGO: string[][] = [
+  ["fiscal-estadual-icms", "fiscal-estadual-servicos"],
+  ["fiscal-municipal", "fiscal-issqn"],
+];
+
+export function equivalentesDe(chave: string): string[] {
+  const grupo = EQUIVALENTES_CATALOGO.find((g) => g.includes(chave));
+  return grupo ? grupo.filter((c) => c !== chave) : [];
+}

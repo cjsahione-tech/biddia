@@ -23,10 +23,10 @@ export async function GET() {
 }
 
 /** Dispara o Agente Comercial em segundo plano. */
-export async function POST() {
+export async function POST(req: Request) {
   const { company, error } = await requireCompany();
   if (error) return error;
 
-  const { run, jaEmAndamento } = await iniciarCaptacao(company!.id);
+  const { run, jaEmAndamento } = await iniciarCaptacao(company!.id, new URL(req.url).origin);
   return NextResponse.json(jaEmAndamento ? { run, jaEmAndamento: true } : { run }, { status: 202 });
 }

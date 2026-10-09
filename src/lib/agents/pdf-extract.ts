@@ -5,6 +5,7 @@ import { transcreverPdfViaVisao, OCR_VISAO_LIMITE_PAGINAS, OCR_VISAO_LIMITE_BYTE
 import { logAudit } from "@/lib/agents/run-tracker";
 import { baixarAnexo } from "@/lib/storage";
 import type { Document as DocumentRow } from "@prisma/client";
+import { ehZip, extrairTextoDeZip } from "@/lib/agents/arquivos-compactados";
 
 // Limite de caracteres por documento enviado ao modelo — controla custo/latência
 // mesmo em editais muito longos (dezenas de páginas). Mantido moderado (não maior)
@@ -38,9 +39,14 @@ export async function extrairTextoPdfComOrigem(bytes: Uint8Array): Promise<Resul
 
   try {
     const pdf = await getDocumentProxy(bytes);
-    const { text, totalPages } = await extractText(pdf, { mergePages: true });
+    // Página a página, com uma marca "[Pág. N]" antes de cada uma: assim quem lê o texto (ex.:
+    // a auditoria de habilitação) consegue citar em que página do edital está cada exigência.
+    const { text, totalPages } = await extractText(pdf, { mergePages: false });
     paginas = totalPages || 1;
-    textoSelecionavel = text.trim() || null;
+    const porPagina = Array.isArray(text) ? text : [text];
+    textoSelecionavel = porPagina.some((t) => t.trim())
+      ? porPagina.map((t, i) => `[Pág. ${i + 1}]\n${t.trim()}`).join("\n\n")
+      : null;
   } catch (err) {
     console.error("Falha ao extrair texto do PDF:", err);
   }
@@ -247,6 +253,22 @@ export async function obterTextoBrutoDocumento(doc: DocumentRow): Promise<string
     if (arquivo) bytes = arquivo.bytes;
   }
   if (!bytes) return null;
+
+  // ZIP (editais do LicitaNet): lê cada arquivo de dentro por inteiro, em vez de tratar o ZIP
+  // como se fosse um PDF (o que não devolvia texto nenhum).
+  if (ehZip(bytes)) {
+    const textoZip = await extrairTextoDeZip(bytes, async (b) => (await extrairTextoPdfComOrigem(b)).texto).catch(
+      (err) => {
+        console.error(`Falha ao abrir o ZIP "${doc.nome}":`, err);
+        return null;
+      }
+    );
+    if (!textoZip) return null;
+    await prisma.document
+      .update({ where: { id: doc.id }, data: { textoExtraido: textoZip } })
+      .catch((err) => console.error(`Falha ao cachear texto do ZIP ${doc.id}:`, err));
+    return textoZip;
+  }
 
   const { texto, viaOcr } = await extrairTextoPdfComOrigem(bytes);
   if (!texto) return null;
