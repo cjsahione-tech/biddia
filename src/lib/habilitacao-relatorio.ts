@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { CATEGORIAS_CATALOGO } from "@/lib/catalogo-documentos";
 import { calcularResultado, dataReferenciaDoEdital, type SituacaoExigencia } from "@/lib/habilitacao";
+import { classificarErro, ErroTipado, tipoDeMensagemAntiga, type TipoErroIA } from "@/lib/ia-erros";
 
 // Dados do relatório de pendências de habilitação — a mesma estrutura alimenta a aba
 // "Habilitação" da tela do edital e o PDF. Tudo vem da última auditoria gravada; nada é
@@ -23,6 +24,8 @@ export type ItemRelatorio = {
   venceAntesDaSessao: boolean;
 };
 
+export type ArquivoComProblema = { nome: string; problema: string; oQueFazer: string };
+
 export type GrupoRelatorio = { categoria: string; titulo: string; itens: ItemRelatorio[] };
 
 export type RelatorioHabilitacao = {
@@ -31,12 +34,24 @@ export type RelatorioHabilitacao = {
   status: string;
   percentual: number | null;
   auditoria: null | {
-    estado: "RODANDO" | "CONCLUIDA" | "ERRO";
+    estado: "RODANDO" | "CONCLUIDA" | "ERRO" | "NA_FILA" | "AGUARDANDO_SALDO" | "INTERROMPIDA";
+    /** Sempre o texto amigável do tipo do erro — nunca a mensagem crua da API. */
     mensagem: string | null;
+    erroTipo: TipoErroIA | null;
+    /** Quando a auditoria foi pedida pelo fluxo atual (nulo = registro antigo, de antes da regra "só em Qualificação"). */
+    solicitadaEm: string | null;
+    /** O que o administrador precisa fazer (ex.: recarregar saldo). Só vem preenchido para admin. */
+    avisoAdmin: string | null;
     concluidaEm: string | null;
     dataReferencia: string | null;
     leituraCompleta: boolean;
-    documentosLidos: { nome: string; caracteres: number; ok: boolean }[];
+    documentosLidos: { nome: string; caracteres: number; ok: boolean; motivo?: string }[];
+    /** Arquivos que não puderam ser lidos: qual, por quê e o que fazer (linguagem simples). */
+    arquivosComProblema: ArquivoComProblema[];
+    /** Texto do andamento enquanto roda (ex.: "Lendo o edital: 3 de 7 partes"). */
+    andamento: string | null;
+    /** Há uma nova tentativa automática agendada (o usuário não precisa fazer nada). */
+    retentativaAgendada: boolean;
   };
   resumo: { exigidas: number; atendidas: number; pendentes: number; naoSeAplicam: number };
   /** Só o que falta resolver (não enviado, vencido, verificar), por categoria. */
@@ -47,6 +62,52 @@ export type RelatorioHabilitacao = {
 
 const TITULO_CATEGORIA = new Map<string, string>([...CATEGORIAS_CATALOGO.map((c) => [c.id, c.titulo] as [string, string]), ["outros", "Outros documentos"]]);
 const ORDEM_CATEGORIA = [...CATEGORIAS_CATALOGO.map((c) => c.id as string), "outros"];
+
+/** Explica, em linguagem simples, por que um arquivo não foi lido e o que o analista pode fazer. */
+export function explicarArquivo(nome: string, motivo?: string): ArquivoComProblema {
+  switch (motivo) {
+    case "download":
+      return {
+        nome,
+        problema: "Não consegui baixar este arquivo do portal de origem (o site não respondeu).",
+        oQueFazer: "Vou tentar de novo automaticamente. Se persistir, baixe o arquivo no portal e envie em “Adicionar PDF”.",
+      };
+    case "demorou":
+      return {
+        nome,
+        problema: "Este arquivo demorou demais para baixar ou ler.",
+        oQueFazer: "Vou tentar de novo. Se persistir, envie o arquivo manualmente em “Adicionar PDF”.",
+      };
+    case "formato":
+      return {
+        nome,
+        problema: "Não consegui ler o conteúdo deste arquivo (pode ser uma imagem escaneada, estar protegido ou corrompido).",
+        oQueFazer: "Abra o arquivo e confira. Se for imagem, envie uma versão em PDF com texto em “Adicionar PDF”.",
+      };
+    default:
+      return {
+        nome,
+        problema: "Parte deste arquivo é imagem de baixa qualidade e não pôde ser lida.",
+        oQueFazer: "Confira essas páginas manualmente: pode haver exigências que não apareceram aqui.",
+      };
+  }
+}
+
+function textoAndamento(progressoJson: string | null): string | null {
+  if (!progressoJson) return null;
+  try {
+    const p = JSON.parse(progressoJson) as { chunksTotal?: number; feitos?: unknown[]; lotes?: Record<string, unknown> };
+    const total = p.chunksTotal ?? 0;
+    const feitos = p.feitos?.length ?? 0;
+    if (total > 0 && feitos >= total) {
+      return Object.keys(p.lotes ?? {}).length > 0 ? "Conferindo as exigências com a documentação da empresa…" : "Leitura concluída; conferindo com a documentação da empresa…";
+    }
+    if (total > 0) return `Lendo o edital: ${feitos} de ${total} partes`;
+  } catch {
+    // progresso ilegível: sem texto de andamento
+  }
+  return null;
+}
 
 export function textoSituacao(situacao: SituacaoExigencia, validade: Date | null): string {
   switch (situacao) {
@@ -63,7 +124,11 @@ export function textoSituacao(situacao: SituacaoExigencia, validade: Date | null
   }
 }
 
-export async function montarRelatorioHabilitacao(editalId: string, companyId: string): Promise<RelatorioHabilitacao | null> {
+export async function montarRelatorioHabilitacao(
+  editalId: string,
+  companyId: string,
+  opts: { admin?: boolean } = {}
+): Promise<RelatorioHabilitacao | null> {
   const edital = await prisma.edital.findFirst({
     where: { id: editalId, companyId },
     select: {
@@ -111,12 +176,21 @@ export async function montarRelatorioHabilitacao(editalId: string, companyId: st
 
   const r = calcularResultado({ situacoes: itens.map((i) => i.situacao), leituraCompleta: edital.auditoriaHabilitacao?.leituraCompleta ?? true });
   const aud = edital.auditoriaHabilitacao;
-  let docsLidos: { nome: string; caracteres: number; ok: boolean }[] = [];
+  let docsLidos: { nome: string; caracteres: number; ok: boolean; motivo?: string }[] = [];
   try {
     docsLidos = aud?.documentosLidos ? JSON.parse(aud.documentosLidos) : [];
   } catch {
     docsLidos = [];
   }
+
+  // Linhas antigas (antes da classificação) só têm o texto cru em `mensagem`: reconhece o tipo
+  // por ele e mostra sempre o texto amigável.
+  const erroTipo: TipoErroIA | null = aud?.erroTipo
+    ? (aud.erroTipo as TipoErroIA)
+    : aud?.mensagem && aud.estado !== "CONCLUIDA"
+      ? tipoDeMensagemAntiga(aud.mensagem)
+      : null;
+  const classificado = erroTipo ? classificarErro(new ErroTipado(erroTipo, "")) : null;
 
   return {
     edital: { id: edital.id, titulo: edital.titulo, orgaoNome: edital.orgaoNome, municipio: edital.municipio, uf: edital.uf, modalidade: edital.modalidade },
@@ -126,11 +200,19 @@ export async function montarRelatorioHabilitacao(editalId: string, companyId: st
     auditoria: aud
       ? {
           estado: aud.estado,
-          mensagem: aud.mensagem,
+          // Registros novos já guardam o texto amigável certo (nova tentativa agendada x erro final);
+          // os antigos (sem tipo gravado) são traduzidos pelo tipo reconhecido no texto cru.
+          mensagem: aud.estado === "CONCLUIDA" ? null : aud.erroTipo && aud.mensagem ? aud.mensagem : (classificado?.mensagemUsuario ?? null),
+          erroTipo: aud.estado === "CONCLUIDA" ? null : erroTipo,
+          solicitadaEm: aud.solicitadaEm?.toISOString() ?? null,
+          avisoAdmin: opts.admin && aud.estado !== "CONCLUIDA" ? (classificado?.mensagemAdmin ?? null) : null,
           concluidaEm: aud.concluidaEm?.toISOString() ?? null,
           dataReferencia: (aud.dataReferencia ?? dataReferenciaDoEdital(edital)).toISOString(),
           leituraCompleta: aud.leituraCompleta,
           documentosLidos: docsLidos,
+          arquivosComProblema: docsLidos.filter((d) => !d.ok).map((d) => explicarArquivo(d.nome, d.motivo)),
+          andamento: ["RODANDO", "NA_FILA"].includes(aud.estado) ? textoAndamento(aud.progresso) : null,
+          retentativaAgendada: aud.estado === "ERRO" && !!aud.proximaTentativaEm,
         }
       : null,
     resumo: { exigidas: r.total, atendidas: r.atendidas, pendentes: r.pendentes, naoSeAplicam: itens.filter((i) => i.situacao === "NAO_SE_APLICA").length },

@@ -610,6 +610,12 @@ enum HabilitacaoStatus {
   HABILITADA_RESSALVAS
   NAO_HABILITADA
   ERRO
+  // Estados adicionados para dizer a causa real em vez de um "erro" genérico:
+  NA_FILA // aguardando vaga (limite de auditorias simultâneas)
+  AGUARDANDO_IA // IA sem saldo/indisponível — a auditoria está guardada e será retomada sozinha
+  ARQUIVO_ILEGIVEL // nenhum arquivo do edital pôde ser baixado/lido
+  EDITAL_GRANDE // edital grande demais para uma leitura só (lido em partes)
+  TEMPO_ESGOTADO // passou do tempo; nova tentativa automática agendada
 }
 
 enum SituacaoExigencia {
@@ -625,6 +631,9 @@ enum AuditoriaHabilitacaoEstado {
   RODANDO
   CONCLUIDA
   ERRO
+  NA_FILA
+  AGUARDANDO_SALDO // pausada porque a IA está sem saldo; retoma sozinha quando voltar
+  INTERROMPIDA // ficou "rodando" tempo demais (função cortada) — será reenviada pelo vigia
 }
 
 // Uma auditoria por edital (a mais recente). Guarda o progresso da leitura em pedaços (para
@@ -636,8 +645,21 @@ model AuditoriaHabilitacao {
   edital   Edital @relation(fields: [editalId], references: [id], onDelete: Cascade)
 
   estado     AuditoriaHabilitacaoEstado @default(RODANDO)
+  // Texto amigável (seguro para o usuário). O detalhe técnico/cru da API fica em detalheTecnico.
   mensagem   String?
   tentativas Int                        @default(0)
+
+  // Tipo do erro (ver src/lib/ia-erros.ts: TipoErroIA) e detalhe técnico — uso interno, nunca exibido.
+  erroTipo       String?
+  detalheTecnico String?
+  // Reentrada automática: quando tentar de novo e quantas vezes já foi tentado sozinho.
+  proximaTentativaEm  DateTime?
+  tentativasAutomaticas Int @default(0)
+  // Impressão digital do edital (documentos + datas) — junto com docsFingerprint permite
+  // reaproveitar o resultado salvo sem gastar IA quando nada mudou.
+  editalFingerprint String?
+  // Quando a auditoria foi pedida (entrada em Qualificação, botão "Auditar agora" etc.).
+  solicitadaEm DateTime?
 
   // Data usada para decidir se um documento está válido: abertura da sessão (ou hoje, se o
   // edital não informa).
@@ -666,6 +688,22 @@ model AuditoriaHabilitacao {
   iniciadaEm  DateTime  @default(now())
   concluidaEm DateTime?
   updatedAt   DateTime  @updatedAt
+}
+
+// Estado global da IA (uma linha, id "global"): o "disjuntor" que para de chamar a API
+// quando o saldo acaba, para não gastar tentativas à toa nem gerar uma enxurrada de erros.
+model ControleIA {
+  id String @id @default("global")
+  // Preenchido quando a API respondeu "saldo insuficiente"; limpo quando um teste mínimo passa.
+  saldoEsgotadoDesde DateTime?
+  // Por que está pausada: "SALDO_INSUFICIENTE" ou "CHAVE_INVALIDA" (define o aviso do administrador).
+  motivo String?
+  // Até quando as chamadas ficam pausadas (nova checagem só depois disso).
+  pausadaAte DateTime?
+  ultimoTesteEm DateTime?
+  // Última vez que o administrador foi avisado (para não repetir o aviso a cada tentativa).
+  avisadoAdminEm DateTime?
+  updatedAt DateTime @updatedAt
 }
 
 // Cada documento de habilitação exigido pelo edital/termo de referência e o resultado da

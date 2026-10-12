@@ -111,7 +111,7 @@ export function EditalDetailClient({ editalId }: { editalId: string }) {
             <span className="text-xs text-muted">
               {edital.fonte === "MANUAL" ? "Adicionado manualmente" : edital.numeroControlePNCP}
             </span>
-            <SeloHabilitacao status={edital.habilitacaoStatus} percentual={edital.habilitacaoPercentual} tamanho="normal" />
+            <SeloHabilitacao status={edital.habilitacaoStatus} percentual={edital.habilitacaoPercentual} tamanho="normal" etapa={edital.etapaKanban} />
             {["HABILITADA_RESSALVAS", "NAO_HABILITADA"].includes(edital.habilitacaoStatus) && (
               <button onClick={() => setTab("habilitacao")} className="text-xs font-medium text-brand hover:underline">
                 Ver pendências
@@ -192,7 +192,7 @@ export function EditalDetailClient({ editalId }: { editalId: string }) {
 
       <div className="mt-6">
         {tab === "analise" && <AnalysisTab edital={edital} onUpdate={load} />}
-        {tab === "habilitacao" && <HabilitacaoTab editalId={edital.id} />}
+        {tab === "habilitacao" && <HabilitacaoTab editalId={edital.id} etapa={edital.etapaKanban} onMudou={load} />}
         {tab === "financeiro" && <FinanceTab edital={edital} onUpdate={load} />}
         {tab === "documentos" && (
           <DocumentsTab editalId={edital.id} documents={edital.documents} onUpdate={load} />

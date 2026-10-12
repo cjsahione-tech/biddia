@@ -9,8 +9,7 @@ import { labelPortal } from "@/lib/fonte-edital";
 import type { EditalListItem, EtapaKanban } from "@/lib/types";
 import { KanbanCard } from "@/components/dashboard/KanbanCard";
 import { KanbanCardModal } from "@/components/dashboard/KanbanCardModal";
-import { ROTULO_STATUS_HABILITACAO } from "@/lib/habilitacao";
-import type { HabilitacaoStatusTipo } from "@/lib/types";
+import { agruparPorHabilitacao, GRUPOS_HABILITACAO, passaFiltroHabilitacao, ROTULO_STATUS_HABILITACAO } from "@/lib/habilitacao";
 
 type DragOverPos = "before" | "after";
 
@@ -43,7 +42,7 @@ export function KanbanBoard({
   const [excluindoLote, setExcluindoLote] = useState(false);
   const [filtroUf, setFiltroUf] = useState<string | null>(null);
   const [filtroFonte, setFiltroFonte] = useState<string | null>(null);
-  const [filtroHabilitacao, setFiltroHabilitacao] = useState<HabilitacaoStatusTipo | null>(null);
+  const [filtroHabilitacao, setFiltroHabilitacao] = useState<string | null>(null); // um selo (ex.: "ERRO") ou um grupo ("grupo:HABILITADAS")
 
   const contagemAbertasPorUf = editais.reduce<Record<string, number>>((acc, e) => {
     if (e.uf && estaAberta(e)) acc[e.uf] = (acc[e.uf] ?? 0) + 1;
@@ -72,7 +71,7 @@ export function KanbanBoard({
       .filter((e) => e.etapaKanban === etapa && e.id !== excluirId)
       .filter((e) => !filtroUf || e.uf === filtroUf)
       .filter((e) => !filtroFonte || e.fonte === filtroFonte)
-      .filter((e) => !filtroHabilitacao || e.habilitacaoStatus === filtroHabilitacao);
+      .filter((e) => !filtroHabilitacao || passaFiltroHabilitacao(e.habilitacaoStatus, filtroHabilitacao));
   }
 
   // Coluna "Oportunidade": agrupa por modalidade na ordem fixa pedida, mantendo a ordem
@@ -278,11 +277,16 @@ export function KanbanBoard({
             <select
               id="filtroHabilitacao"
               value={filtroHabilitacao ?? ""}
-              onChange={(e) => setFiltroHabilitacao((e.target.value || null) as HabilitacaoStatusTipo | null)}
+              onChange={(e) => setFiltroHabilitacao(e.target.value || null)}
               className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs font-medium text-foreground focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
             >
               <option value="">Todas</option>
-              {(["HABILITADA", "HABILITADA_RESSALVAS", "NAO_HABILITADA", "AGUARDANDO", "AUDITANDO", "ERRO"] as const).map((st) => (
+              {GRUPOS_HABILITACAO.filter((g) => g.chave !== "SEM_AUDITORIA").map((g) => (
+                <option key={g.chave} value={`grupo:${g.chave}`}>
+                  {g.titulo} (grupo)
+                </option>
+              ))}
+              {(["HABILITADA", "HABILITADA_RESSALVAS", "NAO_HABILITADA", "AGUARDANDO", "NA_FILA", "AUDITANDO", "AGUARDANDO_IA", "TEMPO_ESGOTADO", "ARQUIVO_ILEGIVEL", "EDITAL_GRANDE", "ERRO"] as const).map((st) => (
                 <option key={st} value={st}>
                   {ROTULO_STATUS_HABILITACAO[st]}
                 </option>
@@ -304,7 +308,7 @@ export function KanbanBoard({
                       editais
                         .filter((e) => !filtroUf || e.uf === filtroUf)
                         .filter((e) => !filtroFonte || e.fonte === filtroFonte)
-                        .filter((e) => !filtroHabilitacao || e.habilitacaoStatus === filtroHabilitacao)
+                        .filter((e) => !filtroHabilitacao || passaFiltroHabilitacao(e.habilitacaoStatus, filtroHabilitacao))
                         .map((e) => e.id)
                     )
                   )
@@ -384,7 +388,24 @@ export function KanbanBoard({
                         {cardsGrupo.map((edital) => renderCard(edital))}
                       </div>
                     ))
-                  : cards.map((edital) => renderCard(edital))}
+                  : key === "QUALIFICACAO"
+                    ? // Qualificação separada pelo resultado da auditoria de habilitação, com contador por grupo.
+                      agruparPorHabilitacao(cards).map(({ chave, titulo, cards: cardsGrupo }) => (
+                        <div key={chave} className="flex flex-col gap-2">
+                          <div className="mt-1.5 flex items-center justify-between px-0.5 first:mt-0">
+                            <h4
+                              className={`text-[10px] font-semibold uppercase tracking-wide ${
+                                chave === "HABILITADAS" ? "text-accent" : chave === "NAO_HABILITADAS" ? "text-danger" : "text-muted"
+                              }`}
+                            >
+                              {titulo}
+                            </h4>
+                            <span className="text-[10px] text-muted">{cardsGrupo.length}</span>
+                          </div>
+                          {cardsGrupo.map((edital) => renderCard(edital))}
+                        </div>
+                      ))
+                    : cards.map((edital) => renderCard(edital))}
                 {cards.length === 0 && (
                   <div className="rounded-lg border border-dashed border-border py-6 text-center text-[11px] text-muted">
                     Arraste um card para cá

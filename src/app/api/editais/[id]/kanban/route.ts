@@ -1,9 +1,11 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireCompany } from "@/lib/api-utils";
 import { dispararPipeline, decidirDisparoPipeline } from "@/lib/agents/pipeline";
 import { logAudit } from "@/lib/agents/run-tracker";
+import { descricaoSolicitacao, solicitarAuditoriaHabilitacao } from "@/lib/agents/auditoria-gatilho";
+import { etapaAudita } from "@/lib/habilitacao";
 
 const ETAPAS = [
   "OPORTUNIDADE",
@@ -109,6 +111,22 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   }
   if (disparaPipeline) dispararPipeline(id, req);
 
+  // Auditoria de habilitação: começa na hora, em segundo plano, quando o card ENTRA em
+  // Qualificação (ou em etapa posterior). Sem clique. Se o edital já foi auditado e nada mudou,
+  // o resultado salvo é reaproveitado (sem custo). Qualquer outra etapa não audita.
+  let obsAuditoria = "";
+  if (etapaMudou && etapaAudita(etapaKanban)) {
+    try {
+      const s = await solicitarAuditoriaHabilitacao(id, { companyId: company!.id, origem: new URL(req.url).origin });
+      if (s.disparar) after(s.disparar);
+      const frase = descricaoSolicitacao(s.resultado);
+      if (frase) obsAuditoria = ` ${frase}`;
+    } catch (err) {
+      // Nunca impede a movimentação do card; o motivo fica no log do servidor.
+      console.error(`Não foi possível solicitar a auditoria de habilitação do edital ${id}:`, err);
+    }
+  }
+
   if (etapaMudou) {
     await logAudit(
       id,
@@ -120,7 +138,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
           ? " Pipeline de agentes disparado automaticamente."
           : motivoSemPipeline
             ? ` Pipeline não reiniciado: ${motivoSemPipeline}.`
-            : "")
+            : "") +
+        obsAuditoria
     );
   }
 

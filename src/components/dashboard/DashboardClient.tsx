@@ -1,5 +1,6 @@
 "use client";
 
+import { etapaAudita } from "@/lib/habilitacao";
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Search, Loader2, RefreshCw, Upload, AlertTriangle } from "lucide-react";
@@ -137,6 +138,19 @@ export function DashboardClient() {
       document.removeEventListener("visibilitychange", aoVoltar);
     };
   }, [atualizarEditais]);
+
+  // Enquanto alguma auditoria de habilitação está em andamento (auditando/na fila/aguardando IA), o
+  // quadro atualiza a cada 8s para o selo virar Habilitada/Não habilitada sem recarregar a página.
+  const temAuditoriaEmAndamento = editais.some(
+    (e) => etapaAudita(e.etapaKanban) && ["AUDITANDO", "NA_FILA", "AGUARDANDO_IA", "TEMPO_ESGOTADO", "EDITAL_GRANDE"].includes(e.habilitacaoStatus)
+  );
+  useEffect(() => {
+    if (!temAuditoriaEmAndamento) return;
+    const id = setInterval(() => {
+      if (document.visibilityState === "visible" && !buscaPollRef.current) atualizarEditais();
+    }, 8_000);
+    return () => clearInterval(id);
+  }, [temAuditoriaEmAndamento, atualizarEditais]);
 
   async function handleSearch() {
     setSearching(true);

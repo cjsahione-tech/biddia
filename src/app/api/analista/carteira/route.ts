@@ -206,7 +206,7 @@ export async function POST(req: Request) {
   let buscaIniciada = false;
   if (termos.length > 0 || segmento) {
     try {
-      await iniciarCaptacao(company.id, new URL(req.url).origin);
+      await iniciarCaptacao(company.id);
       buscaIniciada = true;
     } catch (err) {
       console.error(`Não foi possível iniciar a busca inicial do cliente ${company.id}:`, err);

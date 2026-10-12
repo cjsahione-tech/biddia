@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { comRetry, extrairJSON } from "@/lib/ia-erros";
+import { garantirIALiberada, registrarFalhaIA } from "@/lib/controle-ia";
 
 // Modelos usados pelos agentes.
 // - SONNET: raciocínio/exatidão que não pode escorregar (proposta financeira).
@@ -28,6 +29,37 @@ function getClient(): Anthropic {
   return client;
 }
 
+/** Chamada mínima (1 token, sem repetição) usada pelo disjuntor para saber se o saldo voltou. */
+async function testarConexaoIA(): Promise<void> {
+  await getClient().withOptions({ maxRetries: 0 }).messages.create({
+    model: MODELO_HAIKU,
+    max_tokens: 1,
+    messages: [{ role: "user", content: "ok" }],
+  });
+}
+
+/**
+ * Checagem prévia para quem vai começar um trabalho caro (ex.: auditoria): lança erro com
+ * tipo de saldo/chave se o disjuntor estiver aberto; se a pausa venceu, faz o teste mínimo.
+ */
+export async function verificarIADisponivel(): Promise<void> {
+  await garantirIALiberada(testarConexaoIA);
+}
+
+/**
+ * Toda chamada à IA passa por aqui: (1) se o disjuntor estiver aberto (saldo/chave), falha
+ * na hora sem gastar a API; (2) se a chamada falhar por saldo/chave, abre o disjuntor.
+ */
+async function protegida<T>(fn: () => Promise<T>): Promise<T> {
+  await garantirIALiberada(testarConexaoIA);
+  try {
+    return await fn();
+  } catch (err) {
+    await registrarFalhaIA(err);
+    throw err;
+  }
+}
+
 /** Contador de tokens consumidos — somado a cada chamada (inclusive as repetidas por falha). */
 export type UsoTokens = { entrada: number; saida: number };
 
@@ -38,20 +70,21 @@ export type UsoTokens = { entrada: number; saida: number };
 export async function askJSON<T>(
   system: string,
   userPrompt: string,
-  opts?: { model?: string; maxTokens?: number; uso?: UsoTokens }
+  // sinal: para de esperar a IA quando o prazo da execução (60s da Vercel) está acabando.
+  opts?: { model?: string; maxTokens?: number; uso?: UsoTokens; sinal?: AbortSignal }
 ): Promise<T> {
   const anthropic = getClient();
 
   // Além das tentativas do próprio SDK (erro de rede/sobrecarga), repete quando a resposta
   // volta cortada ou fora do formato JSON — falha intermitente do modelo, não do edital.
-  return comRetry(
+  return protegida(() => comRetry(
     async () => {
       const message = await anthropic.messages.create({
         model: opts?.model ?? MODELO_SONNET,
         max_tokens: opts?.maxTokens ?? 4000,
         system: `${system}\n\nResponda ESTRITAMENTE com um objeto JSON válido, sem markdown, sem texto antes ou depois.`,
         messages: [{ role: "user", content: userPrompt }],
-      });
+      }, opts?.sinal ? { signal: opts.sinal } : undefined);
 
       if (opts?.uso) {
         opts.uso.entrada += message.usage?.input_tokens ?? 0;
@@ -72,8 +105,8 @@ export async function askJSON<T>(
         throw err;
       }
     },
-    { tentativas: 3, esperaMs: 1200 }
-  );
+    { tentativas: 3, esperaMs: 1200, sinal: opts?.sinal }
+  ));
 }
 
 /**
@@ -88,12 +121,14 @@ export async function askText(
 ): Promise<string> {
   const anthropic = getClient();
 
-  const message = await anthropic.messages.create({
-    model: opts?.model ?? MODELO_SONNET,
-    max_tokens: opts?.maxTokens ?? 1500,
-    system,
-    messages: [{ role: "user", content: userPrompt }],
-  });
+  const message = await protegida(() =>
+    anthropic.messages.create({
+      model: opts?.model ?? MODELO_SONNET,
+      max_tokens: opts?.maxTokens ?? 1500,
+      system,
+      messages: [{ role: "user", content: userPrompt }],
+    })
+  );
 
   const block = message.content[0];
   if (block.type !== "text") throw new Error("Resposta inesperada do modelo");
@@ -133,13 +168,15 @@ export async function conversarComFerramentas(
   const mensagens: Anthropic.MessageParam[] = historico.map((m) => ({ role: m.role, content: m.content }));
 
   for (let iteracao = 0; iteracao < MAX_ITERACOES_FERRAMENTAS; iteracao++) {
-    const message = await anthropic.messages.create({
-      model: opts?.model ?? MODELO_SONNET,
-      max_tokens: opts?.maxTokens ?? 1500,
-      system,
-      tools: ferramentas,
-      messages: mensagens,
-    });
+    const message = await protegida(() =>
+      anthropic.messages.create({
+        model: opts?.model ?? MODELO_SONNET,
+        max_tokens: opts?.maxTokens ?? 1500,
+        system,
+        tools: ferramentas,
+        messages: mensagens,
+      })
+    );
 
     if (message.stop_reason !== "tool_use") {
       const texto = message.content
@@ -210,10 +247,15 @@ export const OCR_VISAO_LIMITE_BYTES = 15 * 1024 * 1024;
  * que já existe para PDFs com texto selecionável de verdade — os agentes Analista,
  * Financeiro e Advogado passam a enxergar o mesmo texto de qualquer forma.
  */
-export async function transcreverPdfViaVisao(base64: string, opts?: { maxTokens?: number }): Promise<string | null> {
+export async function transcreverPdfViaVisao(
+  base64: string,
+  // paginas: o PDF enviado tem SÓ estas páginas do documento original (números originais, na ordem) —
+  // a IA marca cada uma com "[Pág. N]" para o texto voltar ao lugar certo.
+  opts?: { maxTokens?: number; paginas?: number[] }
+): Promise<string | null> {
   const anthropic = getClient();
   try {
-    const message = await anthropic.messages.create({
+    const message = await protegida(() => anthropic.messages.create({
       model: MODELO_HAIKU,
       max_tokens: opts?.maxTokens ?? 8000,
       messages: [
@@ -228,12 +270,18 @@ na ordem em que aparece, página por página. Preserve números, tabelas (como t
 alinhados) e a estrutura de seções/itens tal como aparecem no documento. Não resuma, não comente, não traduza —
 apenas transcreva literalmente o que está escrito e visível nas imagens das páginas. Se algum trecho estiver
 ilegível, marque com "[ilegível]" e siga em frente. Responda SOMENTE com o texto transcrito, sem nenhum comentário
-seu antes ou depois.`,
+seu antes ou depois.${
+                opts?.paginas?.length
+                  ? `
+
+Este arquivo contém apenas as páginas ${opts.paginas.join(", ")} do documento original, nessa ordem. Antes do texto de cada página, escreva uma linha com a marca [Pág. N], usando o número ORIGINAL dela (${opts.paginas.map((p) => `[Pág. ${p}]`).join(", ")}, nessa ordem).`
+                  : ""
+              }`,
             },
           ],
         },
       ],
-    });
+    }));
 
     const block = message.content[0];
     if (block.type !== "text") return null;

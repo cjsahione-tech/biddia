@@ -6,6 +6,13 @@ import { logAudit } from "@/lib/agents/run-tracker";
 import { baixarAnexo } from "@/lib/storage";
 import type { Document as DocumentRow } from "@prisma/client";
 import { ehZip, extrairTextoDeZip } from "@/lib/agents/arquivos-compactados";
+import {
+  MIN_PAGINAS_SEM_TEXTO_PARA_OCR,
+  mesclarTextoComOcr,
+  montarPdfComPaginas,
+  paginasSemTexto,
+  separarTranscricaoPorPagina,
+} from "@/lib/pdf-paginas";
 
 // Limite de caracteres por documento enviado ao modelo — controla custo/latência
 // mesmo em editais muito longos (dezenas de páginas). Mantido moderado (não maior)
@@ -36,14 +43,17 @@ export type ResultadoExtracaoPdf = {
 export async function extrairTextoPdfComOrigem(bytes: Uint8Array): Promise<ResultadoExtracaoPdf> {
   let textoSelecionavel: string | null = null;
   let paginas = 1;
+  let porPagina: string[] = [];
 
   try {
-    const pdf = await getDocumentProxy(bytes);
+    // getDocumentProxy "consome" o buffer que recebe (o arquivo fica com 0 bytes): passa uma CÓPIA,
+    // senão o OCR e qualquer reaproveitamento posterior de `bytes` recebem um arquivo vazio.
+    const pdf = await getDocumentProxy(bytes.slice());
     // Página a página, com uma marca "[Pág. N]" antes de cada uma: assim quem lê o texto (ex.:
     // a auditoria de habilitação) consegue citar em que página do edital está cada exigência.
     const { text, totalPages } = await extractText(pdf, { mergePages: false });
     paginas = totalPages || 1;
-    const porPagina = Array.isArray(text) ? text : [text];
+    porPagina = Array.isArray(text) ? text : [text];
     textoSelecionavel = porPagina.some((t) => t.trim())
       ? porPagina.map((t, i) => `[Pág. ${i + 1}]\n${t.trim()}`).join("\n\n")
       : null;
@@ -52,7 +62,29 @@ export async function extrairTextoPdfComOrigem(bytes: Uint8Array): Promise<Resul
   }
 
   const densidade = (textoSelecionavel?.length ?? 0) / paginas;
-  if (densidade >= MIN_CHARS_POR_PAGINA_TEXTO_REAL) return { texto: textoSelecionavel, viaOcr: false };
+  if (densidade >= MIN_CHARS_POR_PAGINA_TEXTO_REAL) {
+    // PDF com texto, mas com algumas páginas escaneadas no meio (anexos digitalizados): lê só
+    // essas páginas por OCR, em vez de perdê-las. Qualquer falha aqui mantém o texto já extraído.
+    const vazias = paginasSemTexto(porPagina);
+    if (
+      vazias.length >= MIN_PAGINAS_SEM_TEXTO_PARA_OCR &&
+      vazias.length <= OCR_VISAO_LIMITE_PAGINAS &&
+      bytes.byteLength <= OCR_VISAO_LIMITE_BYTES
+    ) {
+      try {
+        const subPdf = await montarPdfComPaginas(bytes, vazias);
+        const transcricao = await transcreverPdfViaVisao(Buffer.from(subPdf).toString("base64"), {
+          maxTokens: Math.min(16_000, Math.max(4_000, vazias.length * 700)),
+          paginas: vazias,
+        });
+        const lidas = transcricao ? separarTranscricaoPorPagina(transcricao, vazias) : new Map<number, string>();
+        if (lidas.size > 0) return { texto: mesclarTextoComOcr(porPagina, lidas), viaOcr: true };
+      } catch (err) {
+        console.error("Falha no OCR das páginas escaneadas — seguindo só com o texto selecionável:", err);
+      }
+    }
+    return { texto: textoSelecionavel, viaOcr: false };
+  }
 
   // Sem texto selecionável suficiente — tenta OCR via visão, respeitando um teto de
   // páginas/tamanho para não estourar o orçamento de tempo da função serverless com um
@@ -104,7 +136,9 @@ export async function extrairTrechoDeAnexoParaCorrecao(
   const tamanhoMax = opts?.tamanhoMax ?? MAX_CHARS_POR_DOCUMENTO;
 
   try {
-    const pdf = await getDocumentProxy(bytes);
+    // getDocumentProxy "consome" o buffer que recebe (o arquivo fica com 0 bytes): passa uma CÓPIA,
+    // senão o OCR e qualquer reaproveitamento posterior de `bytes` recebem um arquivo vazio.
+    const pdf = await getDocumentProxy(bytes.slice());
     const matchPaginas = mensagemUsuario.match(REGEX_INTERVALO_PAGINAS);
 
     if (matchPaginas) {

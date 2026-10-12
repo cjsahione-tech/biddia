@@ -30,7 +30,7 @@ export async function encerrarCaptacoesOrfas(companyId: string) {
  * empresa, devolve essa em vez de abrir outra. Precisa ser chamada dentro de uma requisição
  * (usa after()).
  */
-export async function iniciarCaptacao(companyId: string, origem?: string) {
+export async function iniciarCaptacao(companyId: string) {
   await encerrarCaptacoesOrfas(companyId);
   const emAndamento = await prisma.captacaoRun.findFirst({ where: { companyId, status: "RUNNING" } });
   if (emAndamento) return { run: emAndamento, jaEmAndamento: true };
@@ -50,7 +50,7 @@ export async function iniciarCaptacao(companyId: string, origem?: string) {
     };
 
     try {
-      const resultado = await executarAgente1(companyId, gravarProgresso, origem);
+      const resultado = await executarAgente1(companyId, gravarProgresso);
       await prisma.captacaoRun.update({
         where: { id: run.id },
         data: {

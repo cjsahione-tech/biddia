@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutGrid, Building2, Bell, Calculator, BarChart3, FileStack, LogOut, Calendar, Sparkles, ShieldCheck, Undo2, Menu, X } from "lucide-react";
+import { LayoutGrid, Building2, Bell, Calculator, BarChart3, FileStack, LogOut, Calendar, Sparkles, ShieldCheck, Undo2, Menu, X, AlertTriangle } from "lucide-react";
 
 const NAV = [
   { href: "/bidd-ia", label: "Bidd.IA", icon: Sparkles },
@@ -51,6 +51,16 @@ export function AppShell({
       })
       .catch(() => {});
   }, [pathname]);
+
+  // Só para administrador: avisa no topo quando a IA está pausada (saldo/chave) e o que fazer.
+  const [avisoIA, setAvisoIA] = useState<{ aviso: string; auditoriasGuardadas: number } | null>(null);
+  useEffect(() => {
+    if (!isAdmin) return;
+    fetch("/api/admin/ia-status")
+      .then((r) => r.json())
+      .then((d) => setAvisoIA(d?.pausada && d.aviso ? { aviso: d.aviso, auditoriasGuardadas: d.auditoriasGuardadas ?? 0 } : null))
+      .catch(() => {});
+  }, [isAdmin, pathname]);
 
   async function handleLogout() {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -126,6 +136,17 @@ export function AppShell({
           >
             <Undo2 className="h-3.5 w-3.5" /> Voltar para minha carteira
           </button>
+        </div>
+      )}
+      {avisoIA && (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 bg-warning px-4 py-2 text-sm font-medium text-white sm:px-6" role="alert">
+          <AlertTriangle className="h-4 w-4 shrink-0" />
+          <span>{avisoIA.aviso}</span>
+          {avisoIA.auditoriasGuardadas > 0 && (
+            <span className="text-xs font-normal opacity-90">
+              {avisoIA.auditoriasGuardadas} auditoria(s) guardada(s) — retomam sozinhas quando o saldo voltar.
+            </span>
+          )}
         </div>
       )}
       {/* Barra superior — só em telas estreitas (o menu lateral fixo some abaixo de 1024px) */}

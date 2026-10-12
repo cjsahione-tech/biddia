@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { verificarCronSecret } from "@/lib/cron-auth";
 import { executarAgente1 } from "@/lib/agents/agente1-comercial";
 import { mapComLimite } from "@/lib/concorrencia";
-import { varrerAuditoriasPendentes } from "@/lib/agents/auditoria-habilitacao";
+import { vigiarAuditorias } from "@/lib/agents/auditoria-fila";
 import { notificarNovosEditais } from "@/lib/notifications";
 
 // Roda o Agente Comercial para todas as empresas com alguma fonte de busca configurada
@@ -31,7 +31,7 @@ export async function GET(req: Request) {
 
   await mapComLimite(empresas, 3, async (empresa) => {
     try {
-      const resultado = await executarAgente1(empresa.id, undefined, new URL(req.url).origin);
+      const resultado = await executarAgente1(empresa.id);
       resultados.push({ companyId: empresa.id, novos: resultado.novos });
       if (resultado.novos > 0) {
         await notificarNovosEditais(
@@ -46,11 +46,11 @@ export async function GET(req: Request) {
     }
   });
 
-  // Rede de segurança: auditorias de habilitação que não chegaram a iniciar (ou travaram).
-  const reativadas = await varrerAuditoriasPendentes({ limite: 6, origem: new URL(req.url).origin }).catch(() => 0);
+  // Vigia: auditorias de habilitação travadas, com nova tentativa vencida ou guardadas por falta de saldo.
+  const vigia = await vigiarAuditorias({ origem: new URL(req.url).origin, forcar: true }).catch(() => null);
 
   return NextResponse.json({
-    auditoriasReativadas: reativadas,
+    vigia,
     empresasProcessadas: resultados.length,
     totalNovos: resultados.reduce((acc, r) => acc + r.novos, 0),
     resultados,

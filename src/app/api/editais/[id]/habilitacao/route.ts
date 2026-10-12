@@ -1,10 +1,12 @@
 import { NextResponse, after } from "next/server";
+import { vigiarAuditorias } from "@/lib/agents/auditoria-fila";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { executarAuditoriaHabilitacao } from "@/lib/agents/auditoria-habilitacao";
 import { tokenInternoValido } from "@/lib/agents/auditoria-dispatch";
 import { requireCompany } from "@/lib/api-utils";
 import { montarRelatorioHabilitacao } from "@/lib/habilitacao-relatorio";
+import { isAdminEmail } from "@/lib/admin";
 
 // Executa a auditoria de habilitação de UM edital. Não tem botão na tela: é chamada pelo
 // próprio sistema (depois da captação, ao continuar a leitura de um edital grande e ao
@@ -14,15 +16,20 @@ export const maxDuration = 60;
 
 /** Relatório de habilitação do edital (aba "Habilitação"): resumo, pendências por categoria etc. */
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { company, error } = await requireCompany();
+  const { user, company, error } = await requireCompany();
   if (error) return error;
   const { id } = await params;
-  const relatorio = await montarRelatorioHabilitacao(id, company!.id);
+  const relatorio = await montarRelatorioHabilitacao(id, company!.id, { admin: isAdminEmail(user!.email) });
   if (!relatorio) return NextResponse.json({ error: "Edital não encontrado" }, { status: 404 });
+  // A aba consulta isto a cada poucos segundos enquanto a auditoria roda: aproveita para o vigia
+  // conferir se ela não travou.
+  const origem = new URL(_req.url).origin;
+  after(() => vigiarAuditorias({ origem, companyId: company!.id }).then(() => undefined, () => undefined));
   return NextResponse.json({ relatorio });
 }
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const inicio = Date.now(); // o relógio de 60s da Vercel conta daqui
   const { id } = await params;
 
   const token = req.headers.get("authorization")?.replace(/^Bearer /, "") ?? null;
@@ -50,7 +57,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   }
 
   after(async () => {
-    await executarAuditoriaHabilitacao(id, { continuacao, modo, origem });
+    await executarAuditoriaHabilitacao(id, { continuacao, modo, origem, inicio });
   });
 
   return NextResponse.json({ ok: true }, { status: 202 });

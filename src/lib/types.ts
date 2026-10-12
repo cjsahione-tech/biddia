@@ -20,7 +20,12 @@ export type HabilitacaoStatusTipo =
   | "HABILITADA"
   | "HABILITADA_RESSALVAS"
   | "NAO_HABILITADA"
-  | "ERRO";
+  | "ERRO"
+  | "NA_FILA"
+  | "AGUARDANDO_IA"
+  | "ARQUIVO_ILEGIVEL"
+  | "EDITAL_GRANDE"
+  | "TEMPO_ESGOTADO";
 
 export type EditalListItem = {
   id: string;

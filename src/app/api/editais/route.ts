@@ -1,7 +1,8 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireCompany } from "@/lib/api-utils";
 import { LIMITE_INATIVIDADE_MS } from "@/lib/kanban-atividade";
+import { vigiarAuditorias } from "@/lib/agents/auditoria-fila";
 
 export async function GET(req: Request) {
   const { company, error } = await requireCompany();
@@ -9,6 +10,11 @@ export async function GET(req: Request) {
 
   const { searchParams } = new URL(req.url);
   const status = searchParams.get("status");
+
+  // Vigia das auditorias de habilitação (travadas, com nova tentativa vencida, na fila): roda em
+  // segundo plano toda vez que o quadro é aberto — barato quando não há nada a fazer.
+  const origem = new URL(req.url).origin;
+  after(() => vigiarAuditorias({ origem, companyId: company!.id }).then(() => undefined, () => undefined));
 
   // Checagem "preguiçosa" de expiração por inatividade — sem cron: cards parados em
   // "Oportunidade" há mais de 48h de qualquer ação do usuário viram Rascunho aqui mesmo,

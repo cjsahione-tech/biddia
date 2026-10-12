@@ -1,10 +1,16 @@
-import type { Document as DocumentRow, Prisma } from "@prisma/client";
+import { createHash } from "node:crypto";
+import type { Document as DocumentRow, HabilitacaoStatus, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { askJSON, MODELO_HAIKU, MODELO_SONNET, type UsoTokens } from "@/lib/anthropic";
-import { descreverErro } from "@/lib/ia-erros";
+import { askJSON, MODELO_HAIKU, MODELO_SONNET, verificarIADisponivel, type UsoTokens } from "@/lib/anthropic";
+import { classificarErro, ErroTipado, mensagemDeRetentativaDoTipo, mensagemDefinitivaDoTipo } from "@/lib/ia-erros";
+import { PAUSA_MS } from "@/lib/controle-ia";
+import { statusHabilitacaoDefinitivaDoErro, statusHabilitacaoDoErro } from "@/lib/habilitacao";
 import { mapComLimite } from "@/lib/concorrencia";
 import { logAudit } from "@/lib/agents/run-tracker";
-import { baixarDocumentosPendentes } from "@/lib/agents/agente1-comercial";
+import { baixarEPersistirDocumento } from "@/lib/agents/document-download";
+import { colocarNaFila, haVaga, iniciarProximasDaFila } from "@/lib/agents/auditoria-fila";
+import { densidadeDeHabilitacao, selecionarTrechosDeHabilitacao } from "@/lib/habilitacao-trechos";
+import { BATIMENTO_VIVO_MS, decidirAposFalha, MAX_CONTINUACOES_NA_CADEIA, MAX_PASSOS_LEITURA, MAX_PASSOS_SEM_AVANCO } from "@/lib/auditoria-politica";
 import { obterTextoBrutoDocumento } from "@/lib/agents/pdf-extract";
 import { MARCA_ILEGIVEL } from "@/lib/agents/arquivos-compactados";
 import { dispararAuditoriaHabilitacao } from "@/lib/agents/auditoria-dispatch";
@@ -17,7 +23,6 @@ import {
   itemPorChave,
 } from "@/lib/catalogo-documentos";
 import {
-  AUDITORIA_HABILITACAO_DESDE,
   avaliarExigencia,
   calcularResultado,
   custoEstimadoUsd,
@@ -26,6 +31,8 @@ import {
   inferirNaturezaPelaRazaoSocial,
   epochNoNome,
   fingerprintDocumentos,
+  fingerprintEdital,
+  etapaAudita,
   type SituacaoExigencia,
 } from "@/lib/habilitacao";
 
@@ -33,17 +40,24 @@ import {
 // inclusive dentro de ZIPs), levanta cada documento de habilitação exigido, confere com a
 // documentação da empresa (tela Documentos) e grava o resultado e a lista de exigências.
 //
-// Sem botão: roda sozinha depois da captação do edital (ver agente1-comercial.ts) e refaz a
+// Roda sozinha quando o edital entra em Qualificação (ver auditoria-gatilho.ts) — nunca na
+// captação, para não gastar IA com editais que talvez nunca sejam disputados — e refaz a
 // conferência quando a documentação da empresa muda (ver reavaliarEditaisDaEmpresa).
 //
 // Cabe em execuções de 60s da Vercel: o edital é lido em pedaços, quatro por vez; se não der
 // tempo, o progresso fica salvo e uma nova execução continua de onde parou (até 3 execuções).
 
-const ORCAMENTO_MS = 50_000; // tempo de trabalho por execução (limite da Vercel: 60s)
-const FOLGA_EXTRACAO_MS = 22_000; // só começa uma leva de pedaços se sobrar isto
-const FOLGA_CONFERENCIA_MS = 28_000; // a conferência final (Sonnet) precisa de mais folga
+// Tempos (a Vercel corta a função em 60s): cada execução trabalha até ORCAMENTO_MS e só começa
+// um passo novo se sobrar a "folga" dele (uma chamada da IA leva de 10 a 25s).
+const ORCAMENTO_MS = 46_000;
+const MARGEM_FINAL_MS = 6_000; // reservada para salvar o progresso e disparar a continuação
+const FOLGA_PREPARO_MS = 14_000; // começar a baixar/ler mais um arquivo
+const LIMITE_ARQUIVO_MS = 22_000; // teto para baixar OU extrair um arquivo
+const FOLGA_NOVO_PEDACO_MS = 16_000; // começar mais um pedaço (Haiku)
+const FOLGA_NOVO_LOTE_MS = 24_000; // começar mais um lote de conferência (Sonnet)
 const PEDACOS_EM_PARALELO = 4;
-const MAX_CONTINUACOES = 2;
+const LIMITE_PEDACOS_GRANDE = 8; // acima disso o edital é "muito grande" (lido em várias partes)
+const FALHAS_ATE_DESISTIR_DO_ARQUIVO = 2; // tentativas (passos) antes de seguir sem um arquivo
 const NOME_AGENTE = "Auditor de Habilitação";
 
 type Bruta = {
@@ -57,9 +71,25 @@ type Bruta = {
   aplicavelSe: string | null;
 };
 
-type Progresso = { chunksTotal: number; feitos: number[]; brutas: Bruta[] };
+type MotivoArquivo = "download" | "demorou" | "formato";
 
-type Pedaco = { docNome: string; indice: number; total: number; texto: string };
+// Progresso salvo no banco: cada execução retoma de onde a anterior parou. Campos novos são
+// opcionais para continuar lendo registros gravados antes desta versão.
+type Progresso = {
+  chunksTotal: number;
+  feitos: number[];
+  brutas: Bruta[];
+  /** Impressão digital do conjunto de pedaços: se mudar, a leitura recomeça. */
+  plano?: string;
+  passos?: number;
+  semAvanco?: number;
+  /** Arquivos que falharam (por id): quantas vezes e por quê. */
+  falhas?: Record<string, { n: number; motivo: MotivoArquivo }>;
+  /** Resultado da conferência por lote (índice → exigências conferidas). */
+  lotes?: Record<string, Final[]>;
+};
+
+type Pedaco = { docNome: string; indice: number; total: number; texto: string; densidade: number };
 
 const IDS_CATEGORIA = CATEGORIAS_CATALOGO.map((c) => c.id);
 
@@ -126,13 +156,13 @@ Campos de cada exigência:
 Responda em JSON: { "exigencias": [ { "categoria": string, "documento": string, "chave": string | null, "arquivo": string | null, "localizacao": string | null, "condicao": string | null, "aplicavelSe": string | null } ] }`;
 }
 
-async function extrairDoPedaco(pedaco: Pedaco, uso: UsoTokens): Promise<Bruta[]> {
+async function extrairDoPedaco(pedaco: Pedaco, uso: UsoTokens, sinal?: AbortSignal): Promise<Bruta[]> {
   const r = await askJSON<{
     exigencias?: { categoria?: string; documento?: string; chave?: string | null; arquivo?: string | null; localizacao?: string | null; condicao?: string | null; aplicavelSe?: string | null }[];
   }>(
     promptExtracao(),
     `Documento: ${pedaco.docNome} (trecho ${pedaco.indice + 1} de ${pedaco.total})\n\n${pedaco.texto}`,
-    { model: MODELO_HAIKU, maxTokens: 6000, uso }
+    { model: MODELO_HAIKU, maxTokens: 6000, uso, sinal }
   );
 
   const brutas: Bruta[] = [];
@@ -229,8 +259,10 @@ const EXIGENCIAS_POR_LOTE = 18;
  */
 type FatosEmpresa = { razaoSocial: string; natureza: string | null; regime: string | null; atendeBem: boolean; atendeServico: boolean };
 
-async function conferirComIA(brutas: Bruta[], docs: DocEmpresa[], uso: UsoTokens, empresa: FatosEmpresa): Promise<Final[]> {
-  if (brutas.length === 0) return [];
+type ContextoConferencia = { sistema: string; listaDocs: string; idsValidos: Set<string> };
+
+/** Prompt e lista de documentos da empresa — iguais para todos os lotes de uma conferência. */
+function contextoDeConferencia(docs: DocEmpresa[], empresa: FatosEmpresa): ContextoConferencia {
   const porChave = indexarPorChave(docs);
   const personalizados = docs.filter((d) => !chaveEfetivaDoDocumento(d));
 
@@ -270,77 +302,90 @@ atua com ${[empresa.atendeBem ? "venda de produtos" : null, empresa.atendeServic
 
 Responda em JSON: { "grupos": [ { "ids": ["E1","E7"], "chave": string | null, "docEmpresaId": string | null, "certeza": boolean, "aplica": "sim" | "nao" | "nao_sei", "acao": string | null } ] }`;
 
+  const idsValidos = new Set(docs.map((d) => d.id));
+  return { sistema, listaDocs, idsValidos };
+}
+
+/** Divide as exigências em lotes (ordem fixa: o mesmo conjunto gera sempre os mesmos lotes). */
+export function montarLotes(brutas: Bruta[]): Bruta[][] {
   // Ordena por categoria para que repetições caiam no mesmo lote.
   const ordenadas = [...brutas].sort((x, y) => x.categoria.localeCompare(y.categoria) || x.documento.localeCompare(y.documento));
   const lotes: Bruta[][] = [];
   for (let i = 0; i < ordenadas.length; i += EXIGENCIAS_POR_LOTE) lotes.push(ordenadas.slice(i, i + EXIGENCIAS_POR_LOTE));
 
-  const idsValidos = new Set(docs.map((d) => d.id));
+  return lotes;
+}
 
-  const resultados = await mapComLimite(lotes, 4, async (lote) => {
-    const entrada = lote
-      .map(
-        (b, i) =>
-          `E${i + 1} | categoria: ${b.categoria} | documento: ${b.documento} | chave sugerida: ${b.chave ?? "nenhuma"} | local: ${b.localizacao ?? "—"} | condição: ${b.condicao ?? "—"} | aplicavelSe: ${b.aplicavelSe ?? "—"}`
-      )
-      .join("\n");
-    const r = await askJSON<{
-      grupos?: { ids?: string[]; chave?: string | null; docEmpresaId?: string | null; certeza?: boolean; aplica?: string; acao?: string | null }[];
-    }>(
-      sistema,
-      `=== EXIGÊNCIAS LEVANTADAS ===\n${entrada}\n\n=== DOCUMENTOS DA EMPRESA ===\n${listaDocs || "(a empresa ainda não enviou nenhum documento)"}`,
-      { model: MODELO_SONNET, maxTokens: 4000, uso }
-    );
+/** Confere UM lote de exigências com a IA (Sonnet). */
+async function conferirLote(lote: Bruta[], ctx: ContextoConferencia, uso: UsoTokens, sinal?: AbortSignal): Promise<Final[]> {
+  const { sistema, listaDocs, idsValidos } = ctx;
+  const entrada = lote
+    .map(
+      (b, i) =>
+        `E${i + 1} | categoria: ${b.categoria} | documento: ${b.documento} | chave sugerida: ${b.chave ?? "nenhuma"} | local: ${b.localizacao ?? "—"} | condição: ${b.condicao ?? "—"} | aplicavelSe: ${b.aplicavelSe ?? "—"}`
+    )
+    .join("\n");
+  const r = await askJSON<{
+    grupos?: { ids?: string[]; chave?: string | null; docEmpresaId?: string | null; certeza?: boolean; aplica?: string; acao?: string | null }[];
+  }>(
+    sistema,
+    `=== EXIGÊNCIAS LEVANTADAS ===\n${entrada}\n\n=== DOCUMENTOS DA EMPRESA ===\n${listaDocs || "(a empresa ainda não enviou nenhum documento)"}`,
+    { model: MODELO_SONNET, maxTokens: 4000, uso, sinal }
+  );
 
-    const finais: Final[] = [];
-    const usadas = new Set<number>();
-    for (const g of r.grupos ?? []) {
-      const idx = (g.ids ?? [])
-        .map((id) => Number(String(id).replace(/\D/g, "")) - 1)
-        .filter((n) => Number.isInteger(n) && n >= 0 && n < lote.length && !usadas.has(n));
-      if (idx.length === 0) continue;
-      idx.forEach((n) => usadas.add(n));
-      const base = lote[idx[0]];
-      const locais = Array.from(new Set(idx.map((n) => lote[n].localizacao).filter((x): x is string => !!x)));
-      const origens = Array.from(new Set(idx.map((n) => lote[n].origem)));
-      const condicoes = Array.from(new Set(idx.map((n) => lote[n].condicao).filter((x): x is string => !!x)));
-      finais.push({
-        categoria: base.categoria,
-        documento: base.documento,
-        chave: g.chave && itemPorChave(g.chave) ? g.chave : base.chave,
-        origem: origens.join("; "),
-        localizacao: locais.length > 0 ? locais.join("; ") : null,
-        condicao: condicoes.length > 0 ? condicoes.join("; ") : null,
-        aplicavelSe: idx.map((n) => lote[n].aplicavelSe).find((x): x is string => !!x) ?? null,
-        // false = não vale (com certeza); true = vale; null = não dá para saber. Só vale a resposta da
-        // IA quando a exigência realmente é condicional ao tipo de empresa; senão, vale para todos.
-        aplica: !idx.some((n) => lote[n].aplicavelSe) ? true : g.aplica === "nao" ? false : g.aplica === "sim" ? true : null,
-        // Só aceita id que de fato existe na documentação desta empresa (nunca confia na IA).
-        docEmpresaId: g.docEmpresaId && idsValidos.has(g.docEmpresaId) ? g.docEmpresaId : null,
-        certeza: g.certeza === true,
-        acaoSugerida: g.acao?.trim() || null,
-      });
-    }
-    // Exigência que a IA esqueceu de devolver NÃO some: entra como "verificar manualmente".
-    lote.forEach((b, n) => {
-      if (usadas.has(n)) return;
-      finais.push({
-        categoria: b.categoria,
-        documento: b.documento,
-        chave: b.chave,
-        origem: b.origem,
-        localizacao: b.localizacao,
-        condicao: b.condicao,
-        aplicavelSe: b.aplicavelSe,
-        aplica: null,
-        docEmpresaId: null,
-        certeza: false,
-        acaoSugerida: null,
-      });
+  const finais: Final[] = [];
+  const usadas = new Set<number>();
+  for (const g of r.grupos ?? []) {
+    const idx = (g.ids ?? [])
+      .map((id) => Number(String(id).replace(/\D/g, "")) - 1)
+      .filter((n) => Number.isInteger(n) && n >= 0 && n < lote.length && !usadas.has(n));
+    if (idx.length === 0) continue;
+    idx.forEach((n) => usadas.add(n));
+    const base = lote[idx[0]];
+    const locais = Array.from(new Set(idx.map((n) => lote[n].localizacao).filter((x): x is string => !!x)));
+    const origens = Array.from(new Set(idx.map((n) => lote[n].origem)));
+    const condicoes = Array.from(new Set(idx.map((n) => lote[n].condicao).filter((x): x is string => !!x)));
+    finais.push({
+      categoria: base.categoria,
+      documento: base.documento,
+      chave: g.chave && itemPorChave(g.chave) ? g.chave : base.chave,
+      origem: origens.join("; "),
+      localizacao: locais.length > 0 ? locais.join("; ") : null,
+      condicao: condicoes.length > 0 ? condicoes.join("; ") : null,
+      aplicavelSe: idx.map((n) => lote[n].aplicavelSe).find((x): x is string => !!x) ?? null,
+      // false = não vale (com certeza); true = vale; null = não dá para saber. Só vale a resposta da
+      // IA quando a exigência realmente é condicional ao tipo de empresa; senão, vale para todos.
+      aplica: !idx.some((n) => lote[n].aplicavelSe) ? true : g.aplica === "nao" ? false : g.aplica === "sim" ? true : null,
+      // Só aceita id que de fato existe na documentação desta empresa (nunca confia na IA).
+      docEmpresaId: g.docEmpresaId && idsValidos.has(g.docEmpresaId) ? g.docEmpresaId : null,
+      certeza: g.certeza === true,
+      acaoSugerida: g.acao?.trim() || null,
     });
-    return finais;
+  }
+  // Exigência que a IA esqueceu de devolver NÃO some: entra como "verificar manualmente".
+  lote.forEach((b, n) => {
+    if (usadas.has(n)) return;
+    finais.push({
+      categoria: b.categoria,
+      documento: b.documento,
+      chave: b.chave,
+      origem: b.origem,
+      localizacao: b.localizacao,
+      condicao: b.condicao,
+      aplicavelSe: b.aplicavelSe,
+      aplica: null,
+      docEmpresaId: null,
+      certeza: false,
+      acaoSugerida: null,
+    });
   });
+  return finais;
+}
 
+async function conferirComIA(brutas: Bruta[], docs: DocEmpresa[], uso: UsoTokens, empresa: FatosEmpresa, sinal?: AbortSignal): Promise<Final[]> {
+  if (brutas.length === 0) return [];
+  const ctx = contextoDeConferencia(docs, empresa);
+  const resultados = await mapComLimite(montarLotes(brutas), 4, (lote) => conferirLote(lote, ctx, uso, sinal));
   return resultados.flat();
 }
 
@@ -470,6 +515,8 @@ async function gravarResultado(opts: {
   docsLidos?: { nome: string; caracteres: number; ok: boolean }[];
   docsEmpresa: DocEmpresa[];
   mensagem?: string | null;
+  /** Só na leitura completa: impressão digital do edital lido (ver fingerprintEdital). */
+  editalFingerprint?: string;
   uso?: { haikuEntrada: number; haikuSaida: number; sonnetEntrada: number; sonnetSaida: number };
 }) {
   const { editalId, linhas, dataReferencia, leituraCompleta, docsEmpresa } = opts;
@@ -485,12 +532,17 @@ async function gravarResultado(opts: {
   const dadosAuditoria: Prisma.AuditoriaHabilitacaoUpdateInput = {
     estado: "CONCLUIDA",
     mensagem: opts.mensagem ?? null,
+    erroTipo: null,
+    detalheTecnico: null,
+    proximaTentativaEm: null,
+    tentativasAutomaticas: 0,
     dataReferencia,
     totalExigencias: r.total,
     atendidas: r.atendidas,
     pendentes: r.pendentes,
     leituraCompleta,
     docsFingerprint: fingerprintDocumentos(docsEmpresa),
+    ...(opts.editalFingerprint ? { editalFingerprint: opts.editalFingerprint } : {}),
     concluidaEm: new Date(),
     progresso: null,
     ...(opts.docsLidos ? { documentosLidos: JSON.stringify(opts.docsLidos) } : {}),
@@ -546,84 +598,183 @@ async function avisarVencimentosProximos(editalId: string, dataReferencia: Date)
 }
 
 // ── Orquestração ────────────────────────────────────────────────────────────
+//
+// Regras de ouro:
+//  - UMA execução nunca passa de ~46s de trabalho (a Vercel corta em 60s): cada passo checa o
+//    relógio, a IA recebe um "sinal de parar" no prazo, e o progresso é salvo a cada avanço;
+//  - o que não coube numa execução continua na seguinte (encadeada até MAX_CONTINUACOES_NA_CADEIA;
+//    depois a fila retoma numa cadeia nova), sempre de onde parou — nada é refeito;
+//  - TODA auditoria termina num estado final: concluída, erro com motivo, guardada por falta de
+//    saldo, ou re-agendada. Nunca fica "rodando" para sempre (o vigia cobre o que escapar).
 
 export type ResultadoExecucao = "concluida" | "continua" | "erro";
 
-export async function executarAuditoriaHabilitacao(
-  editalId: string,
-  opts: { continuacao?: number; modo?: "completo" | "reconferir"; origem?: string } = {}
-): Promise<ResultadoExecucao> {
-  const continuacao = opts.continuacao ?? 0;
-  const prazo = Date.now() + ORCAMENTO_MS;
-  const restante = () => prazo - Date.now();
+type OpcoesExecucao = {
+  continuacao?: number;
+  modo?: "completo" | "reconferir";
+  origem?: string;
+  /** Instante em que a requisição da Vercel começou (o relógio de 60s conta daqui). */
+  inicio?: number;
+};
 
+const ESGOTOU = Symbol("esgotou");
+
+/** Espera `promessa` por no máximo `ms`; se passar, devolve ESGOTOU (a promessa segue por conta própria). */
+async function comPrazo<T>(promessa: Promise<T>, ms: number): Promise<T | typeof ESGOTOU> {
+  promessa.catch(() => {}); // se perder a corrida e falhar depois, não vira erro solto
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const limite = new Promise<typeof ESGOTOU>((resolve) => {
+    timer = setTimeout(() => resolve(ESGOTOU), Math.max(0, ms));
+  });
   try {
-    const edital = await prisma.edital.findUniqueOrThrow({
-      where: { id: editalId },
-      select: { id: true, companyId: true, titulo: true, dataAberturaProposta: true, dataEncerramentoProposta: true },
-    });
-    const dataReferencia = dataReferenciaDoEdital(edital);
+    return await Promise.race([promessa, limite]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
-    if (continuacao === 0) {
-      await prisma.auditoriaHabilitacao.upsert({
-        where: { editalId },
-        create: { editalId, estado: "RODANDO", tentativas: 1 },
-        update: {
-          estado: "RODANDO",
-          mensagem: null,
-          tentativas: { increment: 1 },
-          // Numa reconferência o consumo da auditoria completa continua somado; numa nova
-          // auditoria completa recomeça do zero.
-          ...(opts.modo === "reconferir"
-            ? {}
-            : { haikuEntrada: 0, haikuSaida: 0, sonnetEntrada: 0, sonnetSaida: 0, iniciadaEm: new Date(), progresso: null }),
-        },
-      });
-      // "Auditando…" só enquanto o edital ainda não tem resultado; numa reconferência o
-      // resultado anterior continua visível até o novo ficar pronto.
-      if (opts.modo !== "reconferir") {
-        await prisma.edital.update({ where: { id: editalId }, data: { habilitacaoStatus: "AUDITANDO" } });
+/**
+ * Roda `fn` sobre os itens, `paralelo` por vez, mas só começa um item novo enquanto
+ * `podeComecar()` disser que ainda há tempo. Se um item falhar, para de começar novos e
+ * relança o primeiro erro depois que os que já estavam em andamento terminarem.
+ */
+async function rodarComPrazo<T>(itens: T[], paralelo: number, podeComecar: () => boolean, fn: (item: T) => Promise<void>): Promise<void> {
+  let proximo = 0;
+  let erro: unknown = null;
+  async function trabalhador() {
+    while (proximo < itens.length && erro === null && podeComecar()) {
+      const item = itens[proximo++];
+      try {
+        await fn(item);
+      } catch (e) {
+        if (erro === null) erro = e;
       }
     }
+  }
+  await Promise.all(Array.from({ length: Math.min(paralelo, itens.length) }, trabalhador));
+  if (erro !== null) throw erro;
+}
 
-    const atual = await prisma.auditoriaHabilitacao.findUniqueOrThrow({ where: { editalId } });
-    const uso = {
-      haiku: { entrada: atual.haikuEntrada, saida: atual.haikuSaida } as UsoTokens,
-      sonnet: { entrada: atual.sonnetEntrada, saida: atual.sonnetSaida } as UsoTokens,
-    };
-    const usoTotal = () => ({
-      haikuEntrada: uso.haiku.entrada,
-      haikuSaida: uso.haiku.saida,
-      sonnetEntrada: uso.sonnet.entrada,
-      sonnetSaida: uso.sonnet.saida,
-    });
+export async function executarAuditoriaHabilitacao(editalId: string, opts: OpcoesExecucao = {}): Promise<ResultadoExecucao> {
+  const continuacao = opts.continuacao ?? 0;
+  const fimDoTrabalho = (opts.inicio ?? Date.now()) + ORCAMENTO_MS;
+  const restante = () => fimDoTrabalho - Date.now();
 
-    // ── Só refazer a conferência (documentação da empresa mudou) — sem reler o edital ──
-    if (opts.modo === "reconferir") {
-      const linhas = await prisma.exigenciaHabilitacao.findMany({ where: { editalId }, orderBy: { ordem: "asc" } });
-      if (linhas.length === 0) {
-        // Nada para reconferir ainda: faz a auditoria completa.
-        return executarAuditoriaHabilitacao(editalId, { ...opts, modo: "completo", continuacao: 0 });
+  // A IA recebe este sinal: perto do fim do prazo as chamadas em andamento são interrompidas
+  // (em vez de a função ser cortada no meio, sem salvar nada).
+  const parar = new AbortController();
+  const timer = setTimeout(() => parar.abort(), Math.max(1_000, restante() - MARGEM_FINAL_MS));
+
+  let resultado: ResultadoExecucao = "erro";
+  try {
+    resultado = await rodar(editalId, { ...opts, continuacao }, restante, parar.signal);
+    return resultado;
+  } catch (err) {
+    await registrarFalha(editalId, err, opts.modo === "reconferir");
+    return "erro";
+  } finally {
+    clearTimeout(timer);
+    // Terminou de vez: abre a vaga para a próxima da fila. Só quando a cadeia ainda aceita mais
+    // um salto entre funções (limite da Vercel).
+    if (resultado !== "continua" && continuacao < MAX_CONTINUACOES_NA_CADEIA) {
+      await iniciarProximasDaFila({ origem: opts.origem }).catch(() => 0);
+    }
+  }
+}
+
+/** Assume a execução (estado "rodando"). false = já existe outra execução viva para este edital. */
+async function assumirExecucao(editalId: string): Promise<boolean> {
+  const dados = {
+    estado: "RODANDO" as const,
+    mensagem: null,
+    erroTipo: null,
+    detalheTecnico: null,
+    proximaTentativaEm: null,
+    tentativas: { increment: 1 },
+  };
+  const r = await prisma.auditoriaHabilitacao.updateMany({
+    where: { editalId, NOT: { estado: "RODANDO", updatedAt: { gte: new Date(Date.now() - BATIMENTO_VIVO_MS) } } },
+    data: dados,
+  });
+  if (r.count === 0) {
+    if (await prisma.auditoriaHabilitacao.findUnique({ where: { editalId }, select: { id: true } })) return false;
+    await prisma.auditoriaHabilitacao.create({ data: { editalId, estado: "RODANDO", tentativas: 1, solicitadaEm: new Date() } });
+  }
+  await prisma.edital.update({ where: { id: editalId }, data: { habilitacaoStatus: "AUDITANDO" } });
+  return true;
+}
+
+async function rodar(
+  editalId: string,
+  opts: OpcoesExecucao & { continuacao: number },
+  restante: () => number,
+  sinal: AbortSignal
+): Promise<ResultadoExecucao> {
+  const { continuacao } = opts;
+  const reconferindo = opts.modo === "reconferir";
+
+  const edital = await prisma.edital.findUniqueOrThrow({
+    where: { id: editalId },
+    select: { id: true, companyId: true, titulo: true, dataAberturaProposta: true, dataEncerramentoProposta: true },
+  });
+  const dataReferencia = dataReferenciaDoEdital(edital);
+
+  if (continuacao === 0) {
+    // Disjuntor: sem saldo/chave nem começa — a auditoria fica guardada, sem gastar tentativa.
+    await verificarIADisponivel();
+    if (!reconferindo) {
+      // Fila: no máximo LIMITE_AUDITORIAS_SIMULTANEAS rodando juntas.
+      if (!(await haVaga(editalId))) {
+        await colocarNaFila(editalId);
+        return "continua";
       }
-      const docs = await carregarDocsDaEmpresa(edital.companyId);
-      const empresa = await carregarFatosDaEmpresa(edital.companyId);
-      // O que já foi decidido como "não se aplica a esta empresa" continua assim (não pergunta de novo).
-      const jaNaoSeAplica: Final[] = linhas
-        .filter((l) => l.situacao === "NAO_SE_APLICA")
-        .map((l) => ({
-          categoria: l.categoria,
-          documento: l.documento,
-          chave: l.catalogoChave,
-          origem: l.origem,
-          localizacao: l.localizacao,
-          condicao: l.condicao,
-          aplicavelSe: l.aplicavelSe,
-          aplica: false,
-          docEmpresaId: null,
-          certeza: true,
-          acaoSugerida: null,
-        }));
-      const brutas: Bruta[] = linhas.filter((l) => l.situacao !== "NAO_SE_APLICA").map((l) => ({
+      if (!(await assumirExecucao(editalId))) return "continua"; // já há uma execução viva
+    }
+  } else {
+    // Continuação: sinal de vida (o vigia só interrompe quem fica parado por muito tempo).
+    await prisma.auditoriaHabilitacao.update({ where: { editalId }, data: { estado: "RODANDO" } });
+  }
+
+  const atual = await prisma.auditoriaHabilitacao.findUniqueOrThrow({ where: { editalId } });
+  const uso = {
+    haiku: { entrada: atual.haikuEntrada, saida: atual.haikuSaida } as UsoTokens,
+    sonnet: { entrada: atual.sonnetEntrada, saida: atual.sonnetSaida } as UsoTokens,
+  };
+  const usoTotal = () => ({
+    haikuEntrada: uso.haiku.entrada,
+    haikuSaida: uso.haiku.saida,
+    sonnetEntrada: uso.sonnet.entrada,
+    sonnetSaida: uso.sonnet.saida,
+  });
+
+  // ── Só refazer a conferência (documentação da empresa mudou) — sem reler o edital ──
+  if (reconferindo) {
+    const linhas = await prisma.exigenciaHabilitacao.findMany({ where: { editalId }, orderBy: { ordem: "asc" } });
+    if (linhas.length === 0) {
+      // Nada para reconferir ainda: faz a auditoria completa.
+      return rodar(editalId, { ...opts, modo: "completo", continuacao: 0 }, restante, sinal);
+    }
+    const docs = await carregarDocsDaEmpresa(edital.companyId);
+    const empresa = await carregarFatosDaEmpresa(edital.companyId);
+    // O que já foi decidido como "não se aplica a esta empresa" continua assim (não pergunta de novo).
+    const jaNaoSeAplica: Final[] = linhas
+      .filter((l) => l.situacao === "NAO_SE_APLICA")
+      .map((l) => ({
+        categoria: l.categoria,
+        documento: l.documento,
+        chave: l.catalogoChave,
+        origem: l.origem,
+        localizacao: l.localizacao,
+        condicao: l.condicao,
+        aplicavelSe: l.aplicavelSe,
+        aplica: false,
+        docEmpresaId: null,
+        certeza: true,
+        acaoSugerida: null,
+      }));
+    const brutas: Bruta[] = linhas
+      .filter((l) => l.situacao !== "NAO_SE_APLICA")
+      .map((l) => ({
         categoria: l.categoria,
         documento: l.documento,
         chave: l.catalogoChave,
@@ -632,176 +783,309 @@ export async function executarAuditoriaHabilitacao(
         condicao: l.condicao,
         aplicavelSe: l.aplicavelSe,
       }));
-      const finais = [...(await conferirComIA(brutas, docs, uso.sonnet, empresa)), ...jaNaoSeAplica];
-      const avaliadas = avaliarTodas(finais, docs, dataReferencia);
-      const anterior = await prisma.auditoriaHabilitacao.findUniqueOrThrow({ where: { editalId } });
-      const r = await gravarResultado({
-        editalId,
-        linhas: avaliadas,
-        dataReferencia,
-        leituraCompleta: anterior.leituraCompleta,
-        docsEmpresa: docs,
-        uso: usoTotal(),
-      });
-      await avisarVencimentosProximos(editalId, dataReferencia);
-      await logAudit(editalId, NOME_AGENTE, "Conferência atualizada", r.status === "NAO_HABILITADA" ? "ALERTA" : "OK", `Documentação da empresa reconferida: ${r.atendidas} de ${r.total} exigências atendidas (${r.percentual}%).`);
-      return "concluida";
-    }
-
-    // ── Leitura completa do processo ──
-    await baixarDocumentosPendentes([editalId]);
-    const todos = await prisma.document.findMany({
-      where: { editalId, tipo: { in: ["DOCUMENTO_PNCP", "DOCUMENTO_LICITANET", "DOCUMENTO_USUARIO"] } },
-      orderBy: { createdAt: "asc" },
-    });
-    const { lidos } = selecionarDocumentos(todos);
-
-    const textos = await mapComLimite(lidos, 3, async (d: DocumentRow) => ({ doc: d, texto: await obterTextoBrutoDocumento(d).catch(() => null) }));
-    const docsLidos = textos.map(({ doc, texto }) => ({
-      nome: doc.nome,
-      caracteres: texto?.length ?? 0,
-      ok: !!texto && !texto.includes(MARCA_ILEGIVEL),
-    }));
-    const comTexto = textos.filter((t): t is { doc: DocumentRow; texto: string } => !!t.texto);
-
-    if (comTexto.length === 0) {
-      throw new Error(
-        todos.length === 0
-          ? "Este edital não tem nenhum documento para ler."
-          : "Não foi possível ler nenhum documento deste edital (arquivos não baixaram, estão corrompidos ou são imagens grandes demais)."
-      );
-    }
-    const leituraCompleta = docsLidos.every((d) => d.ok);
-
-    const pedacos: Pedaco[] = comTexto.flatMap(({ doc, texto }) => {
-      const partes = dividirEmPedacos(texto);
-      return partes.map((p, i) => ({ docNome: doc.nome, indice: i, total: partes.length, texto: p }));
-    });
-
-    const progresso: Progresso = atual.progresso
-      ? (JSON.parse(atual.progresso) as Progresso)
-      : { chunksTotal: pedacos.length, feitos: [], brutas: [] };
-    progresso.chunksTotal = pedacos.length;
-
-    const salvarProgresso = () =>
-      prisma.auditoriaHabilitacao.update({
-        where: { editalId },
-        data: {
-          progresso: JSON.stringify(progresso),
-          documentosLidos: JSON.stringify(docsLidos),
-          leituraCompleta,
-          haikuEntrada: uso.haiku.entrada,
-          haikuSaida: uso.haiku.saida,
-        },
-      });
-
-    // Pedaços ainda não lidos, em levas de 4 em paralelo enquanto houver tempo.
-    let faltam = pedacos.map((_, i) => i).filter((i) => !progresso.feitos.includes(i));
-    while (faltam.length > 0 && restante() > FOLGA_EXTRACAO_MS) {
-      const leva = faltam.slice(0, PEDACOS_EM_PARALELO);
-      const resultados = await Promise.all(leva.map((i) => extrairDoPedaco(pedacos[i], uso.haiku)));
-      leva.forEach((i, k) => {
-        progresso.feitos.push(i);
-        progresso.brutas.push(...resultados[k]);
-      });
-      await salvarProgresso();
-      faltam = faltam.filter((i) => !leva.includes(i));
-    }
-
-    const faltaConferir = faltam.length === 0 && restante() <= FOLGA_CONFERENCIA_MS;
-    if (faltam.length > 0 || faltaConferir) {
-      if (continuacao >= MAX_CONTINUACOES) {
-        throw new Error("O edital é grande demais para ser lido em uma auditoria. Tente novamente mais tarde.");
-      }
-      await salvarProgresso();
-      const ok = await dispararAuditoriaHabilitacao(editalId, { continuacao: continuacao + 1, origem: opts.origem });
-      if (!ok) throw new Error("Não foi possível continuar a leitura do edital.");
-      return "continua";
-    }
-
-    // ── Conferência final ──
-    const docs = await carregarDocsDaEmpresa(edital.companyId);
-    const brutas = removerDuplicadas(progresso.brutas);
-    if (brutas.length === 0) {
-      throw new Error(
-        "Nenhuma exigência de documento de habilitação foi encontrada nos documentos lidos. Se o edital as exige, confira se o arquivo do edital está completo."
-      );
-    }
-    const empresa = await carregarFatosDaEmpresa(edital.companyId);
-    const finais = await conferirComIA(brutas, docs, uso.sonnet, empresa);
-    if (finais.length === 0) throw new Error("A conferência final não devolveu resultado. Tentaremos de novo.");
+    const finais = [...(await conferirComIA(brutas, docs, uso.sonnet, empresa, sinal)), ...jaNaoSeAplica];
     const avaliadas = avaliarTodas(finais, docs, dataReferencia);
-
     const r = await gravarResultado({
       editalId,
       linhas: avaliadas,
       dataReferencia,
-      leituraCompleta,
-      docsLidos,
+      leituraCompleta: atual.leituraCompleta,
       docsEmpresa: docs,
       uso: usoTotal(),
     });
     await avisarVencimentosProximos(editalId, dataReferencia);
-
-    const aviso = leituraCompleta ? "" : " Atenção: algum documento do processo não pôde ser lido por inteiro — o resultado nunca fica como \"Habilitada\" sem ressalva.";
-    await logAudit(
-      editalId,
-      NOME_AGENTE,
-      "Auditoria de habilitação",
-      r.status === "HABILITADA" ? "OK" : "ALERTA",
-      `${r.atendidas} de ${r.total} exigências de habilitação atendidas (${r.percentual}%) — ${
-        r.status === "HABILITADA" ? "Habilitada" : r.status === "HABILITADA_RESSALVAS" ? "Habilitada com ressalvas" : "Não habilitada"
-      }.${aviso}`
-    );
+    await logAudit(editalId, NOME_AGENTE, "Conferência atualizada", r.status === "NAO_HABILITADA" ? "ALERTA" : "OK", `Documentação da empresa reconferida: ${r.atendidas} de ${r.total} exigências atendidas (${r.percentual}%).`);
     return "concluida";
-  } catch (err) {
-    const mensagem = descreverErro(err);
-    console.error(`Auditoria de habilitação do edital ${editalId} falhou:`, err);
-    await prisma.auditoriaHabilitacao
-      .upsert({
-        where: { editalId },
-        create: { editalId, estado: "ERRO", mensagem },
-        update: { estado: "ERRO", mensagem },
-      })
-      .catch(() => null);
-    // Numa reconferência o resultado anterior continua valendo; só a primeira auditoria vira "erro".
-    if (opts.modo !== "reconferir") {
-      await prisma.edital.update({ where: { id: editalId }, data: { habilitacaoStatus: "ERRO" } }).catch(() => null);
+  }
+
+  // ── Leitura completa do processo, em passos ──
+  const progresso: Progresso = atual.progresso ? (JSON.parse(atual.progresso) as Progresso) : { chunksTotal: 0, feitos: [], brutas: [] };
+  progresso.passos = (progresso.passos ?? 0) + 1;
+  progresso.falhas ??= {};
+  progresso.lotes ??= {};
+  let avancos = 0; // quanta coisa avançou neste passo (documentos, pedaços, lotes)
+  let docsLidos: { nome: string; caracteres: number; ok: boolean; motivo?: MotivoArquivo }[] | null = null;
+  let leituraCompleta = true;
+
+  const salvar = () =>
+    prisma.auditoriaHabilitacao.update({
+      where: { editalId },
+      data: {
+        progresso: JSON.stringify(progresso),
+        ...(docsLidos ? { documentosLidos: JSON.stringify(docsLidos), leituraCompleta } : {}),
+        haikuEntrada: uso.haiku.entrada,
+        haikuSaida: uso.haiku.saida,
+        sonnetEntrada: uso.sonnet.entrada,
+        sonnetSaida: uso.sonnet.saida,
+      },
+    });
+
+  /** Não deu tempo de terminar: salva e passa o bastão (próxima execução, ou a fila numa cadeia nova). */
+  const passarAdiante = async (): Promise<ResultadoExecucao> => {
+    progresso.semAvanco = avancos > 0 ? 0 : (progresso.semAvanco ?? 0) + 1;
+    await salvar();
+    if (progresso.semAvanco >= MAX_PASSOS_SEM_AVANCO) {
+      throw new ErroTipado("TEMPO_ESGOTADO", "A auditoria não avançou em passos seguidos.");
     }
-    await logAudit(editalId, NOME_AGENTE, "Auditoria de habilitação", "ERRO", `Não foi possível concluir a auditoria: ${mensagem}. Vamos tentar de novo automaticamente.`).catch(() => null);
-    return "erro";
+    if (continuacao >= MAX_CONTINUACOES_NA_CADEIA) {
+      await prisma.auditoriaHabilitacao.update({ where: { editalId }, data: { estado: "NA_FILA" } });
+      return "continua";
+    }
+    const ok = await dispararAuditoriaHabilitacao(editalId, { continuacao: continuacao + 1, origem: opts.origem });
+    if (!ok) await prisma.auditoriaHabilitacao.update({ where: { editalId }, data: { estado: "NA_FILA" } });
+    return "continua";
+  };
+
+  // 1. Baixar e extrair o texto de cada arquivo (cada um com prazo próprio).
+  const todos = await prisma.document.findMany({
+    where: { editalId, tipo: { in: ["DOCUMENTO_PNCP", "DOCUMENTO_LICITANET", "DOCUMENTO_USUARIO"] } },
+    orderBy: { createdAt: "asc" },
+  });
+  const { lidos } = selecionarDocumentos(todos);
+
+  const textos = new Map<string, string>(); // id do documento → texto
+  for (const d of lidos) if (d.textoExtraido) textos.set(d.id, d.textoExtraido);
+
+  const aProcessar = lidos.filter((d) => !textos.has(d.id) && (progresso.falhas![d.id]?.n ?? 0) < FALHAS_ATE_DESISTIR_DO_ARQUIVO);
+  await rodarComPrazo(aProcessar, 3, () => restante() > FOLGA_PREPARO_MS, async (d) => {
+    const r = await prepararDocumento(d, edital.companyId, () => Math.min(LIMITE_ARQUIVO_MS, restante() - MARGEM_FINAL_MS));
+    if (r.texto !== null) {
+      textos.set(d.id, r.texto);
+      delete progresso.falhas![d.id];
+      avancos++;
+    } else {
+      progresso.falhas![d.id] = { n: (progresso.falhas![d.id]?.n ?? 0) + 1, motivo: r.motivo };
+    }
+  });
+
+  docsLidos = lidos.map((d) => {
+    const texto = textos.get(d.id);
+    return {
+      nome: d.nome,
+      caracteres: texto?.length ?? 0,
+      ok: !!texto && !texto.includes(MARCA_ILEGIVEL),
+      ...(texto ? {} : { motivo: progresso.falhas![d.id]?.motivo ?? ("download" as MotivoArquivo) }),
+    };
+  });
+  leituraCompleta = docsLidos.every((d) => d.ok);
+
+  const aindaPendentes = lidos.filter((d) => !textos.has(d.id) && (progresso.falhas![d.id]?.n ?? 0) < FALHAS_ATE_DESISTIR_DO_ARQUIVO);
+  if (aindaPendentes.length > 0) return passarAdiante();
+
+  if (textos.size === 0) {
+    await salvar();
+    throw lidos.length === 0
+      ? new ErroTipado("SEM_DOCUMENTO", "Este edital não tem nenhum documento para ler.")
+      : new ErroTipado("ARQUIVO_ILEGIVEL", "Nenhum documento deste edital pôde ser baixado ou lido.");
+  }
+
+  // 2. Só os trechos de habilitação vão para a IA; os mais relevantes são lidos primeiro.
+  const pedacos: Pedaco[] = lidos
+    .filter((d) => textos.has(d.id))
+    .flatMap((d) => {
+      const selecionado = selecionarTrechosDeHabilitacao(textos.get(d.id)!);
+      const partes = dividirEmPedacos(selecionado.texto);
+      return partes.map((p, i) => ({ docNome: d.nome, indice: i, total: partes.length, texto: p, densidade: densidadeDeHabilitacao(p) }));
+    })
+    .sort((a, b) => b.densidade - a.densidade);
+
+  const plano = createHash("sha1").update(pedacos.map((p) => `${p.docNome}:${p.indice}:${p.texto.length}`).join("|")).digest("hex");
+  if (progresso.plano !== plano) {
+    // O conjunto de pedaços mudou (ex.: um arquivo que faltava foi lido): recomeça a leitura.
+    progresso.plano = plano;
+    progresso.feitos = [];
+    progresso.brutas = [];
+    progresso.lotes = {};
+  }
+  progresso.chunksTotal = pedacos.length;
+  if (pedacos.length > LIMITE_PEDACOS_GRANDE) {
+    await prisma.edital.update({ where: { id: editalId }, data: { habilitacaoStatus: "EDITAL_GRANDE" } });
+  }
+
+  // 3. Levantar as exigências, pedaço por pedaço (salvando a cada um).
+  const faltam = pedacos.map((_, i) => i).filter((i) => !progresso.feitos.includes(i));
+  if (faltam.length > 0) {
+    try {
+      await rodarComPrazo(faltam, PEDACOS_EM_PARALELO, () => restante() > FOLGA_NOVO_PEDACO_MS, async (i) => {
+        try {
+          const brutas = await extrairDoPedaco(pedacos[i], uso.haiku, sinal);
+          progresso.feitos.push(i);
+          progresso.brutas.push(...brutas);
+          avancos++;
+          await salvar();
+        } catch (e) {
+          if (sinal.aborted) return; // prazo: o pedaço fica para a próxima execução
+          throw e;
+        }
+      });
+    } finally {
+      await salvar().catch(() => null);
+    }
+  }
+  const faltamAinda = pedacos.map((_, i) => i).filter((i) => !progresso.feitos.includes(i));
+  if (faltamAinda.length > 0) {
+    if ((progresso.passos ?? 0) < MAX_PASSOS_LEITURA) return passarAdiante();
+    // Edital gigante: depois de muitos passos, fecha com o que já foi lido (nunca recusa) — o
+    // resultado fica com ressalva e o aviso de leitura incompleta.
+    leituraCompleta = false;
+  }
+
+  // 4. Conferência com a documentação da empresa, lote a lote (salvando a cada um).
+  const brutas = removerDuplicadas(progresso.brutas);
+  if (brutas.length === 0) {
+    throw new ErroTipado(
+      "SEM_EXIGENCIAS",
+      "Nenhuma exigência de documento de habilitação foi encontrada nos documentos lidos. Se o edital as exige, confira se o arquivo do edital está completo."
+    );
+  }
+  const docs = await carregarDocsDaEmpresa(edital.companyId);
+  const empresa = await carregarFatosDaEmpresa(edital.companyId);
+  const ctx = contextoDeConferencia(docs, empresa);
+  const lotes = montarLotes(brutas);
+  const lotesFaltam = lotes.map((_, i) => i).filter((i) => !progresso.lotes![String(i)]);
+  if (lotesFaltam.length > 0) {
+    try {
+      await rodarComPrazo(lotesFaltam, 4, () => restante() > FOLGA_NOVO_LOTE_MS, async (i) => {
+        try {
+          progresso.lotes![String(i)] = await conferirLote(lotes[i], ctx, uso.sonnet, sinal);
+          avancos++;
+          await salvar();
+        } catch (e) {
+          if (sinal.aborted) return;
+          throw e;
+        }
+      });
+    } finally {
+      await salvar().catch(() => null);
+    }
+  }
+  if (lotes.some((_, i) => !progresso.lotes![String(i)])) return passarAdiante();
+
+  const finais = lotes.flatMap((_, i) => progresso.lotes![String(i)]);
+  if (finais.length === 0) throw new ErroTipado("RESPOSTA_INVALIDA", "A conferência final não devolveu resultado.");
+  const avaliadas = avaliarTodas(finais, docs, dataReferencia);
+
+  const r = await gravarResultado({
+    editalId,
+    linhas: avaliadas,
+    dataReferencia,
+    leituraCompleta,
+    docsLidos,
+    docsEmpresa: docs,
+    editalFingerprint: fingerprintEdital(todos, edital),
+    uso: usoTotal(),
+  });
+  await avisarVencimentosProximos(editalId, dataReferencia);
+
+  const aviso = leituraCompleta ? "" : " Atenção: algum documento do processo não pôde ser lido por inteiro — o resultado nunca fica como \"Habilitada\" sem ressalva.";
+  await logAudit(
+    editalId,
+    NOME_AGENTE,
+    "Auditoria de habilitação",
+    r.status === "HABILITADA" ? "OK" : "ALERTA",
+    `${r.atendidas} de ${r.total} exigências de habilitação atendidas (${r.percentual}%) — ${
+      r.status === "HABILITADA" ? "Habilitada" : r.status === "HABILITADA_RESSALVAS" ? "Habilitada com ressalvas" : "Não habilitada"
+    }.${aviso}`
+  );
+  return "concluida";
+}
+
+/**
+ * Baixa (se preciso) e extrai o texto de UM arquivo, cada etapa com prazo. Nunca lança: devolve
+ * o texto ou o motivo da falha, para a tela dizer QUAL arquivo deu problema e o que fazer.
+ */
+async function prepararDocumento(
+  d: DocumentRow,
+  companyId: string,
+  limiteMs: () => number
+): Promise<{ texto: string; motivo?: undefined } | { texto: null; motivo: MotivoArquivo }> {
+  try {
+    let doc = d;
+    const precisaBaixar = (d.tipo === "DOCUMENTO_PNCP" || d.tipo === "DOCUMENTO_LICITANET") && !d.conteudoBase64 && !d.storagePath && !!d.origemUrl;
+    if (precisaBaixar) {
+      let baixou = false;
+      try {
+        const r = await comPrazo(
+          baixarEPersistirDocumento({ id: d.id, editalId: d.editalId, nome: d.nome, tipo: d.tipo, origemUrl: d.origemUrl! }, companyId),
+          limiteMs()
+        );
+        if (r === ESGOTOU) return { texto: null, motivo: "demorou" };
+        baixou = true;
+      } catch (err) {
+        console.error(`Falha ao baixar "${d.nome}" (edital ${d.editalId}):`, err);
+        return { texto: null, motivo: "download" };
+      }
+      if (baixou) doc = await prisma.document.findUniqueOrThrow({ where: { id: d.id } });
+    }
+    const texto = await comPrazo(obterTextoBrutoDocumento(doc), limiteMs());
+    if (texto === ESGOTOU) return { texto: null, motivo: "demorou" };
+    if (!texto) return { texto: null, motivo: "formato" };
+    return { texto };
+  } catch (err) {
+    console.error(`Falha ao preparar "${d.nome}" (edital ${d.editalId}):`, err);
+    return { texto: null, motivo: "formato" };
+  }
+}
+
+/**
+ * Registra uma falha com o destino certo: guardada (sem saldo/chave), nova tentativa automática
+ * agendada (erro passageiro, com espera crescente) ou erro final com o motivo em linguagem simples.
+ * Nunca deixa a auditoria "rodando".
+ */
+async function registrarFalha(editalId: string, err: unknown, reconferindo: boolean) {
+  // O detalhe técnico (com request_id etc.) vai só para o log do servidor e para o campo
+  // interno; a tela recebe sempre o texto amigável do tipo do erro.
+  const c = classificarErro(err);
+  console.error(`Auditoria de habilitação do edital ${editalId} falhou [${c.tipo}]:`, c.detalheTecnico);
+
+  try {
+    // Numa reconferência o resultado anterior continua valendo: só registra o problema.
+    const temResultado = reconferindo && (await prisma.exigenciaHabilitacao.count({ where: { editalId } })) > 0;
+    if (temResultado) {
+      await prisma.auditoriaHabilitacao.update({
+        where: { editalId },
+        data: { estado: "CONCLUIDA", mensagem: null, erroTipo: c.tipo, detalheTecnico: c.detalheTecnico, proximaTentativaEm: null },
+      });
+      return;
+    }
+
+    const aud = await prisma.auditoriaHabilitacao.findUnique({ where: { editalId }, select: { tentativasAutomaticas: true } });
+    const decisao = decidirAposFalha(c.tipo, aud?.tentativasAutomaticas ?? 0);
+    let dados: Prisma.AuditoriaHabilitacaoUpdateInput;
+    let status: HabilitacaoStatus;
+    let aviso: string;
+
+    if (decisao.acao === "aguardar_ia") {
+      dados = { estado: "AGUARDANDO_SALDO", mensagem: c.mensagemUsuario, proximaTentativaEm: new Date(Date.now() + PAUSA_MS) };
+      status = statusHabilitacaoDoErro(c.tipo);
+      aviso = c.mensagemUsuario;
+    } else if (decisao.acao === "tentar_de_novo") {
+      const msg = mensagemDeRetentativaDoTipo(c.tipo);
+      dados = { estado: "ERRO", mensagem: msg, proximaTentativaEm: new Date(Date.now() + decisao.esperaMs) };
+      status = statusHabilitacaoDoErro(c.tipo);
+      aviso = `${msg} Nova tentativa em cerca de ${Math.round(decisao.esperaMs / 60_000)} min.`;
+    } else {
+      const msg = mensagemDefinitivaDoTipo(c.tipo);
+      dados = { estado: "ERRO", mensagem: msg, proximaTentativaEm: null };
+      status = statusHabilitacaoDefinitivaDoErro(c.tipo);
+      aviso = msg;
+    }
+
+    const data = { ...dados, erroTipo: c.tipo, detalheTecnico: c.detalheTecnico };
+    await prisma.auditoriaHabilitacao.upsert({
+      where: { editalId },
+      create: { ...(data as Omit<Prisma.AuditoriaHabilitacaoUncheckedCreateInput, "editalId">), editalId },
+      update: data,
+    });
+    if (!reconferindo) await prisma.edital.update({ where: { id: editalId }, data: { habilitacaoStatus: status } });
+    await logAudit(editalId, NOME_AGENTE, "Auditoria de habilitação", "ERRO", aviso);
+  } catch (e) {
+    // Último recurso: nem o registro da falha pode derrubar o processo.
+    console.error(`Não foi possível registrar a falha da auditoria do edital ${editalId}:`, e);
   }
 }
 
 // ── Gatilhos ────────────────────────────────────────────────────────────────
-
-/**
- * Safety net: editais captados depois do lançamento que ainda estão "Aguardando auditoria"
- * (o disparo falhou) ou com erro, ou cuja auditoria travou no meio — dispara de novo. Poucas
- * por vez. Nunca mexe em editais anteriores ao lançamento.
- */
-export async function varrerAuditoriasPendentes(opts: { companyId?: string; limite?: number; origem?: string } = {}) {
-  const agora = Date.now();
-  const candidatos = await prisma.edital.findMany({
-    where: {
-      ...(opts.companyId ? { companyId: opts.companyId } : {}),
-      createdAt: { gte: AUDITORIA_HABILITACAO_DESDE },
-      etapaKanban: { not: "RASCUNHO" },
-      // Sem documento nenhum (ex.: Compras.gov.br) não há o que ler.
-      documents: { some: { tipo: { in: ["DOCUMENTO_PNCP", "DOCUMENTO_LICITANET", "DOCUMENTO_USUARIO"] } } },
-      OR: [
-        { habilitacaoStatus: "AGUARDANDO", createdAt: { lt: new Date(agora - 3 * 60_000) } },
-        { habilitacaoStatus: "ERRO", auditoriaHabilitacao: { is: { tentativas: { lt: 4 }, updatedAt: { lt: new Date(agora - 10 * 60_000) } } } },
-        { habilitacaoStatus: "AUDITANDO", auditoriaHabilitacao: { is: { updatedAt: { lt: new Date(agora - 4 * 60_000) } } } },
-      ],
-    },
-    select: { id: true },
-    take: opts.limite ?? 5,
-    orderBy: { createdAt: "desc" },
-  });
-  await mapComLimite(candidatos, 3, (e) => dispararAuditoriaHabilitacao(e.id, { origem: opts.origem }));
-  return candidatos.length;
-}
 
 /**
  * A documentação da empresa mudou (enviou, substituiu, alterou validade ou removeu): refaz a
@@ -816,7 +1100,7 @@ export async function reavaliarEditaisDaEmpresa(companyId: string, origem?: stri
       habilitacaoStatus: { in: ["HABILITADA", "HABILITADA_RESSALVAS", "NAO_HABILITADA"] },
       OR: [{ dataEncerramentoProposta: null }, { dataEncerramentoProposta: { gt: new Date() } }],
     },
-    select: { id: true, titulo: true, dataAberturaProposta: true, dataEncerramentoProposta: true },
+    select: { id: true, titulo: true, etapaKanban: true, dataAberturaProposta: true, dataEncerramentoProposta: true },
     take: 60,
   });
   if (editais.length === 0) return;
@@ -863,8 +1147,9 @@ export async function reavaliarEditaisDaEmpresa(companyId: string, origem?: stri
       await avisarVencimentosProximos(edital.id, dataReferencia);
 
       // Exigência fora do catálogo ainda sem documento: um documento personalizado novo pode atendê-la.
+      // A reconferência com IA custa dinheiro: só para editais que auditam (Qualificação em diante).
       const temForaDoCatalogoPendente = avaliadas.some((a) => !a.catalogoChave && a.situacao !== "ATENDIDA");
-      if (temForaDoCatalogoPendente && reconferirComIA < 5) {
+      if (temForaDoCatalogoPendente && etapaAudita(edital.etapaKanban) && reconferirComIA < 5) {
         reconferirComIA++;
         await dispararAuditoriaHabilitacao(edital.id, { modo: "reconferir", origem });
       }

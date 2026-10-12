@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, CheckCircle2, Download, FileText, Loader2, MapPin } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Clock, Download, FileText, Loader2, MapPin, RefreshCw } from "lucide-react";
 import { SeloHabilitacao } from "@/components/editais/SeloHabilitacao";
 import type { HabilitacaoStatusTipo } from "@/lib/types";
+import { CUSTO_MEDIO_AUDITORIA_USD, custoEstimadoBrl, etapaAudita } from "@/lib/habilitacao";
 import type { ItemRelatorio, RelatorioHabilitacao } from "@/lib/habilitacao-relatorio";
 
 const AVISO_IA = "Gerado por IA. Confirme com o analista responsável antes de enviar a proposta.";
@@ -53,10 +54,32 @@ function CartaoPendencia({ item }: { item: ItemRelatorio }) {
   );
 }
 
-export function HabilitacaoTab({ editalId }: { editalId: string }) {
+const brl = (n: number) => n.toFixed(2).replace(".", ",");
+
+export function HabilitacaoTab({ editalId, etapa, onMudou }: { editalId: string; etapa?: string; onMudou?: () => void }) {
   const [relatorio, setRelatorio] = useState<RelatorioHabilitacao | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(true);
+  const [pedindo, setPedindo] = useState(false);
+  const [erroPedido, setErroPedido] = useState<string | null>(null);
+
+  // "Auditar agora" / "Tentar novamente": gasta IA, então pede confirmação mostrando o custo.
+  async function pedirAuditoria() {
+    const custo = `cerca de US$ ${CUSTO_MEDIO_AUDITORIA_USD.toFixed(2).replace(".", ",")} (aprox. R$ ${brl(custoEstimadoBrl(1))})`;
+    if (!window.confirm(`A auditoria usa IA e custa em média ${custo} por edital. Deseja auditar agora?`)) return;
+    setPedindo(true);
+    setErroPedido(null);
+    try {
+      const res = await fetch(`/api/editais/${editalId}/habilitacao/solicitar`, { method: "POST" });
+      if (!res.ok) throw new Error();
+      await carregar();
+      onMudou?.();
+    } catch {
+      setErroPedido("Não foi possível pedir a auditoria agora. Tente novamente em instantes.");
+    } finally {
+      setPedindo(false);
+    }
+  }
 
   const carregar = useCallback(async () => {
     try {
@@ -73,12 +96,22 @@ export function HabilitacaoTab({ editalId }: { editalId: string }) {
   }, [editalId]);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- busca inicial ao abrir a aba
+    // busca inicial ao abrir a aba
     carregar();
   }, [carregar]);
 
-  // Enquanto a auditoria está rodando (ou ainda não começou), acompanha sozinho.
-  const emAndamento = relatorio?.auditoria?.estado === "RODANDO" || relatorio?.status === "AUDITANDO" || relatorio?.status === "AGUARDANDO";
+  // Fora de Qualificação, um registro antigo (erro ou "rodando" parado, de antes da regra "só audita
+  // em Qualificação") não vale: o edital conta como "ainda não auditado". Auditorias pedidas pelo
+  // fluxo atual (solicitadaEm preenchido, ex.: botão "Auditar agora") continuam valendo.
+  const foraDeEtapa = !!etapa && !etapaAudita(etapa);
+  const legado = foraDeEtapa && relatorio?.auditoria?.estado !== "CONCLUIDA" && !relatorio?.auditoria?.solicitadaEm;
+  const status = legado ? "AGUARDANDO" : (relatorio?.status ?? "AGUARDANDO");
+  const auditoria = legado ? null : (relatorio?.auditoria ?? null);
+
+  // Enquanto a auditoria está rodando, acompanha sozinho.
+  const emAndamento =
+    ["RODANDO", "NA_FILA", "AGUARDANDO_SALDO", "INTERROMPIDA"].includes(auditoria?.estado ?? "") ||
+    ["AUDITANDO", "NA_FILA", "AGUARDANDO_IA", "TEMPO_ESGOTADO", "EDITAL_GRANDE"].includes(status);
   useEffect(() => {
     if (!emAndamento) return;
     const t = setInterval(carregar, 5000);
@@ -94,10 +127,13 @@ export function HabilitacaoTab({ editalId }: { editalId: string }) {
   }
   if (erro || !relatorio) return <p className="text-sm text-danger">{erro ?? "Relatório indisponível."}</p>;
 
-  const { auditoria, resumo, status } = relatorio;
+  const { resumo } = relatorio;
   const concluida = auditoria?.estado === "CONCLUIDA";
-  const semResultadoAinda = status === "AGUARDANDO" && !auditoria;
-  const comErro = status === "ERRO" || (auditoria?.estado === "ERRO" && !concluida);
+  const semResultadoAinda = status === "AGUARDANDO";
+  // "Aguardando IA" e "tempo esgotado" se resolvem sozinhos: aparecem como aviso calmo, não como erro.
+  const seResolveSozinho =
+    ["AGUARDANDO_IA", "TEMPO_ESGOTADO", "NA_FILA", "EDITAL_GRANDE"].includes(status) || auditoria?.estado === "AGUARDANDO_SALDO" || !!auditoria?.retentativaAgendada;
+  const comErro = !concluida && !seResolveSozinho && (status === "ERRO" || status === "ARQUIVO_ILEGIVEL" || auditoria?.estado === "ERRO");
 
   return (
     <div className="space-y-6">
@@ -106,7 +142,7 @@ export function HabilitacaoTab({ editalId }: { editalId: string }) {
           <div>
             <h3 className="text-sm font-semibold text-foreground">Habilitação da empresa neste edital</h3>
             <div className="mt-2 flex flex-wrap items-center gap-2">
-              <SeloHabilitacao status={status as HabilitacaoStatusTipo} percentual={relatorio.percentual} tamanho="normal" />
+              <SeloHabilitacao status={status as HabilitacaoStatusTipo} percentual={relatorio.percentual} tamanho="normal" etapa={legado ? etapa : undefined} />
               {concluida && (
                 <span className="text-xs text-muted">
                   {resumo.exigidas} exigidos · {resumo.atendidas} atendidos · {resumo.pendentes} pendentes
@@ -136,40 +172,99 @@ export function HabilitacaoTab({ editalId }: { editalId: string }) {
         )}
         {concluida && (
           <p className="mt-3 text-xs text-muted">
-            Sessão em {dataBr(auditoria!.dataReferencia)} · auditado em {dataHoraBr(auditoria!.concluidaEm)} · atualizado sozinho quando a documentação da empresa muda.
+            Sessão em {dataBr(auditoria!.dataReferencia)} · auditado em {dataHoraBr(auditoria!.concluidaEm)} · atualizado sozinho quando a documentação da empresa muda.{" "}
+            <button onClick={pedirAuditoria} disabled={pedindo} className="font-medium text-brand hover:underline disabled:opacity-60">
+              Auditar novamente
+            </button>
           </p>
         )}
       </div>
 
-      {(emAndamento || semResultadoAinda) && !concluida && (
+      {emAndamento && !concluida && (
         <div className="flex items-start gap-3 rounded-xl border border-border bg-background p-4 text-sm text-muted">
           <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin" />
           <p>
             {status === "AUDITANDO"
               ? "Lendo o edital, o termo de referência e os anexos por inteiro e conferindo com a documentação da empresa… isso pode levar alguns minutos."
-              : "A auditoria começa sozinha logo depois que o edital é captado. Esta tela atualiza assim que houver resultado."}
+              : seResolveSozinho && auditoria?.mensagem
+                ? auditoria.mensagem
+                : "A auditoria vai começar em instantes. Esta tela atualiza assim que houver resultado."}
+            {auditoria?.andamento && <span className="mt-1 block font-medium text-foreground">{auditoria.andamento}</span>}
           </p>
+        </div>
+      )}
+
+      {semResultadoAinda && !concluida && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-background p-4 text-sm text-muted">
+          <p className="flex min-w-0 flex-1 items-start gap-3">
+            <Clock className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>
+              {etapa && etapaAudita(etapa)
+                ? "Este edital ainda não tem auditoria de habilitação."
+                : "Este edital será auditado automaticamente quando entrar em Qualificação — assim a IA só é usada nos editais que você vai disputar."}
+            </span>
+          </p>
+          <button
+            onClick={pedirAuditoria}
+            disabled={pedindo}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-1.5 text-xs font-medium text-foreground hover:bg-border/30 disabled:opacity-60"
+          >
+            {pedindo ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />} Auditar agora
+          </button>
+        </div>
+      )}
+
+      {erroPedido && <p className="text-sm text-danger">{erroPedido}</p>}
+
+      {auditoria?.avisoAdmin && !concluida && (
+        <div className="flex items-start gap-3 rounded-xl border border-warning/30 bg-warning/5 p-4 text-sm text-warning">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <p>
+            <span className="font-medium">Aviso para o administrador:</span> {auditoria.avisoAdmin}
+          </p>
+        </div>
+      )}
+
+      {!concluida && auditoria && auditoria.arquivosComProblema.length > 0 && (
+        <div className="rounded-xl border border-border bg-background p-4 text-sm">
+          <p className="font-medium text-foreground">Arquivos que não consegui ler</p>
+          <ul className="mt-2 space-y-2">
+            {auditoria.arquivosComProblema.map((a) => (
+              <li key={a.nome} className="text-xs text-muted">
+                <span className="font-medium text-foreground">{a.nome}</span> — {a.problema} <span className="text-foreground/80">{a.oQueFazer}</span>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 
       {comErro && (
         <div className="flex items-start gap-3 rounded-xl border border-danger/30 bg-danger/5 p-4 text-sm text-danger">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-          <p>
-            Não foi possível concluir a auditoria deste edital{auditoria?.mensagem ? `: ${auditoria.mensagem}` : "."} O sistema tenta de novo sozinho; se persistir, envie o
-            edital em PDF na tela de Editais.
-          </p>
+          <p className="min-w-0 flex-1">{auditoria?.mensagem ?? "Não foi possível concluir a auditoria deste edital."}</p>
+          <button
+            onClick={pedirAuditoria}
+            disabled={pedindo}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-danger/30 bg-background px-3 py-1.5 text-xs font-medium text-danger hover:bg-danger/10 disabled:opacity-60"
+          >
+            {pedindo ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />} Tentar novamente
+          </button>
         </div>
       )}
 
       {concluida && auditoria && !auditoria.leituraCompleta && (
         <div className="flex items-start gap-3 rounded-xl border border-warning/30 bg-warning/5 p-4 text-sm text-warning">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-          <p>
-            Nem todos os documentos do processo puderam ser lidos por inteiro
-            {auditoria.documentosLidos.some((d) => !d.ok) ? ` (${auditoria.documentosLidos.filter((d) => !d.ok).map((d) => d.nome).join("; ")})` : ""}. Confira manualmente se há mais
-            exigências neles.
-          </p>
+          <div className="min-w-0">
+            <p>Nem todos os documentos do processo puderam ser lidos por inteiro. Confira manualmente se há mais exigências neles:</p>
+            <ul className="mt-1 list-disc space-y-1 pl-5 text-xs">
+              {auditoria.arquivosComProblema.map((a) => (
+                <li key={a.nome}>
+                  <span className="font-medium">{a.nome}</span> — {a.problema} {a.oQueFazer}
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
       )}
 

@@ -136,7 +136,7 @@ export function KanbanCard({
             {TIPO_OBJETO_LABEL[edital.tipoObjeto]}
           </span>
         )}
-        <SeloHabilitacao status={edital.habilitacaoStatus} percentual={edital.habilitacaoPercentual} />
+        <SeloHabilitacao status={edital.habilitacaoStatus} percentual={edital.habilitacaoPercentual} etapa={edital.etapaKanban} />
         {foraDoPerfil && (
           <span className="inline-flex items-center gap-0.5 rounded-full bg-warning/10 px-1.5 py-0.5 text-[10px] font-medium text-warning">
             <AlertTriangle className="h-2.5 w-2.5" /> Fora do perfil
