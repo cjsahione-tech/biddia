@@ -517,6 +517,11 @@ async function gravarResultado(opts: {
   mensagem?: string | null;
   /** Só na leitura completa: impressão digital do edital lido (ver fingerprintEdital). */
   editalFingerprint?: string;
+  /**
+   * Reavaliação por documento novo: se a documentação da empresa mudou enquanto este resultado era
+   * calculado, ele já está velho — não grava (a reavaliação mais nova é quem vale).
+   */
+  descartarSeDocumentosMudaram?: { companyId: string };
   uso?: { haikuEntrada: number; haikuSaida: number; sonnetEntrada: number; sonnetSaida: number };
 }) {
   const { editalId, linhas, dataReferencia, leituraCompleta, docsEmpresa } = opts;
@@ -549,23 +554,38 @@ async function gravarResultado(opts: {
     ...(opts.uso ? { ...opts.uso, custoUsd: custoEstimadoUsd(opts.uso) } : {}),
   };
 
-  await prisma.$transaction([
-    prisma.exigenciaHabilitacao.deleteMany({ where: { editalId } }),
-    prisma.exigenciaHabilitacao.createMany({
-      data: linhas.map((l) => ({
-        editalId,
-        ...l,
-        alertadoEm: alertadas.get(`${l.documento}|${l.documentoEmpresaId}`) ?? null,
-      })),
-    }),
-    prisma.auditoriaHabilitacao.update({ where: { editalId }, data: dadosAuditoria }),
-    prisma.edital.update({
-      where: { id: editalId },
-      data: { habilitacaoStatus: r.status, habilitacaoPercentual: r.percentual, habilitacaoAuditadaEm: new Date() },
-    }),
-  ]);
+  // Trava por edital: duas gravações ao mesmo tempo (ex.: o analista anexa vários documentos seguidos e
+  // cada envio dispara uma reavaliação) se atropelavam — cada uma apagava e recriava a lista, e o edital
+  // ficava com as exigências duplicadas. Com a trava, uma espera a outra terminar.
+  const gravado = await prisma.$transaction(
+    async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${editalId}))`;
+      if (opts.descartarSeDocumentosMudaram) {
+        const atuais = await tx.companyDocument.findMany({
+          where: { companyId: opts.descartarSeDocumentosMudaram.companyId },
+          select: { id: true, updatedAt: true },
+        });
+        if (fingerprintDocumentos(atuais) !== fingerprintDocumentos(docsEmpresa)) return false;
+      }
+      await tx.exigenciaHabilitacao.deleteMany({ where: { editalId } });
+      await tx.exigenciaHabilitacao.createMany({
+        data: linhas.map((l) => ({
+          editalId,
+          ...l,
+          alertadoEm: alertadas.get(`${l.documento}|${l.documentoEmpresaId}`) ?? null,
+        })),
+      });
+      await tx.auditoriaHabilitacao.update({ where: { editalId }, data: dadosAuditoria });
+      await tx.edital.update({
+        where: { id: editalId },
+        data: { habilitacaoStatus: r.status, habilitacaoPercentual: r.percentual, habilitacaoAuditadaEm: new Date() },
+      });
+      return true;
+    },
+    { timeout: 20_000, maxWait: 15_000 }
+  );
 
-  return r;
+  return { ...r, gravado };
 }
 
 /** Avisa (e-mail/WhatsApp, uma vez por exigência) os documentos que vencem até 7 dias antes da sessão. */
@@ -1137,13 +1157,16 @@ export async function reavaliarEditaisDaEmpresa(companyId: string, origem?: stri
         docs,
         dataReferencia
       );
-      await gravarResultado({
+      const gravacao = await gravarResultado({
         editalId: edital.id,
         linhas: avaliadas,
         dataReferencia,
         leituraCompleta: aud.leituraCompleta,
         docsEmpresa: docs,
+        descartarSeDocumentosMudaram: { companyId },
       });
+      // Os documentos mudaram durante o cálculo: outra reavaliação, mais nova, já cuida deste edital.
+      if (!gravacao.gravado) continue;
       await avisarVencimentosProximos(edital.id, dataReferencia);
 
       // Exigência fora do catálogo ainda sem documento: um documento personalizado novo pode atendê-la.

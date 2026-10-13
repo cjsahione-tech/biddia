@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { CATEGORIAS_CATALOGO } from "@/lib/catalogo-documentos";
+import { CATEGORIAS_CATALOGO, itemPorChave } from "@/lib/catalogo-documentos";
 import { calcularResultado, dataReferenciaDoEdital, type SituacaoExigencia } from "@/lib/habilitacao";
 import { classificarErro, ErroTipado, tipoDeMensagemAntiga, type TipoErroIA } from "@/lib/ia-erros";
 
@@ -11,6 +11,10 @@ export type ItemRelatorio = {
   id: string;
   documento: string;
   categoria: string;
+  /** Item do catálogo de documentos (null = exigência fora do catálogo → documento personalizado). */
+  catalogoChave: string | null;
+  /** Este tipo de documento costuma ter validade (certidões, licenças) — marca a caixinha por padrão. */
+  venceTipicamente: boolean;
   situacao: SituacaoExigencia;
   /** Texto pronto: "Não enviado", "Vencido em 15/10/2026", "Verificar manualmente"... */
   situacaoTexto: string;
@@ -153,6 +157,8 @@ export async function montarRelatorioHabilitacao(
     id: e.id,
     documento: e.documento,
     categoria: e.categoria,
+    catalogoChave: e.catalogoChave,
+    venceTipicamente: itemPorChave(e.catalogoChave)?.vence ?? false,
     situacao: e.situacao,
     situacaoTexto: textoSituacao(e.situacao, e.validade),
     origem: e.origem,

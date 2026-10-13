@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, CheckCircle2, Clock, Download, FileText, Loader2, MapPin, RefreshCw } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Clock, Download, FileText, Loader2, MapPin, Paperclip, RefreshCw } from "lucide-react";
+import { FormularioEnvioDocumento } from "@/components/documentos/FormularioEnvioDocumento";
 import { SeloHabilitacao } from "@/components/editais/SeloHabilitacao";
 import type { HabilitacaoStatusTipo } from "@/lib/types";
 import { CUSTO_MEDIO_AUDITORIA_USD, custoEstimadoBrl, etapaAudita } from "@/lib/habilitacao";
@@ -22,8 +23,9 @@ const dataHoraBr = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", dateStyle: "short", timeStyle: "short" }) : "—";
 const dataBr = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" }) : "—");
 
-function CartaoPendencia({ item }: { item: ItemRelatorio }) {
+function CartaoPendencia({ item, onAnexado }: { item: ItemRelatorio; onAnexado: () => void }) {
   const precisaEnviar = item.situacao === "NAO_ENVIADA" || item.situacao === "VENCIDA";
+  const [anexando, setAnexando] = useState(false);
   return (
     <div className="rounded-xl border border-border bg-background p-4">
       <div className="flex flex-wrap items-start justify-between gap-2">
@@ -45,10 +47,36 @@ function CartaoPendencia({ item }: { item: ItemRelatorio }) {
         </p>
       )}
       {item.observacao && item.situacao !== "NAO_ENVIADA" && <p className="mt-1 text-xs text-muted">{item.observacao}</p>}
-      {precisaEnviar && (
-        <Link href="/documentos" className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-brand hover:underline">
-          <FileText className="h-3 w-3" /> Ir para Documentos
-        </Link>
+      {!anexando && (
+        <div className="mt-2 flex flex-wrap items-center gap-3">
+          <button
+            onClick={() => setAnexando(true)}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-brand/30 bg-brand-light/30 px-2.5 py-1 text-xs font-medium text-brand hover:bg-brand-light/60"
+          >
+            <Paperclip className="h-3.5 w-3.5" /> {item.situacao === "VENCIDA" ? "Anexar versão atualizada" : "Anexar documento"}
+          </button>
+          {precisaEnviar && (
+            <Link href="/documentos" className="inline-flex items-center gap-1 text-xs font-medium text-muted hover:text-foreground hover:underline">
+              <FileText className="h-3 w-3" /> Ir para Documentos
+            </Link>
+          )}
+        </div>
+      )}
+      {anexando && (
+        <FormularioEnvioDocumento
+          // Item do catálogo: o servidor define tipo e categoria. Fora do catálogo: documento personalizado
+          // com o nome da exigência já preenchido.
+          catalogoChave={item.catalogoChave ?? undefined}
+          personalizado={!item.catalogoChave}
+          tipoSugerido={item.documento}
+          venceTipicamente={item.venceTipicamente}
+          titulo={`${item.situacao === "VENCIDA" ? "Anexar versão atualizada" : "Anexar documento"}: ${item.documento.slice(0, 90)}`}
+          onConcluido={() => {
+            setAnexando(false);
+            onAnexado();
+          }}
+          onCancelar={() => setAnexando(false)}
+        />
       )}
     </div>
   );
@@ -62,6 +90,22 @@ export function HabilitacaoTab({ editalId, etapa, onMudou }: { editalId: string;
   const [carregando, setCarregando] = useState(true);
   const [pedindo, setPedindo] = useState(false);
   const [erroPedido, setErroPedido] = useState<string | null>(null);
+  const [avisoAnexo, setAvisoAnexo] = useState<string | null>(null);
+
+  // Documento anexado: já entrou no dossiê da empresa (vale para os próximos editais também) e o sistema
+  // reavalia a habilitação em segundo plano — recarrega algumas vezes para mostrar a pendência resolvida.
+  async function aoAnexar() {
+    setAvisoAnexo("Documento salvo na base de documentos da empresa. Reavaliando a habilitação deste edital…");
+    await carregar();
+    onMudou?.();
+    for (const espera of [3000, 6000, 10000]) {
+      setTimeout(() => {
+        carregar();
+        onMudou?.();
+      }, espera);
+    }
+    setTimeout(() => setAvisoAnexo("Documento salvo na base de documentos da empresa — ele também vale para os próximos editais."), 10000);
+  }
 
   // "Auditar agora" / "Tentar novamente": gasta IA, então pede confirmação mostrando o custo.
   async function pedirAuditoria() {
@@ -275,6 +319,13 @@ export function HabilitacaoTab({ editalId, etapa, onMudou }: { editalId: string;
         </div>
       )}
 
+      {avisoAnexo && (
+        <div className="flex items-start gap-3 rounded-xl border border-accent/30 bg-accent/5 p-4 text-sm text-accent">
+          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+          <p>{avisoAnexo}</p>
+        </div>
+      )}
+
       {concluida &&
         relatorio.pendencias.map((grupo) => (
           <section key={grupo.categoria}>
@@ -283,7 +334,7 @@ export function HabilitacaoTab({ editalId, etapa, onMudou }: { editalId: string;
             </h4>
             <div className="mt-2 space-y-2">
               {grupo.itens.map((item) => (
-                <CartaoPendencia key={item.id} item={item} />
+                <CartaoPendencia key={item.id} item={item} onAnexado={aoAnexar} />
               ))}
             </div>
           </section>

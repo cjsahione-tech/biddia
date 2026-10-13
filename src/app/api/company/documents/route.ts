@@ -89,32 +89,39 @@ export async function POST(req: Request) {
   // Um documento por item do catálogo (ou por tipo, nos personalizados): enviar de novo
   // SUBSTITUI o anterior. Documentos antigos (sem chave) que o catálogo reconhece pelo nome
   // do tipo também são substituídos, para não ficar duplicado.
-  const candidatos = await prisma.companyDocument.findMany({
-    where: { companyId: company!.id },
-    select: { id: true, tipo: true, catalogoChave: true, storagePath: true },
-  });
-  const anteriores = candidatos.filter((d) =>
-    item ? chaveEfetivaDoDocumento(d) === item.chave : d.tipo === tipo && !d.catalogoChave
-  );
-  for (const anterior of anteriores) {
-    await prisma.companyDocument.delete({ where: { id: anterior.id } });
-    if (anterior.storagePath) await apagarAnexo(anterior.storagePath).catch(() => null);
-  }
+  // Tudo numa transação com trava por empresa+documento: dois envios ao mesmo tempo (clique duplo,
+  // vários anexos seguidos) liam a lista antes de qualquer um gravar e deixavam o documento duplicado.
+  const { documento, caminhosParaApagar } = await prisma.$transaction(
+    async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${company!.id + ":" + (item?.chave ?? tipo)}))`;
+      const candidatos = await tx.companyDocument.findMany({
+        where: { companyId: company!.id },
+        select: { id: true, tipo: true, catalogoChave: true, storagePath: true },
+      });
+      const anteriores = candidatos.filter((d) =>
+        item ? chaveEfetivaDoDocumento(d) === item.chave : d.tipo === tipo && !d.catalogoChave
+      );
+      for (const anterior of anteriores) await tx.companyDocument.delete({ where: { id: anterior.id } });
 
-  const documento = await prisma.companyDocument.create({
-    data: {
-      companyId: company!.id,
-      tipo,
-      categoria: categoria ?? null,
-      catalogoChave: item?.chave ?? null,
-      forma: forma ?? "COPIA_SIMPLES",
-      dataEmissao: dataEmissao ? new Date(dataEmissao) : null,
-      validade: validade ? new Date(validade) : null,
-      nome,
-      conteudoBase64: conteudoBase64 ?? null,
+      const criado = await tx.companyDocument.create({
+        data: {
+          companyId: company!.id,
+          tipo,
+          categoria: categoria ?? null,
+          catalogoChave: item?.chave ?? null,
+          forma: forma ?? "COPIA_SIMPLES",
+          dataEmissao: dataEmissao ? new Date(dataEmissao) : null,
+          validade: validade ? new Date(validade) : null,
+          nome,
+          conteudoBase64: conteudoBase64 ?? null,
+        },
+      });
+      return { documento: criado, caminhosParaApagar: anteriores.map((a) => a.storagePath).filter((c): c is string => !!c) };
     },
-  });
-
+    { timeout: 20_000, maxWait: 15_000 }
+  );
+  // Arquivos antigos no Storage saem só depois de o registro novo estar gravado.
+  for (const caminho of caminhosParaApagar) await apagarAnexo(caminho).catch(() => null);
 
   // A documentação mudou: refaz a conferência de habilitação dos editais abertos (em segundo plano).
   const origem = new URL(req.url).origin;

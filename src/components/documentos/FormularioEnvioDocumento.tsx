@@ -44,6 +44,8 @@ type Props = {
   catalogoChave?: string;
   /** true = documento personalizado: pede o nome/tipo livre (grupo "Outros"). */
   personalizado?: boolean;
+  /** Nome já preenchido (ex.: o documento exigido pelo edital) quando for personalizado. */
+  tipoSugerido?: string;
   /** Documento já enviado: com `soValidade`, só altera validade/forma, sem novo arquivo. */
   documentoAtual?: CompanyDocumentItem;
   soValidade?: boolean;
@@ -57,6 +59,7 @@ type Props = {
 export function FormularioEnvioDocumento({
   catalogoChave,
   personalizado,
+  tipoSugerido,
   documentoAtual,
   soValidade,
   venceTipicamente,
@@ -64,7 +67,7 @@ export function FormularioEnvioDocumento({
   onConcluido,
   onCancelar,
 }: Props) {
-  const [tipoLivre, setTipoLivre] = useState("");
+  const [tipoLivre, setTipoLivre] = useState((tipoSugerido ?? "").slice(0, 200));
   const [forma, setForma] = useState<FormaDocumento>(documentoAtual?.forma ?? "COPIA_SIMPLES");
   const [temValidade, setTemValidade] = useState(documentoAtual ? !!documentoAtual.validade : !!venceTipicamente);
   const [validade, setValidade] = useState(paraInputData(documentoAtual?.validade ?? null));

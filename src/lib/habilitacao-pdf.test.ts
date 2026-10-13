@@ -12,6 +12,8 @@ const item = (n: number, over: Partial<ItemRelatorio> = {}): ItemRelatorio => ({
   id: `i${n}`,
   documento: `Documento exigido número ${n} com um nome bem comprido para obrigar a quebra de linha na tabela do relatório de pendências`,
   categoria: "fiscal",
+  catalogoChave: null,
+  venceTipicamente: false,
   situacao: "NAO_ENVIADA",
   situacaoTexto: "Não enviado",
   origem: "ANEXO I - TR.pdf",
