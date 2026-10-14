@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireCompany } from "@/lib/api-utils";
-import { apagarAnexo } from "@/lib/storage";
+import { apagarAnexoSeLivre } from "@/lib/storage-uso";
 import { tocarEdital } from "@/lib/agents/run-tracker";
 
 // Só vale pro caminho antigo (anexoBase64 no corpo da requisição) — arquivos grandes
@@ -51,7 +51,7 @@ export async function PATCH(
     if (!anexoDocIdAnterior) return;
     const anterior = await prisma.document.findUnique({ where: { id: anexoDocIdAnterior } });
     await prisma.document.delete({ where: { id: anexoDocIdAnterior } }).catch(() => null);
-    if (anterior?.storagePath) await apagarAnexo(anterior.storagePath).catch(() => null);
+    if (anterior?.storagePath) await apagarAnexoSeLivre(anterior.storagePath);
   }
 
   if (parsed.data.removerAnexo) {

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { AlertTriangle, ChevronDown, ChevronUp, Clock, MapPin, Paperclip, StickyNote, Trash2 } from "lucide-react";
-import { formatValorEdital, formatDate, formatDateTime } from "@/lib/format";
+import { descreverValorEdital, formatDate, formatDateTime } from "@/lib/format";
 import { faixaCorCard } from "@/lib/kanban";
 import { calcularEstadoInatividade } from "@/lib/kanban-atividade";
 import { diasRestantesRascunho } from "@/lib/rascunho-prazo";
@@ -45,6 +45,7 @@ export function KanbanCard({
   const dias = diasParaEncerrar(edital.dataEncerramentoProposta);
   const prazoUrgente = dias !== null && dias <= 3;
   const [expandido, setExpandido] = useState(false);
+  const valor = descreverValorEdital(edital);
 
   // Estado "novo vs visto": todo edital nasce em Oportunidade sem ter sido aberto ainda
   // (ou volta a ficar assim se o órgão retificar depois de já visto) — destaque azul até
@@ -160,8 +161,8 @@ export function KanbanCard({
       </p>
 
       <div className="mt-2 flex items-center justify-between">
-        <p className={`text-xs font-semibold ${edital.orcamentoSigiloso ? "italic text-muted" : "text-foreground"}`}>
-          {formatValorEdital(edital.valorGlobal, edital.orcamentoSigiloso)}
+        <p className={`text-xs font-semibold ${valor.apagado ? "italic text-muted" : "text-foreground"}`} title={valor.nota ?? undefined}>
+          {valor.texto}
         </p>
         {edital.dataEncerramentoProposta && (
           <p className={`text-[11px] ${prazoUrgente ? "font-medium text-danger" : "text-muted"}`}>

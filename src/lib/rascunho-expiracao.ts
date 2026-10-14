@@ -55,7 +55,18 @@ export async function excluirRascunhosVencidos(opts?: {
     const { count } = await prisma.edital.deleteMany({ where: { id: { in: ids } } });
     resultado.excluidos += count;
 
-    for (const caminho of caminhos) {
+    // O Secretário copia para o checklist do edital o MESMO arquivo do Storage da base de documentos da empresa
+    // (e outros editais podem apontar para o mesmo caminho): só apaga o que ninguém mais referencia.
+    const aindaUsados = new Set<string>();
+    if (caminhos.length > 0) {
+      const [outrosDocumentos, documentosDaEmpresa] = await Promise.all([
+        prisma.document.findMany({ where: { storagePath: { in: caminhos } }, select: { storagePath: true } }),
+        prisma.companyDocument.findMany({ where: { storagePath: { in: caminhos } }, select: { storagePath: true } }),
+      ]);
+      for (const r of [...outrosDocumentos, ...documentosDaEmpresa]) if (r.storagePath) aindaUsados.add(r.storagePath);
+    }
+
+    for (const caminho of caminhos.filter((c) => !aindaUsados.has(c))) {
       await apagarAnexo(caminho).then(
         () => resultado.arquivosApagados++,
         () => null // arquivo já ausente ou Storage indisponível: o registro já saiu, não trava a limpeza

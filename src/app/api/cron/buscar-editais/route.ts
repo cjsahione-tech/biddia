@@ -6,6 +6,7 @@ import { mapComLimite } from "@/lib/concorrencia";
 import { vigiarAuditorias } from "@/lib/agents/auditoria-fila";
 import { notificarNovosEditais } from "@/lib/notifications";
 import { excluirRascunhosVencidos } from "@/lib/rascunho-expiracao";
+import { repararEditais } from "@/lib/agents/edital-disponivel";
 
 // Roda o Agente Comercial para todas as empresas com alguma fonte de busca configurada
 // (palavras-chave do PNCP e/ou segmento do LicitaNet) e notifica por e-mail/WhatsApp
@@ -51,13 +52,16 @@ export async function GET(req: Request) {
   const vigia = await vigiarAuditorias({ origem: new URL(req.url).origin, forcar: true }).catch(() => null);
 
   // Limpeza: rascunhos com mais de 7 dias saem da base (o tempo que sobra da busca é usado aqui).
-  const limpeza = await excluirRascunhosVencidos({ ateMs: 15_000 }).catch(() => null);
+  const limpeza = await excluirRascunhosVencidos({ ateMs: 10_000 }).catch(() => null);
+  // Completa os editais captados (arquivos, edital principal no Storage, valor) com o tempo que sobrou.
+  const reparo = await repararEditais({ limite: 30, ateMs: 15_000 }).catch(() => null);
   // Histórico de consumo de IA: guarda 60 dias (o painel de saúde olha no máximo 90, mas 60 já cobre a rotina).
   await prisma.consumoIA.deleteMany({ where: { createdAt: { lt: new Date(Date.now() - 60 * 24 * 3_600_000) } } }).catch(() => null);
 
   return NextResponse.json({
     vigia,
     limpezaRascunhos: limpeza,
+    reparoEditais: reparo,
     empresasProcessadas: resultados.length,
     totalNovos: resultados.reduce((acc, r) => acc + r.novos, 0),
     resultados,

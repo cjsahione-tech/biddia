@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Loader2, Search, X } from "lucide-react";
-import { formatDate, formatValorEdital } from "@/lib/format";
+import { formatDate, descreverValorEdital, formatBRL } from "@/lib/format";
 import { parseItens } from "@/lib/proposal";
 import type { EditalListItem, EstudoViabilidadeDetail } from "@/lib/types";
 
@@ -106,9 +106,10 @@ export function EtapaEdital({
                 </div>
                 <div className="flex shrink-0 items-center gap-3">
                   <span
-                    className={`text-xs font-semibold ${edital.orcamentoSigiloso ? "italic text-muted" : "text-foreground"}`}
+                    className={`text-xs font-semibold ${descreverValorEdital(edital).apagado ? "italic text-muted" : "text-foreground"}`}
+                    title={descreverValorEdital(edital).nota ?? undefined}
                   >
-                    {formatValorEdital(edital.valorGlobal, edital.orcamentoSigiloso)}
+                    {descreverValorEdital(edital).texto}
                   </span>
                   {vinculando === edital.id && <Loader2 className="h-4 w-4 animate-spin text-brand" />}
                 </div>
@@ -155,9 +156,8 @@ export function ResumoEdital({
         <div className="mt-4 flex flex-wrap items-center gap-6">
           <div>
             <p className="text-xs text-muted">Valor estimado (teto)</p>
-            <p className="mt-0.5 text-lg font-semibold text-foreground">
-              {formatValorEdital(edital.valorGlobal, edital.orcamentoSigiloso)}
-            </p>
+            <p className="mt-0.5 text-lg font-semibold text-foreground">{descreverValorEdital(edital).texto}</p>
+            {descreverValorEdital(edital).nota && <p className="mt-0.5 max-w-xs text-xs text-muted">{descreverValorEdital(edital).nota}</p>}
           </div>
           {edital.dataEncerramentoProposta && (
             <div>
@@ -189,7 +189,7 @@ export function ResumoEdital({
                     <td className="px-4 py-2.5 text-foreground">{item.descricao}</td>
                     <td className="px-4 py-2.5 text-muted">{item.unidade}</td>
                     <td className="px-4 py-2.5 text-right text-muted">{item.quantidade}</td>
-                    <td className="px-4 py-2.5 text-right text-muted">{formatValorEdital(item.valorUnitario, false)}</td>
+                    <td className="px-4 py-2.5 text-right text-muted">{formatBRL(item.valorUnitario)}</td>
                   </tr>
                 ))}
               </tbody>

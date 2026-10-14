@@ -39,6 +39,9 @@ export type EditalListItem = {
   modalidade: string | null;
   valorGlobal: number | null;
   orcamentoSigiloso: boolean;
+  valorOrigem: string | null;
+  valorTentadoEm: string | null;
+  createdAt: string;
   dataEncerramentoProposta: string | null;
   status: "NOVO" | "APROVADO" | "REPROVADO";
   etapaKanban: EtapaKanban;

@@ -16,6 +16,9 @@ vi.mock("@/lib/prisma", () => ({
     },
   },
 }));
+// O trabalho em segundo plano (after) só existe dentro de uma requisição real; aqui ele não é o assunto.
+vi.mock("next/server", async (original) => ({ ...(await original<typeof import("next/server")>()), after: () => {} }));
+vi.mock("@/lib/agents/edital-disponivel", () => ({ repararUmEdital: async () => {} }));
 vi.mock("@/lib/api-utils", () => ({ requireCompany: async () => ({ user: null, company: { id: "c1" }, error: null }) }));
 
 import { GET } from "@/app/api/editais/[id]/route";

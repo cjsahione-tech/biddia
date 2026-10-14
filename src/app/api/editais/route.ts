@@ -4,6 +4,11 @@ import { requireCompany } from "@/lib/api-utils";
 import { LIMITE_INATIVIDADE_MS } from "@/lib/kanban-atividade";
 import { vigiarAuditorias } from "@/lib/agents/auditoria-fila";
 import { excluirRascunhosVencidos } from "@/lib/rascunho-expiracao";
+import { repararEditais } from "@/lib/agents/edital-disponivel";
+
+// No máximo uma passada de reparo por empresa a cada 45s por instância (abrir/atualizar o quadro não pode
+// disparar downloads em cascata).
+const ultimoReparo = new Map<string, number>();
 import { filtroRascunhoVencido } from "@/lib/rascunho-prazo";
 
 export async function GET(req: Request) {
@@ -29,6 +34,14 @@ export async function GET(req: Request) {
     },
     data: { etapaKanban: "RASCUNHO", motivoMovimentacao: "INATIVIDADE", movidoEm: new Date() },
   });
+
+  // Deixa os editais completos em segundo plano: arquivos que faltaram na captura, edital principal no
+  // Storage e valor estimado (sem IA). Só mexe no que ainda falta.
+  const agoraMs = Date.now();
+  if (agoraMs - (ultimoReparo.get(company!.id) ?? 0) > 45_000) {
+    ultimoReparo.set(company!.id, agoraMs);
+    after(() => repararEditais({ companyId: company!.id, limite: 10, ateMs: 25_000 }).then(() => undefined, () => undefined));
+  }
 
   // Rascunho que passou de 7 dias é apagado de verdade (em segundo plano, aos poucos); enquanto isso
   // já não aparece no quadro.

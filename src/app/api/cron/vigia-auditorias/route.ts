@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { verificarCronSecret } from "@/lib/cron-auth";
 import { vigiarAuditorias } from "@/lib/agents/auditoria-fila";
+import { repararEditais } from "@/lib/agents/edital-disponivel";
 
 // Vigia das auditorias de habilitação: interrompe e re-enfileira as que travaram, reenvia as
 // que têm nova tentativa vencida, retoma as guardadas por falta de saldo (quando a IA volta) e
@@ -15,5 +16,7 @@ export async function GET(req: Request) {
   if (naoAutorizado) return naoAutorizado;
 
   const resumo = await vigiarAuditorias({ origem: new URL(req.url).origin, forcar: true });
-  return NextResponse.json(resumo);
+  // Aproveita a chamada frequente para completar editais captados (arquivos, edital principal, valor).
+  const reparo = await repararEditais({ limite: 20, ateMs: 20_000 }).catch(() => null);
+  return NextResponse.json({ ...resumo, reparoEditais: reparo });
 }

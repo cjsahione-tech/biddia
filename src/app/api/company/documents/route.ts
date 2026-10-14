@@ -2,7 +2,7 @@ import { NextResponse, after } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireCompany } from "@/lib/api-utils";
-import { apagarAnexo } from "@/lib/storage";
+import { apagarAnexoSeLivre } from "@/lib/storage-uso";
 import { reavaliarEditaisDaEmpresa } from "@/lib/agents/auditoria-habilitacao";
 import { itemPorChave, chaveEfetivaDoDocumento, itemAceitaVarios, ehPastaValida } from "@/lib/catalogo-documentos";
 
@@ -144,7 +144,7 @@ export async function POST(req: Request) {
     { timeout: 20_000, maxWait: 15_000 }
   );
   // Arquivos antigos no Storage saem só depois de o registro novo estar gravado.
-  for (const caminho of caminhosParaApagar) await apagarAnexo(caminho).catch(() => null);
+  for (const caminho of caminhosParaApagar) await apagarAnexoSeLivre(caminho);
 
   // A documentação mudou: refaz a conferência de habilitação dos editais abertos (em segundo plano).
   const origem = new URL(req.url).origin;

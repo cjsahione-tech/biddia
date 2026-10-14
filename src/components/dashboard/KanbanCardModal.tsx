@@ -5,7 +5,7 @@ import Link from "next/link";
 import { AlertTriangle, Download, ExternalLink, Loader2, Paperclip, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Field, TextArea, TextInput } from "@/components/ui/Field";
-import { formatDate, formatValorEdital } from "@/lib/format";
+import { formatDate, descreverValorEdital } from "@/lib/format";
 import { CORES_CARD, ETAPAS_KANBAN, topoCorCard } from "@/lib/kanban";
 import { labelVerNoPortal } from "@/lib/fonte-edital";
 import type { CorCard, DocumentItem, EditalDetail, EtapaKanban } from "@/lib/types";
@@ -201,8 +201,11 @@ export function KanbanCardModal({
                 {edital.orgaoNome} — {edital.municipio ?? "?"}/{edital.uf ?? "?"}
               </p>
               <div className="mt-2 flex flex-wrap items-center gap-3 text-sm">
-                <span className={`font-semibold ${edital.orcamentoSigiloso ? "italic text-muted" : "text-foreground"}`}>
-                  {formatValorEdital(edital.valorGlobal, edital.orcamentoSigiloso)}
+                <span
+                  className={`font-semibold ${descreverValorEdital(edital).apagado ? "italic text-muted" : "text-foreground"}`}
+                  title={descreverValorEdital(edital).nota ?? undefined}
+                >
+                  {descreverValorEdital(edital).texto}
                 </span>
                 <span className="text-muted">Encerra {formatDate(edital.dataEncerramentoProposta)}</span>
                 {edital.linkPortal && (

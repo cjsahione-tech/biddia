@@ -2,7 +2,7 @@ import { NextResponse, after } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireCompany } from "@/lib/api-utils";
-import { apagarAnexo } from "@/lib/storage";
+import { apagarAnexoSeLivre } from "@/lib/storage-uso";
 import { reavaliarEditaisDaEmpresa } from "@/lib/agents/auditoria-habilitacao";
 import { itemPorChave, chaveEfetivaDoDocumento, itemAceitaVarios, ehPastaValida } from "@/lib/catalogo-documentos";
 
@@ -99,7 +99,7 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ docId
   if (!documento) return NextResponse.json({ error: "Documento não encontrado" }, { status: 404 });
 
   await prisma.companyDocument.delete({ where: { id: docId } });
-  if (documento.storagePath) await apagarAnexo(documento.storagePath).catch(() => null);
+  if (documento.storagePath) await apagarAnexoSeLivre(documento.storagePath);
 
   // A documentação mudou: refaz a conferência de habilitação dos editais abertos (em segundo plano).
   const origem = new URL(req.url).origin;

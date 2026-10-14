@@ -5,6 +5,7 @@ import {
   linkPortalCompra,
   buscarDetalheCompra,
   buscarArquivosCompra,
+  buscarItensCompra,
   selecionarDocumentosPrincipais,
   parseItemUrl,
   type PncpSearchItem,
@@ -28,6 +29,7 @@ import { baixarEPersistirDocumento } from "@/lib/agents/document-download";
 import { logAudit } from "@/lib/agents/run-tracker";
 import { houveRetificacao } from "@/lib/edital-retificacao";
 import { mapComLimite } from "@/lib/concorrencia";
+import { somarValorDosItens } from "@/lib/valor-edital";
 
 // Quantos editais trazer por palavra-chave (PNCP) ou por segmento (LicitaNet), na ordem
 // de cada fonte — o mesmo recorte que os sites de origem mostram nas primeiras páginas.
@@ -292,7 +294,8 @@ async function executarAgente1Interno(
             // vem do endpoint de detalhe, que esta atualização evita chamar de
             // propósito), então nunca preenche um valor pra um edital marcado sigiloso
             // na captura original.
-            ...(existente.orcamentoSigiloso ? {} : { valorGlobal: item.valor_global }),
+            // Também não apaga um valor já completado (soma dos itens / texto do edital) com o "nulo" da busca.
+            ...(existente.orcamentoSigiloso || item.valor_global == null ? {} : { valorGlobal: item.valor_global, valorOrigem: "PNCP" }),
             dataAtualizacaoPncp: novaData,
             dataAberturaProposta: item.data_inicio_vigencia ? new Date(item.data_inicio_vigencia) : null,
             dataEncerramentoProposta: item.data_fim_vigencia ? new Date(item.data_fim_vigencia) : null,
@@ -421,17 +424,40 @@ async function executarAgente1Interno(
 
       let valorGlobal: number | null = item.valor_global;
       let orcamentoSigiloso = false;
+      let valorOrigem: string | null = null;
+      let valorTentadoEm: Date | null = null;
       let arquivos: PncpArquivo[] = [];
+      let arquivosConsultados = false;
       if (cnpj && ano && sequencial) {
         const [detalhe, arqs] = await Promise.all([
           buscarDetalheCompra(cnpj, ano, sequencial).catch(() => null),
-          buscarArquivosCompra(cnpj, ano, sequencial).catch(() => [] as PncpArquivo[]),
+          buscarArquivosCompra(cnpj, ano, sequencial).then(
+            (a) => {
+              arquivosConsultados = true;
+              return a;
+            },
+            () => [] as PncpArquivo[]
+          ),
         ]);
         arquivos = arqs;
         if (detalhe) {
           orcamentoSigiloso = !!detalhe.indicadorOrcamentoSigiloso;
           if (!orcamentoSigiloso && detalhe.valorTotalEstimado != null) valorGlobal = detalhe.valorTotalEstimado;
           if (orcamentoSigiloso) valorGlobal = null;
+        }
+        if (valorGlobal != null) valorOrigem = "PNCP";
+        // Sem valor na contratação: o PNCP publica o valor de cada item — a soma é o valor do edital (sem IA).
+        if (valorGlobal == null && !orcamentoSigiloso) {
+          const itens = await buscarItensCompra(cnpj, ano, sequencial).catch(() => null);
+          if (itens) {
+            const soma = somarValorDosItens(itens);
+            valorTentadoEm = new Date();
+            if (soma.sigiloso) orcamentoSigiloso = true;
+            else if (soma.valor != null) {
+              valorGlobal = soma.valor;
+              valorOrigem = soma.parcial || itens.length >= 500 ? "ITENS_PARCIAL" : "ITENS";
+            }
+          }
         }
       }
 
@@ -459,6 +485,9 @@ async function executarAgente1Interno(
         dataEncerramentoProposta: item.data_fim_vigencia ? new Date(item.data_fim_vigencia) : null,
         valorGlobal,
         orcamentoSigiloso,
+        valorOrigem,
+        valorTentadoEm,
+        documentosConsultadosEm: arquivosConsultados ? new Date() : null,
         linkPortal: linkPortalCompra(item.item_url),
         keywordMatched: c.keyword,
         ordemKanban: Date.now(),

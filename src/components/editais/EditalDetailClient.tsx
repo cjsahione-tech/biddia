@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { ArrowLeft, ExternalLink, Loader2 } from "lucide-react";
-import { formatValorEdital, formatDate } from "@/lib/format";
+import { descreverValorEdital, formatDate } from "@/lib/format";
 import { ETAPAS_KANBAN } from "@/lib/kanban";
 import { labelVerNoPortal } from "@/lib/fonte-edital";
 import type { EditalDetail, EtapaKanban } from "@/lib/types";
@@ -150,10 +150,11 @@ export function EditalDetailClient({ editalId }: { editalId: string }) {
         </div>
         <div className="shrink-0 md:text-right">
           <p
-            className={`text-xl font-semibold ${edital.orcamentoSigiloso ? "text-muted italic" : "text-foreground"}`}
+            className={`text-xl font-semibold ${descreverValorEdital(edital).apagado ? "text-muted italic" : "text-foreground"}`}
           >
-            {formatValorEdital(edital.valorGlobal, edital.orcamentoSigiloso)}
+            {descreverValorEdital(edital).texto}
           </p>
+          {descreverValorEdital(edital).nota && <p className="mt-0.5 max-w-xs text-xs text-muted md:ml-auto">{descreverValorEdital(edital).nota}</p>}
           <p className="mt-1 text-xs text-muted">Encerra {formatDate(edital.dataEncerramentoProposta)}</p>
           {edital.linkPortal && (
             <a

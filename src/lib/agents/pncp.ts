@@ -191,6 +191,10 @@ export type PncpItemCompra = {
   descricao: string;
   quantidade: number;
   valorUnitarioEstimado: number | null;
+  /** Valor total estimado do item (quantidade x unitário), como o órgão publicou. */
+  valorTotal?: number | null;
+  /** O órgão marcou o valor deste item como sigiloso. */
+  orcamentoSigiloso?: boolean | null;
   unidadeMedida: string;
 };
 
@@ -227,6 +231,8 @@ export async function buscarItensCompra(cnpj: string, ano: string, sequencial: s
     descricao: string;
     quantidade: number;
     valorUnitarioEstimado: number | null;
+    valorTotal?: number | null;
+    orcamentoSigiloso?: boolean | null;
     unidadeMedida: string;
   }>;
 
@@ -235,6 +241,8 @@ export async function buscarItensCompra(cnpj: string, ano: string, sequencial: s
     descricao: item.descricao,
     quantidade: item.quantidade,
     valorUnitarioEstimado: item.valorUnitarioEstimado,
+    valorTotal: item.valorTotal ?? null,
+    orcamentoSigiloso: item.orcamentoSigiloso ?? null,
     unidadeMedida: item.unidadeMedida,
   }));
 }

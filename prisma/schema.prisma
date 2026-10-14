@@ -339,6 +339,14 @@ model Edital {
   dataPrazoImpugnacao  DateTime?
   valorGlobal          Float?
   orcamentoSigiloso    Boolean   @default(false)
+  // De onde veio o valor: "PNCP" (campo da contratação), "ITENS" (soma dos itens publicados no PNCP),
+  // "EDITAL" (lido do texto do edital) — null = sem valor. valorTentadoEm: quando já procuramos o valor nas
+  // fontes gratuitas (evita repetir a busca e permite dizer "não divulgado" em vez de "buscando").
+  valorOrigem          String?
+  valorTentadoEm       DateTime?
+  // Última vez que a lista de arquivos do edital foi consultada no PNCP (para reconsultar os que ficaram
+  // sem documento por falha momentânea, sem repetir a cada rodada os que realmente não têm arquivo).
+  documentosConsultadosEm DateTime?
   tipoObjeto           String?
   linkPortal           String
   keywordMatched       String?

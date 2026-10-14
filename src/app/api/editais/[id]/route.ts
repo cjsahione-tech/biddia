@@ -1,7 +1,8 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireCompany } from "@/lib/api-utils";
+import { repararUmEdital } from "@/lib/agents/edital-disponivel";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { company, error } = await requireCompany();
@@ -28,6 +29,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   });
 
   if (!edital) return NextResponse.json({ error: "Edital não encontrado" }, { status: 404 });
+
+  // Garante, em segundo plano, que o edital esteja completo (arquivos, edital no Storage, valor).
+  after(() => repararUmEdital(id).then(() => undefined, () => undefined));
 
   // Abrir o card é o próprio evento de "visto" — marca uma vez só (não reescreve
   // visualizadoEm em toda reabertura) e conta como atividade do usuário.
