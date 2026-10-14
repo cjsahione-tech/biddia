@@ -936,3 +936,19 @@ model ParametroTributarioRegime {
 
   @@unique([companyId, regime, ramo])
 }
+
+// Consumo de IA por chamada (tokens), atribuído ao agente que a fez — mede quanto cada agente gasta e permite
+// provar se uma mudança realmente economizou. Sem relação com Edital de propósito: apagar um edital não apaga
+// o histórico de gasto. Registros antigos (60 dias) são limpos pelo cron.
+model ConsumoIA {
+  id        String   @id @default(cuid())
+  agente    String // chave do agente (ex.: "agente2-analista") ou "outros"
+  editalId  String?
+  modelo    String
+  entrada   Int
+  saida     Int
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([agente, createdAt])
+}

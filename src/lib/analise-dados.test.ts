@@ -54,3 +54,22 @@ describe("listas de texto (obrigações, requisitos, riscos)", () => {
     for (const v of [{ a: { b: "c" } }, [1, [2, 3]], true, 0, null]) expect(typeof paraTexto(v)).toBe("string");
   });
 });
+
+describe("prazos do edital", () => {
+  it("objeto no lugar de texto vira texto; sem tipo/prazo some; lixo vira lista vazia", async () => {
+    const { normalizarPrazos, lerPrazos } = await import("@/lib/analise-dados");
+    const r = normalizarPrazos([
+      { tipo: "Impugnação", prazo: "3 dias úteis", referencia: "item 5.1" },
+      { tipo: { nome: "Entrega" }, prazo: { dias: 30 }, referencia: null },
+      { tipo: "Sem prazo" },
+      "texto solto",
+    ]);
+    expect(r).toEqual([
+      { tipo: "Impugnação", prazo: "3 dias úteis", referencia: "item 5.1" },
+      { tipo: "Entrega", prazo: "30", referencia: null },
+    ]);
+    for (const p of r) expect(typeof p.tipo + typeof p.prazo).toBe("stringstring");
+    expect(normalizarPrazos("x")).toEqual([]);
+    expect(lerPrazos("não é json")).toEqual([]);
+  });
+});

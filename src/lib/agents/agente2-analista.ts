@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { askJSON, MODELO_HAIKU } from "@/lib/anthropic";
 import { obterTextoCompletoEdital } from "@/lib/agents/pdf-extract";
 import { withAgentRun, logAudit } from "@/lib/agents/run-tracker";
-import { normalizarGruposHabilitacao, normalizarLista, paraTexto } from "@/lib/analise-dados";
+import { normalizarGruposHabilitacao, normalizarLista, normalizarPrazos, paraTexto } from "@/lib/analise-dados";
 
 // Cada grupo é uma seção de habilitação/qualificação TAL COMO o próprio edital a
 // organiza (ex: "13.1 Regularidade Fiscal, Trabalhista, Econômico-Financeira e
@@ -144,7 +144,7 @@ Retorne um objeto JSON com exatamente estas chaves:
       requisitosAdicionais: JSON.stringify(normalizarLista(result.requisitosAdicionais)),
       riscos: JSON.stringify(normalizarLista(result.riscos)),
       parecer: paraTexto(result.parecer),
-      prazos: JSON.stringify(Array.isArray(result.prazos) ? result.prazos.filter((x) => x && x.tipo && x.prazo) : []),
+      prazos: JSON.stringify(normalizarPrazos(result.prazos)),
       baseadoEmTextoCompleto: temTextoCompleto,
     };
 

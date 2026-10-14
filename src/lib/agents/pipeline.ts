@@ -100,7 +100,9 @@ export async function executarEtapa(editalId: string, etapa: EtapaPipeline): Pro
 
   const timeout = new Promise<"timeout">((resolve) => setTimeout(() => resolve("timeout"), ESPERA_MAXIMA_MS));
   const execucao = comRetry(() => executar(editalId), {
-    tentativas: etapa === "auditor" ? 1 : 3,
+    // 2 (antes 3): cada chamada à IA já repete sozinha em falha passageira; refazer o agente INTEIRO uma
+    // terceira vez só repagava as chamadas que tinham dado certo. O Auditor reexecuta o que ficar faltando.
+    tentativas: etapa === "auditor" ? 1 : 2,
     esperaMs: 3000,
     aoFalhar: async (err, tentativa) => {
       await logAudit(

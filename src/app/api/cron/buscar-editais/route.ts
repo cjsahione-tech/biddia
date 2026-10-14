@@ -52,6 +52,8 @@ export async function GET(req: Request) {
 
   // Limpeza: rascunhos com mais de 7 dias saem da base (o tempo que sobra da busca é usado aqui).
   const limpeza = await excluirRascunhosVencidos({ ateMs: 15_000 }).catch(() => null);
+  // Histórico de consumo de IA: guarda 60 dias (o painel de saúde olha no máximo 90, mas 60 já cobre a rotina).
+  await prisma.consumoIA.deleteMany({ where: { createdAt: { lt: new Date(Date.now() - 60 * 24 * 3_600_000) } } }).catch(() => null);
 
   return NextResponse.json({
     vigia,

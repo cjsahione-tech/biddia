@@ -328,6 +328,12 @@ export function custoEstimadoUsd(u: { haikuEntrada: number; haikuSaida: number; 
   return Math.round(usd * 10_000) / 10_000;
 }
 
+/** Custo estimado (US$) de um volume de tokens num modelo: "haiku" no nome do modelo = Haiku, senão Sonnet. */
+export function custoPorModeloUsd(modelo: string, entrada: number, saida: number): number {
+  const p = modelo.toLowerCase().includes("haiku") ? PRECO.haiku : PRECO.sonnet;
+  return (entrada * p.entrada + saida * p.saida) / 1_000_000;
+}
+
 /** Epoch de um nome como "196986_editais_1786333361.zip" (para achar o envio mais recente). */
 export function epochNoNome(nome: string): number {
   const m = nome.match(/_(\d{9,})\.\w+$/);

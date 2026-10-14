@@ -51,6 +51,31 @@ export function normalizarGruposHabilitacao(valor: unknown): GrupoHabilitacao[] 
   return soltos.length > 0 ? [{ categoriaEdital: null, itens: soltos }, ...grupos] : grupos;
 }
 
+export type PrazoEdital = { tipo: string; prazo: string; referencia: string | null };
+
+/** Prazos do edital {tipo, prazo, referencia}: só os que têm tipo e prazo em texto; o resto some. */
+export function normalizarPrazos(valor: unknown): PrazoEdital[] {
+  if (!Array.isArray(valor)) return [];
+  const prazos: PrazoEdital[] = [];
+  for (const p of valor) {
+    if (!p || typeof p !== "object" || Array.isArray(p)) continue;
+    const o = p as Record<string, unknown>;
+    const tipo = paraTexto(o.tipo);
+    const prazo = paraTexto(o.prazo);
+    if (tipo && prazo) prazos.push({ tipo, prazo, referencia: paraTexto(o.referencia) || null });
+  }
+  return prazos;
+}
+
+export function lerPrazos(json: string | null | undefined): PrazoEdital[] {
+  if (!json) return [];
+  try {
+    return normalizarPrazos(JSON.parse(json));
+  } catch {
+    return [];
+  }
+}
+
 /** JSON gravado no banco → grupos seguros (JSON inválido = lista vazia). */
 export function lerGruposHabilitacao(json: string | null | undefined): GrupoHabilitacao[] {
   if (!json) return [];

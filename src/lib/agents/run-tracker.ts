@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import type { AuditSeverity } from "@prisma/client";
+import { comContextoIA } from "@/lib/ia-contexto";
 
 export async function withAgentRun<T>(
   editalId: string,
@@ -11,7 +12,8 @@ export async function withAgentRun<T>(
   });
 
   try {
-    const result = await fn();
+    // O consumo de IA feito lá dentro é registrado no nome deste agente (ver consumo-ia.ts).
+    const result = await comContextoIA({ agente: agentKey, editalId }, fn);
     await prisma.agentRun.update({
       where: { id: run.id },
       data: { status: "DONE", finishedAt: new Date() },

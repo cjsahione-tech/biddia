@@ -2,23 +2,13 @@ import { FonteBadge } from "@/components/ui/FonteBadge";
 import { AgentChat } from "@/components/editais/AgentChat";
 import type { EditalDetail } from "@/lib/types";
 
-import { lerGruposHabilitacao, lerLista, type GrupoHabilitacao } from "@/lib/analise-dados";
+import { lerGruposHabilitacao, lerLista, lerPrazos, type GrupoHabilitacao, type PrazoEdital } from "@/lib/analise-dados";
 
 // Dados da IA passam sempre por lerLista/lerGruposHabilitacao: a IA às vezes devolve objeto onde o
 // formato pedia texto (ou um grupo sem "itens"), e desenhar um objeto na tela derruba a página inteira.
 const parseList = (json: string | undefined): string[] => lerLista(json);
 
-type PrazoEdital = { tipo: string; prazo: string; referencia: string | null };
-
-function parsePrazos(json: string | null | undefined): PrazoEdital[] {
-  if (!json) return [];
-  try {
-    const parsed = JSON.parse(json);
-    return Array.isArray(parsed) ? parsed.filter((p) => p && p.tipo && p.prazo) : [];
-  } catch {
-    return [];
-  }
-}
+const parsePrazos = lerPrazos;
 
 function SectionPrazos({ prazos, analiseAntiga }: { prazos: PrazoEdital[]; analiseAntiga: boolean }) {
   return (

@@ -21,6 +21,7 @@ import { verificarAcessoPlano } from "@/lib/plano";
 import { classificarTipoObjeto, empresaAtende, type TipoObjeto } from "@/lib/agents/classificador-objeto";
 import { classificarEditaisEmLote } from "@/lib/agents/relevancia";
 import { askJSON, MODELO_HAIKU } from "@/lib/anthropic";
+import { comContextoIA } from "@/lib/ia-contexto";
 import { extrairTextoPdf, base64ParaBytes } from "@/lib/agents/pdf-extract";
 import { baixarAnexo } from "@/lib/storage";
 import { baixarEPersistirDocumento } from "@/lib/agents/document-download";
@@ -113,7 +114,12 @@ function normalizarBusca(s: string): string {
  */
 export type ProgressoCaptacao = { fase: "buscando" | "classificando" | "criando"; analisados: number; novos: number };
 
-export async function executarAgente1(
+/** Busca de editais da empresa. O consumo de IA feito aqui é registrado no nome do Agente Comercial. */
+export function executarAgente1(companyId: string, onProgresso?: (p: ProgressoCaptacao) => void | Promise<void>) {
+  return comContextoIA({ agente: "agente1-comercial" }, () => executarAgente1Interno(companyId, onProgresso));
+}
+
+async function executarAgente1Interno(
   companyId: string,
   onProgresso?: (p: ProgressoCaptacao) => void | Promise<void>
 ) {

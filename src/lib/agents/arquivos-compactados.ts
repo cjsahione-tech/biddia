@@ -37,6 +37,19 @@ export async function extrairTextoDocx(bytes: Uint8Array): Promise<string | null
 export const MARCA_ILEGIVEL = "[[ARQUIVO ILEGÍVEL:";
 
 /**
+ * true quando o "texto" de um arquivo é só o aviso de que nada pôde ser lido (ex.: ZIP corrompido ou só com
+ * arquivos de formato não suportado) — sem nenhum conteúdo de verdade. Esse texto NÃO pode ir para a IA: ela
+ * não acharia exigência nenhuma e o resultado sairia como "sem exigências" em vez de "arquivo ilegível".
+ */
+export function textoSoIlegivel(texto: string): boolean {
+  const semMarcas = texto
+    .replace(/\[\[ARQUIVO ILEGÍVEL:[^\]]*\]\]/g, "")
+    .replace(/={3,} ARQUIVO:[^\n]*={3,}/g, "")
+    .trim();
+  return semMarcas.length < 40;
+}
+
+/**
  * Abre um ZIP e devolve o texto de todos os arquivos suportados, cada um com um cabeçalho
  * "===== ARQUIVO: nome =====". Arquivo que não pôde ser lido (PDF escaneado grande demais,
  * corrompido) fica marcado com `[[ARQUIVO ILEGÍVEL: nome]]` — a auditoria usa isso para

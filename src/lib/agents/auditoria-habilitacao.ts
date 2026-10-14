@@ -12,10 +12,11 @@ import { colocarNaFila, haVaga, iniciarProximasDaFila } from "@/lib/agents/audit
 import { densidadeDeHabilitacao, selecionarTrechosDeHabilitacao } from "@/lib/habilitacao-trechos";
 import { BATIMENTO_VIVO_MS, decidirAposFalha, MAX_CONTINUACOES_NA_CADEIA, MAX_PASSOS_LEITURA, MAX_PASSOS_SEM_AVANCO } from "@/lib/auditoria-politica";
 import { obterTextoBrutoDocumento } from "@/lib/agents/pdf-extract";
-import { MARCA_ILEGIVEL } from "@/lib/agents/arquivos-compactados";
+import { MARCA_ILEGIVEL, textoSoIlegivel } from "@/lib/agents/arquivos-compactados";
 import { dispararAuditoriaHabilitacao } from "@/lib/agents/auditoria-dispatch";
 import { notificarPrazosVencendo } from "@/lib/notifications";
 import { escolherMelhorDocumento } from "@/lib/documentos-empresa";
+import { comContextoIA } from "@/lib/ia-contexto";
 import {
   CATALOGO_DOCUMENTOS,
   CATEGORIAS_CATALOGO,
@@ -57,7 +58,11 @@ const LIMITE_ARQUIVO_MS = 22_000; // teto para baixar OU extrair um arquivo
 const FOLGA_NOVO_PEDACO_MS = 16_000; // começar mais um pedaço (Haiku)
 const FOLGA_NOVO_LOTE_MS = 24_000; // começar mais um lote de conferência (Sonnet)
 const PEDACOS_EM_PARALELO = 4;
-const LIMITE_PEDACOS_GRANDE = 8; // acima disso o edital é "muito grande" (lido em várias partes)
+// Pedaço de 45 mil caracteres num trecho cheio de exigências pedia uma resposta tão longa da IA que passava do
+// tempo da execução e era descartada — o mesmo pedaço estourava de novo a cada tentativa (gasto sem progresso).
+// Pedaços menores respondem dentro do prazo e o progresso é salvo a cada um.
+const TAMANHO_PEDACO = 30_000;
+const LIMITE_PEDACOS_GRANDE = 12; // acima disso o edital é "muito grande" (lido em várias partes)
 const FALHAS_ATE_DESISTIR_DO_ARQUIVO = 2; // tentativas (passos) antes de seguir sem um arquivo
 const NOME_AGENTE = "Auditor de Habilitação";
 
@@ -697,7 +702,9 @@ export async function executarAuditoriaHabilitacao(editalId: string, opts: Opcoe
 
   let resultado: ResultadoExecucao = "erro";
   try {
-    resultado = await rodar(editalId, { ...opts, continuacao }, restante, parar.signal);
+    resultado = await comContextoIA({ agente: "auditoria-habilitacao", editalId }, () =>
+      rodar(editalId, { ...opts, continuacao }, restante, parar.signal)
+    );
     return resultado;
   } catch (err) {
     await registrarFalha(editalId, err, opts.modo === "reconferir");
@@ -902,7 +909,9 @@ async function rodar(
   const aindaPendentes = lidos.filter((d) => !textos.has(d.id) && (progresso.falhas![d.id]?.n ?? 0) < FALHAS_ATE_DESISTIR_DO_ARQUIVO);
   if (aindaPendentes.length > 0) return passarAdiante();
 
-  if (textos.size === 0) {
+  // Texto que é só o aviso "arquivo ilegível" (ZIP corrompido etc.) não conta como leitura.
+  const comConteudo = [...textos.values()].filter((t) => !textoSoIlegivel(t)).length;
+  if (comConteudo === 0) {
     await salvar();
     throw lidos.length === 0
       ? new ErroTipado("SEM_DOCUMENTO", "Este edital não tem nenhum documento para ler.")
@@ -911,10 +920,10 @@ async function rodar(
 
   // 2. Só os trechos de habilitação vão para a IA; os mais relevantes são lidos primeiro.
   const pedacos: Pedaco[] = lidos
-    .filter((d) => textos.has(d.id))
+    .filter((d) => textos.has(d.id) && !textoSoIlegivel(textos.get(d.id)!))
     .flatMap((d) => {
       const selecionado = selecionarTrechosDeHabilitacao(textos.get(d.id)!);
-      const partes = dividirEmPedacos(selecionado.texto);
+      const partes = dividirEmPedacos(selecionado.texto, TAMANHO_PEDACO);
       return partes.map((p, i) => ({ docNome: d.nome, indice: i, total: partes.length, texto: p, densidade: densidadeDeHabilitacao(p) }));
     })
     .sort((a, b) => b.densidade - a.densidade);

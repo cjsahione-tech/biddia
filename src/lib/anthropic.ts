@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { comRetry, extrairJSON } from "@/lib/ia-erros";
 import { garantirIALiberada, registrarFalhaIA } from "@/lib/controle-ia";
+import { registrarConsumo } from "@/lib/consumo-ia";
 
 // Modelos usados pelos agentes.
 // - SONNET: raciocínio/exatidão que não pode escorregar (proposta financeira).
@@ -90,6 +91,7 @@ export async function askJSON<T>(
         opts.uso.entrada += message.usage?.input_tokens ?? 0;
         opts.uso.saida += message.usage?.output_tokens ?? 0;
       }
+      await registrarConsumo(opts?.model ?? MODELO_SONNET, message.usage);
 
       const block = message.content[0];
       if (!block || block.type !== "text") throw new Error("Resposta inesperada do modelo");
@@ -130,6 +132,7 @@ export async function askText(
     })
   );
 
+  await registrarConsumo(opts?.model ?? MODELO_SONNET, message.usage);
   const block = message.content[0];
   if (block.type !== "text") throw new Error("Resposta inesperada do modelo");
   return block.text.trim();
@@ -178,6 +181,7 @@ export async function conversarComFerramentas(
       })
     );
 
+    await registrarConsumo(opts?.model ?? MODELO_SONNET, message.usage);
     if (message.stop_reason !== "tool_use") {
       const texto = message.content
         .filter((b): b is Anthropic.TextBlock => b.type === "text")
@@ -214,6 +218,7 @@ export async function conversarComFerramentas(
       system: `${system}\n\nAs consultas já foram feitas — responda AGORA ao usuário com o que foi possível levantar ou gerar, e diga com clareza o que ficou faltando e por quê. Não chame mais ferramentas.`,
       messages: mensagens,
     });
+    await registrarConsumo(opts?.model ?? MODELO_SONNET, final.usage);
     const texto = final.content
       .filter((b): b is Anthropic.TextBlock => b.type === "text")
       .map((b) => b.text)
@@ -283,6 +288,7 @@ Este arquivo contém apenas as páginas ${opts.paginas.join(", ")} do documento 
       ],
     }));
 
+    await registrarConsumo(MODELO_HAIKU, message.usage);
     const block = message.content[0];
     if (block.type !== "text") return null;
     return block.text.trim() || null;
