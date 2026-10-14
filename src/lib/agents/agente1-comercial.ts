@@ -705,6 +705,7 @@ export async function capturarEditalManual(
       // O pipeline já roda na hora (mais abaixo) — o card entra direto em "Rascunho",
       // pronto pra revisão, em vez de "Oportunidade" (que é para quem ainda não decidiu).
       etapaKanban: "RASCUNHO",
+      movidoEm: new Date(),
       ordemKanban: Date.now(),
     },
   });

@@ -5,6 +5,7 @@ import { executarAgente1 } from "@/lib/agents/agente1-comercial";
 import { mapComLimite } from "@/lib/concorrencia";
 import { vigiarAuditorias } from "@/lib/agents/auditoria-fila";
 import { notificarNovosEditais } from "@/lib/notifications";
+import { excluirRascunhosVencidos } from "@/lib/rascunho-expiracao";
 
 // Roda o Agente Comercial para todas as empresas com alguma fonte de busca configurada
 // (palavras-chave do PNCP e/ou segmento do LicitaNet) e notifica por e-mail/WhatsApp
@@ -49,8 +50,12 @@ export async function GET(req: Request) {
   // Vigia: auditorias de habilitação travadas, com nova tentativa vencida ou guardadas por falta de saldo.
   const vigia = await vigiarAuditorias({ origem: new URL(req.url).origin, forcar: true }).catch(() => null);
 
+  // Limpeza: rascunhos com mais de 7 dias saem da base (o tempo que sobra da busca é usado aqui).
+  const limpeza = await excluirRascunhosVencidos({ ateMs: 15_000 }).catch(() => null);
+
   return NextResponse.json({
     vigia,
+    limpezaRascunhos: limpeza,
     empresasProcessadas: resultados.length,
     totalNovos: resultados.reduce((acc, r) => acc + r.novos, 0),
     resultados,

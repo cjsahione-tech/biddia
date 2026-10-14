@@ -97,7 +97,16 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     where: { id },
     // Qualquer arraste manual limpa o motivo de inatividade/exclusão (é a própria forma
     // de "recuperar" um card, sem precisar de UI dedicada) e conta como atividade.
-    data: { etapaKanban, ordemKanban, status: novoStatus, decidedAt, motivoMovimentacao: null, ultimaMovimentacao: new Date() },
+    // Entrar no Rascunho (mesmo arrastando) começa a contar os 7 dias até a exclusão automática.
+    data: {
+      etapaKanban,
+      ordemKanban,
+      status: novoStatus,
+      decidedAt,
+      motivoMovimentacao: null,
+      ultimaMovimentacao: new Date(),
+      ...(etapaMudou && etapaKanban === "RASCUNHO" ? { movidoEm: new Date() } : {}),
+    },
   });
 
   // A esteira é idempotente: se já está rodando ou já foi concluída, mover o card de novo

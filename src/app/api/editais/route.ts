@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { requireCompany } from "@/lib/api-utils";
 import { LIMITE_INATIVIDADE_MS } from "@/lib/kanban-atividade";
 import { vigiarAuditorias } from "@/lib/agents/auditoria-fila";
+import { excluirRascunhosVencidos } from "@/lib/rascunho-expiracao";
+import { filtroRascunhoVencido } from "@/lib/rascunho-prazo";
 
 export async function GET(req: Request) {
   const { company, error } = await requireCompany();
@@ -28,9 +30,14 @@ export async function GET(req: Request) {
     data: { etapaKanban: "RASCUNHO", motivoMovimentacao: "INATIVIDADE", movidoEm: new Date() },
   });
 
+  // Rascunho que passou de 7 dias é apagado de verdade (em segundo plano, aos poucos); enquanto isso
+  // já não aparece no quadro.
+  after(() => excluirRascunhosVencidos({ companyId: company!.id, ateMs: 25_000 }).then(() => undefined, () => undefined));
+
   const editais = await prisma.edital.findMany({
     where: {
       companyId: company!.id,
+      NOT: filtroRascunhoVencido(),
       ...(status ? { status: status as "NOVO" | "APROVADO" | "REPROVADO" } : {}),
     },
     // Ordem padrão fixa do quadro: data-limite de proposta mais próxima primeiro, em

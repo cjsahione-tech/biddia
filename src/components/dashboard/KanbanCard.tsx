@@ -3,6 +3,7 @@ import { AlertTriangle, ChevronDown, ChevronUp, Clock, MapPin, Paperclip, Sticky
 import { formatValorEdital, formatDate, formatDateTime } from "@/lib/format";
 import { faixaCorCard } from "@/lib/kanban";
 import { calcularEstadoInatividade } from "@/lib/kanban-atividade";
+import { diasRestantesRascunho } from "@/lib/rascunho-prazo";
 import type { EditalListItem } from "@/lib/types";
 import { SeloHabilitacao } from "@/components/editais/SeloHabilitacao";
 
@@ -105,6 +106,15 @@ export function KanbanCard({
             title="Sem atividade há mais de 36h — expira para Rascunho em 48h se ninguém mexer"
           >
             <Clock className="h-2.5 w-2.5" /> Quase expirando
+          </span>
+        )}
+        {edital.etapaKanban === "RASCUNHO" && (
+          <span
+            className="inline-flex items-center gap-0.5 rounded-full bg-danger/10 px-1.5 py-0.5 text-[10px] font-medium text-danger"
+            title="Rascunhos são apagados 7 dias depois de entrar aqui. Arraste o card para outra coluna para guardá-lo."
+          >
+            <Trash2 className="h-2.5 w-2.5" />{" "}
+            {diasRestantesRascunho(edital) === 0 ? "Exclui hoje" : `Exclui em ${diasRestantesRascunho(edital)} dia(s)`}
           </span>
         )}
         {edital.etapaKanban === "RASCUNHO" && edital.motivoMovimentacao && (
