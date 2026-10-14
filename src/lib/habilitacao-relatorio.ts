@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { CATEGORIAS_CATALOGO, itemPorChave } from "@/lib/catalogo-documentos";
+import { CATEGORIAS_CATALOGO, chaveEfetivaDoDocumento, itemPorChave, normalizarNomeTipo } from "@/lib/catalogo-documentos";
 import { calcularResultado, dataReferenciaDoEdital, type SituacaoExigencia } from "@/lib/habilitacao";
 import { classificarErro, ErroTipado, tipoDeMensagemAntiga, type TipoErroIA } from "@/lib/ia-erros";
 
@@ -15,6 +15,8 @@ export type ItemRelatorio = {
   catalogoChave: string | null;
   /** Este tipo de documento costuma ter validade (certidões, licenças) — marca a caixinha por padrão. */
   venceTipicamente: boolean;
+  /** Documento que a empresa já enviou para esta exigência (base de documentos), se houver. */
+  documentoEnviado: { nome: string; enviadoEm: string; validade: string | null } | null;
   situacao: SituacaoExigencia;
   /** Texto pronto: "Não enviado", "Vencido em 15/10/2026", "Verificar manualmente"... */
   situacaoTexto: string;
@@ -153,7 +155,22 @@ export async function montarRelatorioHabilitacao(
   });
   if (!edital) return null;
 
+  // Documentos que a empresa já enviou: cada exigência mostra "Enviado" quando há um para ela.
+  const docsEmpresa = await prisma.companyDocument.findMany({
+    where: { companyId },
+    select: { id: true, tipo: true, catalogoChave: true, nome: true, validade: true, createdAt: true },
+  });
+  const docEnviadoPara = (e: { documentoEmpresaId: string | null; catalogoChave: string | null; documento: string }) => {
+    const doc =
+      (e.documentoEmpresaId ? docsEmpresa.find((d) => d.id === e.documentoEmpresaId) : undefined) ??
+      (e.catalogoChave ? docsEmpresa.find((d) => chaveEfetivaDoDocumento(d) === e.catalogoChave) : undefined) ??
+      // Fora do catálogo: documento personalizado enviado com o nome da exigência.
+      (!e.catalogoChave ? docsEmpresa.find((d) => !chaveEfetivaDoDocumento(d) && normalizarNomeTipo(d.tipo) === normalizarNomeTipo(e.documento)) : undefined);
+    return doc ? { nome: doc.nome, enviadoEm: doc.createdAt.toISOString(), validade: doc.validade?.toISOString() ?? null } : null;
+  };
+
   const itens: ItemRelatorio[] = edital.exigenciasHabilitacao.map((e) => ({
+    documentoEnviado: docEnviadoPara(e),
     id: e.id,
     documento: e.documento,
     categoria: e.categoria,

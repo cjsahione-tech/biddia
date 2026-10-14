@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, CheckCircle2, Clock, Download, FileText, Loader2, MapPin, Paperclip, RefreshCw } from "lucide-react";
+import { AlertTriangle, Check, CheckCircle2, Clock, Download, FileText, Loader2, MapPin, Paperclip, RefreshCw } from "lucide-react";
 import { FormularioEnvioDocumento } from "@/components/documentos/FormularioEnvioDocumento";
 import { SeloHabilitacao } from "@/components/editais/SeloHabilitacao";
 import type { HabilitacaoStatusTipo } from "@/lib/types";
@@ -26,12 +26,34 @@ const dataBr = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString("
 function CartaoPendencia({ item, onAnexado }: { item: ItemRelatorio; onAnexado: () => void }) {
   const precisaEnviar = item.situacao === "NAO_ENVIADA" || item.situacao === "VENCIDA";
   const [anexando, setAnexando] = useState(false);
+  // "Enviado": vem do banco (documento já na base da empresa) ou, logo após o envio, do próprio clique.
+  const [enviadoAgora, setEnviadoAgora] = useState(false);
+  const enviado = item.documentoEnviado;
+  const mostrarEnviado = !!enviado || enviadoAgora;
+  const vencido = item.situacao === "VENCIDA";
   return (
     <div className="rounded-xl border border-border bg-background p-4">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <p className="min-w-0 flex-1 text-sm font-medium text-foreground">{item.documento}</p>
-        <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${ESTILO_SITUACAO[item.situacao]}`}>{item.situacaoTexto}</span>
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+          {mostrarEnviado && (
+            <span
+              className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${vencido ? "bg-warning/10 text-warning" : "bg-accent/10 text-accent"}`}
+              title="Este documento já está na base de documentos da empresa"
+            >
+              <Check className="h-3 w-3" /> {vencido ? "Enviado (vencido)" : "Enviado"}
+            </span>
+          )}
+          <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${ESTILO_SITUACAO[item.situacao]}`}>{item.situacaoTexto}</span>
+        </div>
       </div>
+      {mostrarEnviado && (
+        <p className="mt-1.5 text-xs text-muted">
+          {enviado
+            ? `${enviado.nome} — enviado em ${new Date(enviado.enviadoEm).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })}${enviado.validade ? ` · validade ${new Date(enviado.validade).toLocaleDateString("pt-BR", { timeZone: "UTC" })}` : ""}`
+            : "Documento salvo na base de documentos da empresa."}
+        </p>
+      )}
       {(item.localizacao || item.origem) && (
         <p className="mt-1.5 flex items-start gap-1.5 text-xs text-muted">
           <MapPin className="mt-0.5 h-3 w-3 shrink-0" />
@@ -53,7 +75,7 @@ function CartaoPendencia({ item, onAnexado }: { item: ItemRelatorio; onAnexado: 
             onClick={() => setAnexando(true)}
             className="inline-flex items-center gap-1.5 rounded-lg border border-brand/30 bg-brand-light/30 px-2.5 py-1 text-xs font-medium text-brand hover:bg-brand-light/60"
           >
-            <Paperclip className="h-3.5 w-3.5" /> {item.situacao === "VENCIDA" ? "Anexar versão atualizada" : "Anexar documento"}
+            <Paperclip className="h-3.5 w-3.5" /> {vencido ? "Anexar versão atualizada" : mostrarEnviado ? "Substituir documento" : "Anexar documento"}
           </button>
           {precisaEnviar && (
             <Link href="/documentos" className="inline-flex items-center gap-1 text-xs font-medium text-muted hover:text-foreground hover:underline">
@@ -70,9 +92,10 @@ function CartaoPendencia({ item, onAnexado }: { item: ItemRelatorio; onAnexado: 
           personalizado={!item.catalogoChave}
           tipoSugerido={item.documento}
           venceTipicamente={item.venceTipicamente}
-          titulo={`${item.situacao === "VENCIDA" ? "Anexar versão atualizada" : "Anexar documento"}: ${item.documento.slice(0, 90)}`}
+          titulo={`${vencido ? "Anexar versão atualizada" : mostrarEnviado ? "Substituir documento" : "Anexar documento"}: ${item.documento.slice(0, 90)}`}
           onConcluido={() => {
             setAnexando(false);
+            setEnviadoAgora(true);
             onAnexado();
           }}
           onCancelar={() => setAnexando(false)}
@@ -96,15 +119,18 @@ export function HabilitacaoTab({ editalId, etapa, onMudou }: { editalId: string;
   // reavalia a habilitação em segundo plano — recarrega algumas vezes para mostrar a pendência resolvida.
   async function aoAnexar() {
     setAvisoAnexo("Documento salvo na base de documentos da empresa. Reavaliando a habilitação deste edital…");
+    // Reavalia ESTE edital agora (mesmo com a sessão já encerrada) e só então recarrega o resultado.
+    await fetch(`/api/editais/${editalId}/habilitacao/reavaliar`, { method: "POST" }).catch(() => null);
     await carregar();
     onMudou?.();
-    for (const espera of [3000, 6000, 10000]) {
+    // Documento fora do catálogo é conferido pela IA em segundo plano (alguns segundos): recarrega por ~40s.
+    for (const espera of [3000, 6000, 10000, 16000, 24000, 40000]) {
       setTimeout(() => {
         carregar();
         onMudou?.();
       }, espera);
     }
-    setTimeout(() => setAvisoAnexo("Documento salvo na base de documentos da empresa — ele também vale para os próximos editais."), 10000);
+    setTimeout(() => setAvisoAnexo("Documento salvo na base de documentos da empresa — ele também vale para os próximos editais."), 40000);
   }
 
   // "Auditar agora" / "Tentar novamente": gasta IA, então pede confirmação mostrando o custo.
@@ -346,7 +372,14 @@ export function HabilitacaoTab({ editalId, etapa, onMudou }: { editalId: string;
           <ul className="space-y-2 border-t border-border px-4 py-3 text-sm">
             {relatorio.atendidas.map((i) => (
               <li key={i.id} className="flex flex-wrap items-start justify-between gap-2">
-                <span className="min-w-0 flex-1 text-foreground">{i.documento}</span>
+                <span className="min-w-0 flex-1 text-foreground">
+                  {i.documento}
+                  {i.documentoEnviado && (
+                    <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-accent/10 px-2 py-0.5 text-[10px] font-medium text-accent" title={i.documentoEnviado.nome}>
+                      <Check className="h-2.5 w-2.5" /> Enviado
+                    </span>
+                  )}
+                </span>
                 <span className="text-xs text-muted">
                   {i.localizacao ?? i.origem} · {i.validade ? `válido até ${new Date(i.validade).toLocaleDateString("pt-BR", { timeZone: "UTC" })}` : "não vence"}
                 </span>

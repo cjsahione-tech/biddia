@@ -14,6 +14,7 @@ const item = (n: number, over: Partial<ItemRelatorio> = {}): ItemRelatorio => ({
   categoria: "fiscal",
   catalogoChave: null,
   venceTipicamente: false,
+  documentoEnviado: null,
   situacao: "NAO_ENVIADA",
   situacaoTexto: "Não enviado",
   origem: "ANEXO I - TR.pdf",

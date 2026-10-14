@@ -1112,14 +1112,17 @@ async function registrarFalha(editalId: string, err: unknown, reconferindo: bool
  * conferência dos editais abertos já auditados. A parte de decidir validade é só conta (grátis);
  * quando há exigência fora do catálogo ainda pendente, pede também uma reconferência com a IA.
  */
-export async function reavaliarEditaisDaEmpresa(companyId: string, origem?: string) {
+export async function reavaliarEditaisDaEmpresa(companyId: string, origem?: string, opts: { editalId?: string } = {}) {
   const editais = await prisma.edital.findMany({
-    where: {
-      companyId,
-      etapaKanban: { not: "RASCUNHO" },
-      habilitacaoStatus: { in: ["HABILITADA", "HABILITADA_RESSALVAS", "NAO_HABILITADA"] },
-      OR: [{ dataEncerramentoProposta: null }, { dataEncerramentoProposta: { gt: new Date() } }],
-    },
+    where: opts.editalId
+      ? // Pedido para UM edital (o analista anexou um documento nele): reavalia mesmo com a sessão encerrada.
+        { id: opts.editalId, companyId, habilitacaoStatus: { in: ["HABILITADA", "HABILITADA_RESSALVAS", "NAO_HABILITADA"] } }
+      : {
+          companyId,
+          etapaKanban: { not: "RASCUNHO" },
+          habilitacaoStatus: { in: ["HABILITADA", "HABILITADA_RESSALVAS", "NAO_HABILITADA"] },
+          OR: [{ dataEncerramentoProposta: null }, { dataEncerramentoProposta: { gt: new Date() } }],
+        },
     select: { id: true, titulo: true, etapaKanban: true, dataAberturaProposta: true, dataEncerramentoProposta: true },
     take: 60,
   });
