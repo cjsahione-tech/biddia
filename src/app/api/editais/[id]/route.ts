@@ -13,7 +13,13 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     include: {
       analysis: true,
       proposal: true,
-      documents: { orderBy: { createdAt: "asc" } },
+      // Só os dados descritivos: NUNCA o conteúdo (conteudoBase64 / textoExtraido). Um edital com vários
+      // arquivos baixados passa de 30 MB e estoura o limite de ~4,5 MB de resposta da Vercel — a página
+      // do edital não abria. O download do arquivo tem rota própria (documents/[docId]/download).
+      documents: {
+        orderBy: { createdAt: "asc" },
+        select: { id: true, editalId: true, nome: true, tipo: true, categoria: true, status: true, validade: true, origemUrl: true, createdAt: true, updatedAt: true },
+      },
       checklistItems: { orderBy: { createdAt: "asc" } },
       auditLogs: { orderBy: { createdAt: "desc" } },
       agentRuns: { orderBy: { startedAt: "desc" } },
