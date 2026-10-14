@@ -2,7 +2,7 @@ import type { ChecklistStatus, HabilitacaoCategoria, Edital } from "@prisma/clie
 import { prisma } from "@/lib/prisma";
 import { askJSON, MODELO_HAIKU } from "@/lib/anthropic";
 import { withAgentRun, logAudit } from "@/lib/agents/run-tracker";
-import { dentroDaValidadeComMargem, FORMA_LABEL } from "@/lib/documentos-empresa";
+import { dentroDaValidadeComMargem, escolherMelhorDocumento, FORMA_LABEL } from "@/lib/documentos-empresa";
 import { CHECKLIST_BASE, CATEGORIA_BASE } from "@/lib/checklist-base";
 import { CHECKLIST_BASE_PARA_CATALOGO, chaveEfetivaDoDocumento } from "@/lib/catalogo-documentos";
 import { lerGruposHabilitacao } from "@/lib/analise-dados";
@@ -107,14 +107,18 @@ async function preencherChecklistComDossie(
   // conteúdo (base64) de todos os arquivos da empresa.
   const metadados = await prisma.companyDocument.findMany({
     where: { companyId: edital.companyId },
-    select: { id: true, tipo: true, catalogoChave: true },
+    select: { id: true, tipo: true, catalogoChave: true, validade: true, createdAt: true },
   });
   const idPorItem = new Map<string, string>();
   for (const item of itensBaseFaltantes) {
     const chaves = CHECKLIST_BASE_PARA_CATALOGO[item.documentoNome] ?? [];
+    // Com mais de um documento servindo ao item, usa o que está válido na data da sessão.
+    const candidatos = metadados.filter(
+      (d) => d.tipo === item.documentoNome || chaves.includes(chaveEfetivaDoDocumento(d) ?? "")
+    );
     const achado =
-      metadados.find((d) => d.tipo === item.documentoNome) ??
-      metadados.find((d) => chaves.includes(chaveEfetivaDoDocumento(d) ?? ""));
+      escolherMelhorDocumento(candidatos.filter((d) => d.tipo === item.documentoNome), dataReferencia) ??
+      escolherMelhorDocumento(candidatos, dataReferencia);
     if (achado) idPorItem.set(item.documentoNome, achado.id);
   }
   const docsDossie = await prisma.companyDocument.findMany({

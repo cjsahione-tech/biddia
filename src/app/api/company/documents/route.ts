@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { requireCompany } from "@/lib/api-utils";
 import { apagarAnexo } from "@/lib/storage";
 import { reavaliarEditaisDaEmpresa } from "@/lib/agents/auditoria-habilitacao";
-import { itemPorChave, chaveEfetivaDoDocumento } from "@/lib/catalogo-documentos";
+import { itemPorChave, chaveEfetivaDoDocumento, itemAceitaVarios, ehPastaValida } from "@/lib/catalogo-documentos";
 
 const CATEGORIAS = [
   "FISCAL_TRABALHISTA_ECONOMICO_FINANCEIRA_JURIDICA",
@@ -14,9 +14,10 @@ const CATEGORIAS = [
 ] as const;
 const FORMAS = ["COPIA_SIMPLES", "AUTENTICADO", "ASSINATURA_DIGITAL"] as const;
 
-// Mesmo teto do caminho pequeno (base64) do checklist — arquivos maiores usam o fluxo de
-// URL assinada (ver [docId]/upload-url/route.ts).
-const TAMANHO_MAXIMO_ANEXO_BASE64 = 3.5 * 1024 * 1024;
+// Teto do caminho pequeno (base64) — arquivos maiores usam o fluxo de URL assinada (ver
+// [docId]/upload-url/route.ts). O corpo da requisição na Vercel não passa de ~4,5MB e o base64 incha
+// o arquivo em ~33%: arquivo de até 3MB vira ~4MB no corpo, com folga para o resto do JSON.
+const TAMANHO_MAXIMO_ANEXO_BASE64 = 3 * 1024 * 1024;
 
 const schema = z.object({
   // Item do catálogo fixo (ver src/lib/catalogo-documentos.ts). Quando informado, o tipo e a
@@ -29,6 +30,12 @@ const schema = z.object({
   validade: z.string().optional().nullable(),
   nome: z.string().trim().min(1).max(200),
   conteudoBase64: z.string().min(1).optional(),
+  // Pasta (id do catálogo) em que um documento PERSONALIZADO fica; ignorada quando há catalogoChave.
+  pasta: z.string().max(40).optional().nullable(),
+  // Em itens que aceitam vários arquivos (atestados, certificados...): guarda MAIS UM em vez de substituir.
+  adicionar: z.boolean().optional(),
+  // Envio em lote: quem chama pede a conferência dos editais uma única vez, no fim (POST .../reavaliar).
+  semReavaliar: z.boolean().optional(),
 });
 
 export async function GET() {
@@ -49,11 +56,23 @@ export async function GET() {
       forma: true,
       dataEmissao: true,
       validade: true,
+      pasta: true,
       createdAt: true,
     },
   });
 
-  return NextResponse.json({ documentos });
+  // Em quantos editais cada documento está atendendo exigências (para o usuário ver que ele "trabalha").
+  const usosBrutos = documentos.length
+    ? await prisma.exigenciaHabilitacao.findMany({
+        where: { documentoEmpresaId: { in: documentos.map((d) => d.id) }, situacao: "ATENDIDA", edital: { companyId: company!.id } },
+        select: { documentoEmpresaId: true, editalId: true },
+        distinct: ["documentoEmpresaId", "editalId"],
+      })
+    : [];
+  const usos = new Map<string, number>();
+  for (const u of usosBrutos) if (u.documentoEmpresaId) usos.set(u.documentoEmpresaId, (usos.get(u.documentoEmpresaId) ?? 0) + 1);
+
+  return NextResponse.json({ documentos: documentos.map((d) => ({ ...d, usos: usos.get(d.id) ?? 0 })) });
 }
 
 /**
@@ -68,7 +87,8 @@ export async function POST(req: Request) {
   const body = await req.json().catch(() => null);
   const parsed = schema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Dados inválidos" }, { status: 400 });
-  const { catalogoChave, categoria: categoriaInformada, forma, dataEmissao, validade, nome, conteudoBase64 } = parsed.data;
+  const { catalogoChave, categoria: categoriaInformada, forma, dataEmissao, validade, nome, conteudoBase64, adicionar, semReavaliar } = parsed.data;
+  const pasta = ehPastaValida(parsed.data.pasta) ? parsed.data.pasta : null;
 
   const item = catalogoChave ? itemPorChave(catalogoChave) : undefined;
   if (catalogoChave && !item) return NextResponse.json({ error: "Item de documento desconhecido" }, { status: 400 });
@@ -98,9 +118,11 @@ export async function POST(req: Request) {
         where: { companyId: company!.id },
         select: { id: true, tipo: true, catalogoChave: true, storagePath: true },
       });
-      const anteriores = candidatos.filter((d) =>
-        item ? chaveEfetivaDoDocumento(d) === item.chave : d.tipo === tipo && !d.catalogoChave
-      );
+      // Item que aceita vários arquivos + "adicionar": nada é substituído, o novo entra ao lado dos outros.
+      const anteriores =
+        item && adicionar && itemAceitaVarios(item.chave)
+          ? []
+          : candidatos.filter((d) => (item ? chaveEfetivaDoDocumento(d) === item.chave : d.tipo === tipo && !d.catalogoChave));
       for (const anterior of anteriores) await tx.companyDocument.delete({ where: { id: anterior.id } });
 
       const criado = await tx.companyDocument.create({
@@ -109,6 +131,7 @@ export async function POST(req: Request) {
           tipo,
           categoria: categoria ?? null,
           catalogoChave: item?.chave ?? null,
+          pasta: item ? null : pasta,
           forma: forma ?? "COPIA_SIMPLES",
           dataEmissao: dataEmissao ? new Date(dataEmissao) : null,
           validade: validade ? new Date(validade) : null,
@@ -125,9 +148,11 @@ export async function POST(req: Request) {
 
   // A documentação mudou: refaz a conferência de habilitação dos editais abertos (em segundo plano).
   const origem = new URL(req.url).origin;
-  after(async () => {
-    await reavaliarEditaisDaEmpresa(company!.id, origem);
-  });
+  if (!semReavaliar) {
+    after(async () => {
+      await reavaliarEditaisDaEmpresa(company!.id, origem);
+    });
+  }
 
   // Não devolve o conteúdo do arquivo de volta (pode ter vários MB).
   const { conteudoBase64: _conteudo, ...documentoSemConteudo } = documento;

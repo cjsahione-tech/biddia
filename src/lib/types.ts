@@ -87,10 +87,14 @@ export type CompanyDocumentItem = {
   tipo: string;
   categoria: HabilitacaoCategoria | null;
   catalogoChave: string | null;
+  /** Pasta escolhida para um documento personalizado (null = "Outros"). */
+  pasta: string | null;
   nome: string;
   forma: FormaDocumento;
   dataEmissao: string | null;
   validade: string | null;
+  /** Em quantos editais este documento está atendendo exigências. */
+  usos?: number;
   createdAt: string;
 };
 

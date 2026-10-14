@@ -84,6 +84,14 @@ describe("avaliarTodas", () => {
     expect(r[0].observacao).toContain("confira");
   });
 
+  it("vários documentos no mesmo item: usa o que está válido na data da sessão, não o último enviado", () => {
+    const antigoValido = { ...doc("a1", "atestados-fornecimento", "2028-01-01"), createdAt: new Date("2026-01-01") };
+    const novoVencido = { ...doc("a2", "atestados-fornecimento", "2026-10-21"), createdAt: new Date("2026-09-01") }; // vence antes da margem
+    const r = avaliarTodas([exig({ chave: "atestados-fornecimento" })], [novoVencido, antigoValido], sessao);
+    expect(r[0].situacao).toBe("ATENDIDA");
+    expect(r[0].documentoEmpresaId).toBe("a1");
+  });
+
   it("exigência só para outro tipo de empresa: não se aplica; sem saber: verificar; vale: segue normal", () => {
     const r = avaliarTodas(
       [

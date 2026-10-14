@@ -583,6 +583,10 @@ model CompanyDocument {
   // catálogo existir — nesse caso o item é reconhecido pelo nome do tipo, sem reescrever nada.
   catalogoChave String?
 
+  // Pasta (id de CategoriaCatalogo, ex.: "fiscal") em que um documento PERSONALIZADO foi guardado.
+  // Documento de item do catálogo ignora este campo: a pasta é a do próprio item. null = "Outros".
+  pasta String?
+
   nome        String
   forma       FormaDocumento @default(COPIA_SIMPLES)
   dataEmissao DateTime?

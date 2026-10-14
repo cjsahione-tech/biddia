@@ -28,6 +28,21 @@ function adicionarDiasUteisUtc(data: Date, diasUteis: number): Date {
  * um documento que vence no dia seguinte à abertura passaria como "válido" hoje e viraria
  * pendência crítica de última hora.
  */
+/**
+ * Entre vários documentos do MESMO item (ex.: três atestados), escolhe o que a licitação deve usar:
+ * um que ainda esteja válido na data de referência (o mais recente deles); se nenhum estiver, o mais
+ * recente — que a conferência vai marcar como vencido. Sem data, usa hoje.
+ */
+export function escolherMelhorDocumento<T extends { validade: Date | null; createdAt?: Date; updatedAt?: Date }>(
+  docs: T[],
+  dataReferencia: Date = new Date()
+): T | null {
+  if (docs.length === 0) return null;
+  const instante = (d: T) => (d.createdAt ?? d.updatedAt ?? new Date(0)).getTime();
+  const maisRecenteDePrimeiro = [...docs].sort((a, b) => instante(b) - instante(a));
+  return maisRecenteDePrimeiro.find((d) => dentroDaValidadeComMargem(d.validade, dataReferencia)) ?? maisRecenteDePrimeiro[0];
+}
+
 export function dentroDaValidadeComMargem(
   validade: Date | null,
   dataReferencia: Date,

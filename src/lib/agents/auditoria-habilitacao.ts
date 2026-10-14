@@ -15,6 +15,7 @@ import { obterTextoBrutoDocumento } from "@/lib/agents/pdf-extract";
 import { MARCA_ILEGIVEL } from "@/lib/agents/arquivos-compactados";
 import { dispararAuditoriaHabilitacao } from "@/lib/agents/auditoria-dispatch";
 import { notificarPrazosVencendo } from "@/lib/notifications";
+import { escolherMelhorDocumento } from "@/lib/documentos-empresa";
 import {
   CATALOGO_DOCUMENTOS,
   CATEGORIAS_CATALOGO,
@@ -191,6 +192,7 @@ type DocEmpresa = {
   nome: string;
   catalogoChave: string | null;
   validade: Date | null;
+  createdAt?: Date;
   updatedAt: Date;
 };
 
@@ -212,7 +214,7 @@ type Final = {
 async function carregarDocsDaEmpresa(companyId: string): Promise<DocEmpresa[]> {
   return prisma.companyDocument.findMany({
     where: { companyId },
-    select: { id: true, tipo: true, nome: true, catalogoChave: true, validade: true, updatedAt: true },
+    select: { id: true, tipo: true, nome: true, catalogoChave: true, validade: true, createdAt: true, updatedAt: true },
     orderBy: { createdAt: "desc" },
   });
 }
@@ -225,12 +227,20 @@ async function carregarFatosDaEmpresa(companyId: string): Promise<FatosEmpresa> 
   return { razaoSocial: c.razaoSocial, natureza: inferirNaturezaPelaRazaoSocial(c.razaoSocial), regime: c.regimeTributarioPadrao, atendeBem: c.atendeBem, atendeServico: c.atendeServico };
 }
 
-/** Documento da empresa por item do catálogo (o mais recente de cada item). */
-function indexarPorChave(docs: DocEmpresa[]): Map<string, DocEmpresa> {
-  const mapa = new Map<string, DocEmpresa>();
+/**
+ * Documento da empresa por item do catálogo. Com vários no mesmo item (atestados, certificados...),
+ * vale o que ainda está válido na data da sessão (o mais recente deles); senão, o mais recente.
+ */
+function indexarPorChave(docs: DocEmpresa[], dataReferencia?: Date): Map<string, DocEmpresa> {
+  const grupos = new Map<string, DocEmpresa[]>();
   for (const d of docs) {
     const chave = chaveEfetivaDoDocumento(d);
-    if (chave && !mapa.has(chave)) mapa.set(chave, d);
+    if (chave) grupos.set(chave, [...(grupos.get(chave) ?? []), d]);
+  }
+  const mapa = new Map<string, DocEmpresa>();
+  for (const [chave, lista] of grupos) {
+    const escolhido = escolherMelhorDocumento(lista, dataReferencia);
+    if (escolhido) mapa.set(chave, escolhido);
   }
   return mapa;
 }
@@ -423,7 +433,7 @@ export function avaliarTodas(
   docs: DocEmpresa[],
   dataReferencia: Date
 ): LinhaAvaliada[] {
-  const porChave = indexarPorChave(docs);
+  const porChave = indexarPorChave(docs, dataReferencia);
   const porId = new Map(docs.map((d) => [d.id, d]));
 
   return finais.map((f, i) => {

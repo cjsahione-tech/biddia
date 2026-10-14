@@ -1,19 +1,35 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Plus, Download, Trash2, Loader2, ChevronDown, ChevronRight, Upload, RefreshCw, CalendarDays, Info } from "lucide-react";
+import {
+  Plus,
+  Download,
+  Trash2,
+  Loader2,
+  ChevronDown,
+  ChevronRight,
+  Upload,
+  RefreshCw,
+  CalendarDays,
+  Info,
+  FolderInput,
+  Files,
+} from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import {
   CATEGORIAS_CATALOGO,
   CATALOGO_DOCUMENTOS,
   ROTULO_APLICACAO,
   chaveEfetivaDoDocumento,
+  itemAceitaVarios,
   itensDaCategoria,
+  pastaDoDocumento,
   type Aplicacao,
   type ItemCatalogo,
 } from "@/lib/catalogo-documentos";
 import type { CompanyDocumentItem } from "@/lib/types";
 import { FormularioEnvioDocumento, FORMA_LABEL } from "@/components/documentos/FormularioEnvioDocumento";
+import { EnvioEmLote } from "@/components/documentos/EnvioEmLote";
 
 type Filtro = "TODOS" | "P" | "S";
 
@@ -43,18 +59,118 @@ function ChipAplicacao({ aplicacao }: { aplicacao: Aplicacao }) {
 }
 
 type Edicao =
-  | { chave: string; modo: "enviar" | "validade" }
-  | { personalizado: true }
+  // Ação sobre um ITEM do catálogo: enviar/substituir o arquivo, ou adicionar mais um (itens que aceitam vários).
+  | { chave: string; modo: "enviar" | "adicionar" }
+  // Ação sobre UM documento.
+  | { docId: string; modo: "validade" | "mover" }
+  // Documento personalizado numa pasta (pasta null = "Outros").
+  | { personalizado: true; pasta: string | null }
   | null;
+
+const selectClass =
+  "mt-1 block w-full rounded-lg border border-border bg-background px-2 py-1.5 text-sm text-foreground focus:border-brand focus:outline-none";
+
+/** Mover um documento para outra pasta/item. Documento de item do catálogo só troca de item; o personalizado também pode só mudar de pasta. */
+function MoverDocumento({
+  doc,
+  onConcluido,
+  onCancelar,
+}: {
+  doc: CompanyDocumentItem;
+  onConcluido: () => void;
+  onCancelar: () => void;
+}) {
+  const chaveAtual = chaveEfetivaDoDocumento(doc);
+  const [pasta, setPasta] = useState<string>(pastaDoDocumento(doc) ?? "");
+  const [item, setItem] = useState<string>(chaveAtual ?? "");
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+  const permiteSemItem = !chaveAtual;
+  const itens = pasta ? itensDaCategoria(pasta as never) : [];
+
+  async function salvar() {
+    if (!item && !permiteSemItem) {
+      setErro("Escolha o item de destino.");
+      return;
+    }
+    setSalvando(true);
+    setErro(null);
+    try {
+      const res = await fetch(`/api/company/documents/${doc.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(item ? { catalogoChave: item } : { pasta: pasta || null }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        setErro(data?.error ?? "Não foi possível mover o documento.");
+        return;
+      }
+      onConcluido();
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  return (
+    <div className="my-2 rounded-xl border border-brand/30 bg-brand-light/20 p-4">
+      <p className="text-sm font-semibold text-foreground">Mover “{doc.nome}”</p>
+      <p className="mt-0.5 text-xs text-muted">
+        É o item que decide em quais editais o documento será usado. Ao mover, os editais abertos são conferidos de novo.
+      </p>
+      <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <label className="text-xs text-muted">
+          Pasta
+          <select
+            className={selectClass}
+            value={pasta}
+            onChange={(e) => {
+              setPasta(e.target.value);
+              setItem("");
+            }}
+          >
+            <option value="">Outros</option>
+            {CATEGORIAS_CATALOGO.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.titulo}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="text-xs text-muted">
+          Item
+          <select className={selectClass} value={item} onChange={(e) => setItem(e.target.value)}>
+            {permiteSemItem ? <option value="">Só mudar de pasta (continua personalizado)</option> : <option value="">Escolha…</option>}
+            {itens.map((i) => (
+              <option key={i.chave} value={i.chave}>
+                {i.nome.length > 70 ? `${i.nome.slice(0, 67)}…` : i.nome}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      {erro && <p className="mt-2 text-xs text-danger">{erro}</p>}
+      <div className="mt-3 flex justify-end gap-2">
+        <Button variant="secondary" onClick={onCancelar}>
+          Cancelar
+        </Button>
+        <Button onClick={salvar} loading={salvando}>
+          Mover
+        </Button>
+      </div>
+    </div>
+  );
+}
 
 export function DocumentosClient() {
   const [documentos, setDocumentos] = useState<CompanyDocumentItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [erroCarga, setErroCarga] = useState<string | null>(null);
   const [filtro, setFiltro] = useState<Filtro>("TODOS");
-  // Todas as categorias começam minimizadas.
+  // Todas as pastas começam minimizadas.
   const [abertas, setAbertas] = useState<Set<string>>(new Set());
   const [edicao, setEdicao] = useState<Edicao>(null);
+  const [emLote, setEmLote] = useState(false);
   const [removendoId, setRemovendoId] = useState<string | null>(null);
   const [classificandoId, setClassificandoId] = useState<string | null>(null);
 
@@ -77,18 +193,21 @@ export function DocumentosClient() {
     load();
   }, []);
 
-  // Um documento por item do catálogo (o mais recente); o que não casa com nenhum item vai
-  // para "Outros" — inclusive documentos antigos com tipo livre, que continuam todos aqui.
-  const { porChave, outros } = useMemo(() => {
-    const mapa = new Map<string, CompanyDocumentItem>();
-    const resto: CompanyDocumentItem[] = [];
+  // Documentos por item do catálogo (mais recente primeiro) e personalizados por pasta. O que não casa
+  // com nenhum item — inclusive documentos antigos com tipo livre — fica na pasta escolhida ou em "Outros".
+  const { porChave, personalizadosPorPasta } = useMemo(() => {
+    const mapa = new Map<string, CompanyDocumentItem[]>();
+    const livres = new Map<string, CompanyDocumentItem[]>();
     const ordenados = [...documentos].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     for (const d of ordenados) {
       const chave = chaveEfetivaDoDocumento(d);
-      if (chave && !mapa.has(chave)) mapa.set(chave, d);
-      else resto.push(d);
+      if (chave) mapa.set(chave, [...(mapa.get(chave) ?? []), d]);
+      else {
+        const pasta = pastaDoDocumento(d) ?? "";
+        livres.set(pasta, [...(livres.get(pasta) ?? []), d]);
+      }
     }
-    return { porChave: mapa, outros: resto };
+    return { porChave: mapa, personalizadosPorPasta: livres };
   }, [documentos]);
 
   const visivel = (i: ItemCatalogo) => filtro === "TODOS" || i.aplicacao === "PS" || i.aplicacao === filtro;
@@ -106,7 +225,7 @@ export function DocumentosClient() {
   }
 
   async function remover(doc: CompanyDocumentItem) {
-    if (!confirm(`Remover "${doc.tipo}"? Isso não afeta checklists já preenchidos com ele.`)) return;
+    if (!confirm(`Remover "${doc.tipo}" (${doc.nome})? Isso não afeta checklists já preenchidos com ele.`)) return;
     setRemovendoId(doc.id);
     try {
       const res = await fetch(`/api/company/documents/${doc.id}`, { method: "DELETE" });
@@ -142,9 +261,12 @@ export function DocumentosClient() {
     load();
   }
 
+  const editandoDoc = (doc: CompanyDocumentItem) => (edicao && "docId" in edicao && edicao.docId === doc.id ? edicao : null);
+
   // Funções de desenho (não componentes): um componente criado aqui dentro seria recriado a cada
   // renderização e apagaria o que o usuário digitou no formulário aberto.
-  function botoesDoc(doc: CompanyDocumentItem, chave?: string) {
+  function botoesDoc(doc: CompanyDocumentItem, item?: ItemCatalogo) {
+    const podeSubstituir = !!item && !itemAceitaVarios(item.chave);
     return (
       <div className="flex items-center gap-1.5">
         <a
@@ -156,24 +278,29 @@ export function DocumentosClient() {
         >
           <Download className="h-4 w-4" />
         </a>
-        {chave && (
-          <>
-            <button
-              onClick={() => setEdicao({ chave, modo: "validade" })}
-              className="rounded-md p-1.5 text-muted hover:bg-surface hover:text-brand"
-              title="Alterar validade"
-            >
-              <CalendarDays className="h-4 w-4" />
-            </button>
-            <button
-              onClick={() => setEdicao({ chave, modo: "enviar" })}
-              className="rounded-md p-1.5 text-muted hover:bg-surface hover:text-brand"
-              title="Substituir arquivo"
-            >
-              <RefreshCw className="h-4 w-4" />
-            </button>
-          </>
+        <button
+          onClick={() => setEdicao({ docId: doc.id, modo: "validade" })}
+          className="rounded-md p-1.5 text-muted hover:bg-surface hover:text-brand"
+          title="Alterar validade"
+        >
+          <CalendarDays className="h-4 w-4" />
+        </button>
+        {podeSubstituir && (
+          <button
+            onClick={() => setEdicao({ chave: item.chave, modo: "enviar" })}
+            className="rounded-md p-1.5 text-muted hover:bg-surface hover:text-brand"
+            title="Substituir arquivo"
+          >
+            <RefreshCw className="h-4 w-4" />
+          </button>
         )}
+        <button
+          onClick={() => setEdicao({ docId: doc.id, modo: "mover" })}
+          className="rounded-md p-1.5 text-muted hover:bg-surface hover:text-brand"
+          title="Mover para outra pasta/item"
+        >
+          <FolderInput className="h-4 w-4" />
+        </button>
         <button
           onClick={() => remover(doc)}
           disabled={removendoId === doc.id}
@@ -186,9 +313,106 @@ export function DocumentosClient() {
     );
   }
 
-  function linhaItem(item: ItemCatalogo) {
-    const doc = porChave.get(item.chave);
+  function chipsDoDocumento(doc: CompanyDocumentItem) {
     const sit = situacao(doc);
+    return (
+      <>
+        <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${sit.className}`}>
+          {sit.label}
+          {sit.detalhe && <span className="ml-1 font-normal">· {sit.detalhe}</span>}
+        </span>
+        {!!doc.usos && (
+          <span
+            className="inline-flex items-center rounded-full bg-brand-light px-2.5 py-1 text-xs font-medium text-brand"
+            title="Em quantos editais este documento está atendendo exigências de habilitação"
+          >
+            Atende {doc.usos} edital(is)
+          </span>
+        )}
+      </>
+    );
+  }
+
+  function formulariosDoDocumento(doc: CompanyDocumentItem) {
+    const e = editandoDoc(doc);
+    if (!e) return null;
+    return e.modo === "validade" ? (
+      <FormularioEnvioDocumento
+        documentoAtual={doc}
+        soValidade
+        titulo="Alterar validade"
+        onConcluido={aposSalvar}
+        onCancelar={() => setEdicao(null)}
+      />
+    ) : (
+      <MoverDocumento doc={doc} onConcluido={aposSalvar} onCancelar={() => setEdicao(null)} />
+    );
+  }
+
+  function linhaPersonalizado(doc: CompanyDocumentItem) {
+    return (
+      <div key={doc.id} className="border-b border-border py-3 last:border-0">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium text-foreground">{doc.tipo}</p>
+            <p className="truncate text-xs text-muted">
+              {doc.nome} · {FORMA_LABEL[doc.forma]}
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {chipsDoDocumento(doc)}
+            <select
+              aria-label={`Classificar ${doc.tipo} como item do catálogo`}
+              value=""
+              disabled={classificandoId === doc.id}
+              onChange={(e) => classificar(doc, e.target.value)}
+              className="max-w-[12rem] rounded-md border border-border bg-background px-2 py-1 text-xs text-foreground"
+            >
+              <option value="">Classificar como…</option>
+              {CATALOGO_DOCUMENTOS.filter((i) => itemAceitaVarios(i.chave) || !porChave.has(i.chave)).map((i) => (
+                <option key={i.chave} value={i.chave}>
+                  {i.nome.length > 60 ? `${i.nome.slice(0, 57)}…` : i.nome}
+                </option>
+              ))}
+            </select>
+            {botoesDoc(doc)}
+          </div>
+        </div>
+        {formulariosDoDocumento(doc)}
+      </div>
+    );
+  }
+
+  function blocoPersonalizados(pasta: string, vazioTexto: string | null) {
+    const lista = personalizadosPorPasta.get(pasta) ?? [];
+    const abrindoAqui = edicao && "personalizado" in edicao && (edicao.pasta ?? "") === pasta;
+    return (
+      <>
+        {lista.map((doc) => linhaPersonalizado(doc))}
+        {lista.length === 0 && !abrindoAqui && vazioTexto && <p className="py-4 text-sm text-muted">{vazioTexto}</p>}
+        {abrindoAqui ? (
+          <FormularioEnvioDocumento
+            personalizado
+            pastaInicial={pasta || null}
+            titulo="Adicionar documento personalizado"
+            onConcluido={aposSalvar}
+            onCancelar={() => setEdicao(null)}
+          />
+        ) : (
+          <div className="py-3">
+            <Button variant="secondary" onClick={() => setEdicao({ personalizado: true, pasta: pasta || null })}>
+              <Plus className="h-4 w-4" /> Adicionar documento personalizado
+            </Button>
+          </div>
+        )}
+      </>
+    );
+  }
+
+  function linhaItem(item: ItemCatalogo) {
+    const docs = porChave.get(item.chave) ?? [];
+    const varios = itemAceitaVarios(item.chave);
+    const doc = docs[0];
     const editandoAqui = edicao && "chave" in edicao && edicao.chave === item.chave ? edicao : null;
     return (
       <div className="border-b border-border py-3 last:border-0">
@@ -204,39 +428,69 @@ export function DocumentosClient() {
                 <Info className="mt-0.5 h-3 w-3 shrink-0" /> {item.nota}
               </p>
             )}
-            {doc && (
+            {varios && (
+              <p className="mt-1 flex items-start gap-1 pl-9 text-xs text-muted/90">
+                <Files className="mt-0.5 h-3 w-3 shrink-0" /> Aceita vários arquivos — em cada edital, o sistema usa o que estiver
+                válido na data da sessão.
+              </p>
+            )}
+            {!varios && doc && (
               <p className="mt-1 truncate pl-9 text-xs text-muted">
                 {doc.nome} · {FORMA_LABEL[doc.forma]}
               </p>
             )}
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${sit.className}`}>
-              {sit.label}
-              {sit.detalhe && <span className="ml-1 font-normal">· {sit.detalhe}</span>}
-            </span>
-            {doc ? (
-              botoesDoc(doc, item.chave)
-            ) : (
-              <Button variant="secondary" onClick={() => setEdicao({ chave: item.chave, modo: "enviar" })}>
-                <Upload className="h-3.5 w-3.5" /> Enviar
+            {!varios && doc && chipsDoDocumento(doc)}
+            {!varios && doc && botoesDoc(doc, item)}
+            {varios && docs.length === 0 && (
+              <span className="inline-flex items-center rounded-full bg-muted/10 px-2.5 py-1 text-xs font-medium text-muted">
+                Não enviado
+              </span>
+            )}
+            {varios && (
+              <Button variant="secondary" onClick={() => setEdicao({ chave: item.chave, modo: "adicionar" })}>
+                <Upload className="h-3.5 w-3.5" /> {docs.length === 0 ? "Enviar" : "Adicionar outro"}
               </Button>
+            )}
+            {!varios && !doc && (
+              <>
+                <span className="inline-flex items-center rounded-full bg-muted/10 px-2.5 py-1 text-xs font-medium text-muted">
+                  Não enviado
+                </span>
+                <Button variant="secondary" onClick={() => setEdicao({ chave: item.chave, modo: "enviar" })}>
+                  <Upload className="h-3.5 w-3.5" /> Enviar
+                </Button>
+              </>
             )}
           </div>
         </div>
+        {!varios && doc && formulariosDoDocumento(doc)}
+        {varios && (
+          <ul className="mt-2 space-y-1 pl-9">
+            {docs.map((d) => (
+              <li key={d.id} className="rounded-lg bg-surface/50 px-3 py-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="min-w-0 flex-1 truncate text-xs text-foreground">
+                    {d.nome} <span className="text-muted">· {FORMA_LABEL[d.forma]}</span>
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {chipsDoDocumento(d)}
+                    {botoesDoc(d, item)}
+                  </div>
+                </div>
+                {formulariosDoDocumento(d)}
+              </li>
+            ))}
+          </ul>
+        )}
         {editandoAqui && (
           <FormularioEnvioDocumento
             catalogoChave={item.chave}
-            documentoAtual={doc}
-            soValidade={editandoAqui.modo === "validade"}
+            documentoAtual={editandoAqui.modo === "enviar" ? doc : undefined}
+            adicionar={editandoAqui.modo === "adicionar"}
             venceTipicamente={item.vence}
-            titulo={
-              editandoAqui.modo === "validade"
-                ? "Alterar validade"
-                : doc
-                  ? "Substituir arquivo"
-                  : "Enviar documento"
-            }
+            titulo={editandoAqui.modo === "adicionar" ? "Adicionar documento" : doc ? "Substituir arquivo" : "Enviar documento"}
             onConcluido={aposSalvar}
             onCancelar={() => setEdicao(null)}
           />
@@ -244,9 +498,6 @@ export function DocumentosClient() {
       </div>
     );
   }
-
-  const personalizadoAberto = edicao !== null && "personalizado" in edicao;
-  const chavesLivres = CATALOGO_DOCUMENTOS.filter((i) => !porChave.has(i.chave));
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8 lg:py-10">
@@ -276,10 +527,28 @@ export function DocumentosClient() {
             </button>
           ))}
         </div>
-        <p className="text-sm text-muted">
-          <strong className="text-foreground">{totalEnviados}</strong> de {itensVisiveis.length} documentos enviados
-        </p>
+        <div className="flex flex-wrap items-center gap-3">
+          <p className="text-sm text-muted">
+            <strong className="text-foreground">{totalEnviados}</strong> de {itensVisiveis.length} documentos enviados
+          </p>
+          {!emLote && (
+            <Button onClick={() => setEmLote(true)}>
+              <Upload className="h-4 w-4" /> Enviar documentos
+            </Button>
+          )}
+        </div>
       </div>
+
+      {emLote && (
+        <EnvioEmLote
+          documentos={documentos}
+          onConcluido={load}
+          onFechar={() => {
+            setEmLote(false);
+            load();
+          }}
+        />
+      )}
 
       {erroCarga && <p className="mt-4 text-sm text-danger">{erroCarga}</p>}
 
@@ -293,6 +562,7 @@ export function DocumentosClient() {
             const itens = itensDaCategoria(cat.id).filter(visivel);
             if (itens.length === 0) return null;
             const enviados = itens.filter((i) => porChave.has(i.chave)).length;
+            const extras = personalizadosPorPasta.get(cat.id)?.length ?? 0;
             const aberta = abertas.has(cat.id);
             return (
               <section key={cat.id} className="rounded-2xl border border-border">
@@ -313,7 +583,7 @@ export function DocumentosClient() {
                     </span>
                   </span>
                   <span className="shrink-0 rounded-full bg-surface px-2.5 py-1 text-xs font-medium text-muted">
-                    {enviados} de {itens.length} enviados
+                    {enviados} de {itens.length} enviados{extras > 0 ? ` · +${extras} personalizado(s)` : ""}
                   </span>
                 </button>
                 {aberta && (
@@ -326,6 +596,10 @@ export function DocumentosClient() {
                     {itens.map((item) => (
                       <div key={item.chave}>{linhaItem(item)}</div>
                     ))}
+                    {(extras > 0 || (edicao && "personalizado" in edicao && edicao.pasta === cat.id)) && (
+                      <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-muted">Personalizados desta pasta</p>
+                    )}
+                    {blocoPersonalizados(cat.id, null)}
                   </div>
                 )}
               </section>
@@ -350,63 +624,11 @@ export function DocumentosClient() {
                 </span>
               </span>
               <span className="shrink-0 rounded-full bg-surface px-2.5 py-1 text-xs font-medium text-muted">
-                {outros.length} documento(s)
+                {(personalizadosPorPasta.get("") ?? []).length} documento(s)
               </span>
             </button>
             {abertas.has("outros") && (
-              <div className="border-t border-border px-4 pb-3">
-                {outros.map((doc) => {
-                  const sit = situacao(doc);
-                  return (
-                    <div key={doc.id} className="flex flex-wrap items-center justify-between gap-3 border-b border-border py-3 last:border-0">
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-foreground">{doc.tipo}</p>
-                        <p className="truncate text-xs text-muted">
-                          {doc.nome} · {FORMA_LABEL[doc.forma]}
-                        </p>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${sit.className}`}>
-                          {sit.label}
-                          {sit.detalhe && <span className="ml-1 font-normal">· {sit.detalhe}</span>}
-                        </span>
-                        <select
-                          aria-label={`Classificar ${doc.tipo} como item do catálogo`}
-                          value=""
-                          disabled={classificandoId === doc.id}
-                          onChange={(e) => classificar(doc, e.target.value)}
-                          className="max-w-[12rem] rounded-md border border-border bg-background px-2 py-1 text-xs text-foreground"
-                        >
-                          <option value="">Classificar como…</option>
-                          {chavesLivres.map((i) => (
-                            <option key={i.chave} value={i.chave}>
-                              {i.nome.length > 60 ? `${i.nome.slice(0, 57)}…` : i.nome}
-                            </option>
-                          ))}
-                        </select>
-                        botoesDoc(doc)
-                      </div>
-                    </div>
-                  );
-                })}
-                {outros.length === 0 && !personalizadoAberto && (
-                  <p className="py-4 text-sm text-muted">Nenhum documento personalizado ainda.</p>
-                )}
-                {personalizadoAberto ? (
-                  <FormularioEnvioDocumento
-                    personalizado
-                    titulo="Adicionar documento personalizado"
-                    onConcluido={aposSalvar}
-                    onCancelar={() => setEdicao(null)}
-                  />
-                ) : (
-                  <div className="pt-3">
-                    <Button variant="secondary" onClick={() => setEdicao({ personalizado: true })}>
-                      <Plus className="h-4 w-4" /> Adicionar documento personalizado
-                    </Button>
-                  </div>
-                )}
-              </div>
+              <div className="border-t border-border px-4">{blocoPersonalizados("", "Nenhum documento personalizado ainda.")}</div>
             )}
           </section>
         </div>

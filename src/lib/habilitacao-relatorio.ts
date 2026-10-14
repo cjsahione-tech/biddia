@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { CATEGORIAS_CATALOGO, chaveEfetivaDoDocumento, itemPorChave, normalizarNomeTipo } from "@/lib/catalogo-documentos";
+import { escolherMelhorDocumento } from "@/lib/documentos-empresa";
 import { calcularResultado, dataReferenciaDoEdital, type SituacaoExigencia } from "@/lib/habilitacao";
 import { classificarErro, ErroTipado, tipoDeMensagemAntiga, type TipoErroIA } from "@/lib/ia-erros";
 
@@ -163,7 +164,7 @@ export async function montarRelatorioHabilitacao(
   const docEnviadoPara = (e: { documentoEmpresaId: string | null; catalogoChave: string | null; documento: string }) => {
     const doc =
       (e.documentoEmpresaId ? docsEmpresa.find((d) => d.id === e.documentoEmpresaId) : undefined) ??
-      (e.catalogoChave ? docsEmpresa.find((d) => chaveEfetivaDoDocumento(d) === e.catalogoChave) : undefined) ??
+      (e.catalogoChave ? escolherMelhorDocumento(docsEmpresa.filter((d) => chaveEfetivaDoDocumento(d) === e.catalogoChave)) ?? undefined : undefined) ??
       // Fora do catálogo: documento personalizado enviado com o nome da exigência.
       (!e.catalogoChave ? docsEmpresa.find((d) => !chaveEfetivaDoDocumento(d) && normalizarNomeTipo(d.tipo) === normalizarNomeTipo(e.documento)) : undefined);
     return doc ? { nome: doc.nome, enviadoEm: doc.createdAt.toISOString(), validade: doc.validade?.toISOString() ?? null } : null;

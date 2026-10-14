@@ -4,36 +4,15 @@ import { useState } from "react";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Field, TextInput, Select } from "@/components/ui/Field";
+import { CATEGORIAS_CATALOGO } from "@/lib/catalogo-documentos";
 import type { CompanyDocumentItem, FormaDocumento } from "@/lib/types";
-
-// Mesmos tetos usados no checklist: arquivo pequeno vai embutido em base64 no corpo da
-// requisição; acima disso, vai direto pro Storage via URL assinada (ver upload-url).
-const TAMANHO_MAXIMO_BASE64 = 3.5 * 1024 * 1024;
-const TAMANHO_MAXIMO_ANEXO = 25 * 1024 * 1024;
+import { enviarDocumento, TAMANHO_MAXIMO_ANEXO } from "@/components/documentos/enviar-documento";
 
 export const FORMA_LABEL: Record<FormaDocumento, string> = {
   COPIA_SIMPLES: "Cópia simples",
   AUTENTICADO: "Autenticado em cartório",
   ASSINATURA_DIGITAL: "Assinatura digital (ICP-Brasil)",
 };
-
-function lerComoBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(file);
-  });
-}
-
-async function enviarParaStorage(signedUrl: string, file: File) {
-  const res = await fetch(signedUrl, {
-    method: "PUT",
-    headers: { "Content-Type": file.type || "application/octet-stream" },
-    body: file,
-  });
-  if (!res.ok) throw new Error(`Falha no upload para o armazenamento (${res.status}).`);
-}
 
 function paraInputData(iso: string | null): string {
   return iso ? iso.slice(0, 10) : "";
@@ -42,13 +21,17 @@ function paraInputData(iso: string | null): string {
 type Props = {
   /** Item do catálogo a que o arquivo pertence — o servidor define tipo e categoria a partir dele. */
   catalogoChave?: string;
-  /** true = documento personalizado: pede o nome/tipo livre (grupo "Outros"). */
+  /** true = documento personalizado: pede o nome/tipo livre e a pasta. */
   personalizado?: boolean;
+  /** Pasta já escolhida para o documento personalizado (a pasta em que o botão foi clicado). */
+  pastaInicial?: string | null;
   /** Nome já preenchido (ex.: o documento exigido pelo edital) quando for personalizado. */
   tipoSugerido?: string;
   /** Documento já enviado: com `soValidade`, só altera validade/forma, sem novo arquivo. */
   documentoAtual?: CompanyDocumentItem;
   soValidade?: boolean;
+  /** Item que aceita vários arquivos: este envio entra AO LADO dos já enviados, sem substituir. */
+  adicionar?: boolean;
   /** Sugestão: este tipo de documento costuma ter data de validade. */
   venceTipicamente?: boolean;
   titulo: string;
@@ -59,15 +42,18 @@ type Props = {
 export function FormularioEnvioDocumento({
   catalogoChave,
   personalizado,
+  pastaInicial,
   tipoSugerido,
   documentoAtual,
   soValidade,
+  adicionar,
   venceTipicamente,
   titulo,
   onConcluido,
   onCancelar,
 }: Props) {
   const [tipoLivre, setTipoLivre] = useState((tipoSugerido ?? "").slice(0, 200));
+  const [pasta, setPasta] = useState(pastaInicial ?? "");
   const [forma, setForma] = useState<FormaDocumento>(documentoAtual?.forma ?? "COPIA_SIMPLES");
   const [temValidade, setTemValidade] = useState(documentoAtual ? !!documentoAtual.validade : !!venceTipicamente);
   const [validade, setValidade] = useState(paraInputData(documentoAtual?.validade ?? null));
@@ -120,57 +106,18 @@ export function FormularioEnvioDocumento({
         return;
       }
 
-      const metadados = {
-        ...(catalogoChave ? { catalogoChave } : { tipo: tipoLivre.trim() }),
+      const resultado = await enviarDocumento(arquivo, {
+        ...(catalogoChave ? { catalogoChave } : { tipo: tipoLivre.trim(), pasta: pasta || null }),
         forma,
         dataEmissao: dataEmissao || null,
         validade: temValidade ? validade || null : null,
-        nome: arquivo.name,
-      };
-
-      if (arquivo.size <= TAMANHO_MAXIMO_BASE64) {
-        const conteudoBase64 = await lerComoBase64(arquivo);
-        const res = await fetch("/api/company/documents", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...metadados, conteudoBase64 }),
-        });
-        if (!res.ok) {
-          const data = await res.json().catch(() => null);
-          setErro(data?.error ?? "Não foi possível salvar o documento.");
-          return;
-        }
-      } else {
-        const criarRes = await fetch("/api/company/documents", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(metadados),
-        });
-        const criado = await criarRes.json().catch(() => null);
-        if (!criarRes.ok) {
-          setErro(criado?.error ?? "Não foi possível salvar o documento.");
-          return;
-        }
-        const urlRes = await fetch(`/api/company/documents/${criado.documento.id}/upload-url`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ nomeArquivo: arquivo.name, tamanhoBytes: arquivo.size }),
-        });
-        const urlData = await urlRes.json().catch(() => null);
-        if (!urlRes.ok) {
-          setErro(urlData?.error ?? "Não foi possível preparar o upload.");
-          return;
-        }
-        await enviarParaStorage(urlData.signedUrl, arquivo);
-        await fetch(`/api/company/documents/${criado.documento.id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ storagePath: urlData.path }),
-        });
+        adicionar,
+      });
+      if (!resultado.ok) {
+        setErro(resultado.erro);
+        return;
       }
       onConcluido();
-    } catch {
-      setErro("Não foi possível salvar o documento. Tente novamente.");
     } finally {
       setSalvando(false);
     }
@@ -194,6 +141,19 @@ export function FormularioEnvioDocumento({
               onChange={(e) => setTipoLivre(e.target.value)}
               placeholder="Ex: Alvará de funcionamento"
             />
+          </Field>
+        )}
+
+        {personalizado && (
+          <Field label="Pasta" htmlFor="pastaDoc">
+            <Select id="pastaDoc" value={pasta} onChange={(e) => setPasta(e.target.value)}>
+              <option value="">Outros</option>
+              {CATEGORIAS_CATALOGO.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.titulo}
+                </option>
+              ))}
+            </Select>
           </Field>
         )}
 

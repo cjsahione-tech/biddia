@@ -474,6 +474,32 @@ export function chaveEfetivaDoDocumento(doc: { catalogoChave?: string | null; ti
   return POR_NOME.get(normalizarNomeTipo(doc.tipo)) ?? null;
 }
 
+const IDS_PASTAS = new Set<string>(CATEGORIAS_CATALOGO.map((c) => c.id));
+
+export function ehPastaValida(id: string | null | undefined): id is CategoriaCatalogo {
+  return !!id && IDS_PASTAS.has(id);
+}
+
+/**
+ * Itens em que faz sentido a empresa guardar VÁRIOS arquivos (atestados de contratos diferentes,
+ * certificados de normas diferentes, um RG por sócio...). Nos demais (uma certidão, o contrato
+ * social) vale só o documento atual: enviar de novo substitui o anterior.
+ */
+const CATEGORIAS_COM_VARIOS = new Set<CategoriaCatalogo>(["atestados", "certificados", "equipe"]);
+const CHAVES_COM_VARIOS = new Set(["juridica-docs-socios", "tecnica-licencas-ambientais"]);
+
+export function itemAceitaVarios(chave: string | null | undefined): boolean {
+  const item = itemPorChave(chave);
+  return !!item && (CATEGORIAS_COM_VARIOS.has(item.categoria) || CHAVES_COM_VARIOS.has(item.chave));
+}
+
+/** Pasta em que o documento aparece: a do item do catálogo, ou a escolhida (personalizado), ou null = "Outros". */
+export function pastaDoDocumento(doc: { catalogoChave?: string | null; tipo: string; pasta?: string | null }): CategoriaCatalogo | null {
+  const chave = chaveEfetivaDoDocumento(doc);
+  if (chave) return itemPorChave(chave)?.categoria ?? null;
+  return ehPastaValida(doc.pasta) ? doc.pasta : null;
+}
+
 /**
  * Itens PADRÃO do checklist de cada edital (Agente Secretário) -> itens do catálogo que
  * podem preenchê-los. Os de produto e de serviço aceitam qualquer um dos dois.
