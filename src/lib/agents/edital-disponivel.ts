@@ -3,12 +3,14 @@ import { prisma } from "@/lib/prisma";
 import { mapComLimite } from "@/lib/concorrencia";
 import {
   buscarArquivosCompra,
+  buscarDetalheCompra,
   buscarItensCompra,
   parseNumeroControlePNCP,
   selecionarDocumentosPrincipais,
 } from "@/lib/agents/pncp";
 import { baixarEPersistirDocumento } from "@/lib/agents/document-download";
 import { extrairValorDoTexto, somarValorDosItens } from "@/lib/valor-edital";
+import { logAudit } from "@/lib/agents/run-tracker";
 
 // Deixa o edital DENTRO da plataforma desde o início, sem gastar IA:
 //  1) registra a lista de arquivos do PNCP quando ela ficou vazia (falha momentânea na captura);
@@ -50,32 +52,70 @@ export async function preencherValorPelosItens(edital: { id: string; numeroContr
   return true;
 }
 
-/** Registra os arquivos do edital no PNCP quando o edital ainda não tem nenhum documento oficial. */
-export async function registrarDocumentosPncpSeFaltar(edital: { id: string; numeroControlePNCP: string }): Promise<number> {
+export const SITUACAO_REMOVIDA_PNCP = "Removida do PNCP pelo órgão";
+
+/**
+ * O órgão apagou esta contratação do PNCP (muito comum: ele republica com outro número). Sem isso o usuário só via
+ * "não consegui ler os arquivos". Marca o card, registra um aviso e, se a versão republicada já estiver no quadro
+ * (mesmo órgão e mesmo título), diz qual é.
+ */
+export async function marcarCompraRemovida(edital: { id: string }): Promise<void> {
+  const e = await prisma.edital.findUnique({ where: { id: edital.id }, select: { companyId: true, orgaoCnpj: true, titulo: true, situacao: true } });
+  if (!e || e.situacao === SITUACAO_REMOVIDA_PNCP) return;
+  await prisma.edital.update({ where: { id: edital.id }, data: { situacao: SITUACAO_REMOVIDA_PNCP } });
+  const substituto = await prisma.edital.findFirst({
+    where: { companyId: e.companyId, orgaoCnpj: e.orgaoCnpj, titulo: e.titulo, id: { not: edital.id }, situacao: { not: SITUACAO_REMOVIDA_PNCP } },
+    select: { titulo: true, numeroControlePNCP: true, etapaKanban: true },
+    orderBy: { createdAt: "desc" },
+  });
+  const sufixo = substituto
+    ? ` Já existe no seu quadro uma contratação do mesmo órgão e com o mesmo título (${substituto.numeroControlePNCP}, coluna "${substituto.etapaKanban}") — provavelmente a versão republicada; use ela.`
+    : " Se o órgão republicou, a nova versão aparece numa próxima busca; ou envie o edital em PDF pelo botão “Adicionar PDF”.";
+  await logAudit(edital.id, "Agente Comercial", "Contratação removida do PNCP", "ALERTA", `O órgão apagou esta contratação do PNCP, por isso os arquivos não podem mais ser baixados.${sufixo}`);
+}
+
+/**
+ * Completa os arquivos do edital com o que o PNCP publica agora: registra os principais (edital — inclusive vários
+ * arquivos do tipo "Edital" —, termo de referência e anexos de preços) que ainda não estão cadastrados. Cobre
+ * falha momentânea na captura, arquivos publicados depois e a capa que escondia o edital de verdade.
+ */
+export async function completarDocumentosPncp(edital: { id: string; numeroControlePNCP: string }): Promise<{ novos: number; removida: boolean }> {
   const ref = parseNumeroControlePNCP(edital.numeroControlePNCP);
-  if (!ref) return 0;
-  const existentes = await prisma.document.count({ where: { editalId: edital.id, tipo: "DOCUMENTO_PNCP" } });
-  if (existentes > 0) return 0;
+  if (!ref) return { novos: 0, removida: false };
 
   let arquivos;
   try {
     arquivos = await buscarArquivosCompra(ref.cnpj, ref.ano, ref.sequencial);
-  } catch {
-    return 0; // não marca como consultado: a próxima rodada tenta de novo
+  } catch (err) {
+    // 404 na lista de arquivos E sem detalhe da compra = o órgão apagou a contratação (um 404 isolado pode ser instabilidade).
+    const sem404 = !(err instanceof Error) || !err.message.includes("(404)");
+    if (sem404) return { novos: 0, removida: false };
+    const detalhe = await buscarDetalheCompra(ref.cnpj, ref.ano, ref.sequencial).catch(() => null);
+    if (detalhe) return { novos: 0, removida: false };
+    await marcarCompraRemovida(edital);
+    await prisma.edital.update({ where: { id: edital.id }, data: { documentosConsultadosEm: new Date() } });
+    return { novos: 0, removida: true };
   }
-  const { edital: docEdital, termoReferencia, anexosPrecos } = selecionarDocumentosPrincipais(arquivos);
-  const novos = [
-    ...(docEdital ? [{ nome: docEdital.titulo, origemUrl: docEdital.url, categoria: "EDITAL" as const }] : []),
+
+  const { editais, termoReferencia, anexosPrecos } = selecionarDocumentosPrincipais(arquivos);
+  const principais = [
+    ...editais.map((a) => ({ nome: a.titulo, origemUrl: a.url, categoria: "EDITAL" as const })),
     ...(termoReferencia ? [{ nome: termoReferencia.titulo, origemUrl: termoReferencia.url, categoria: "TERMO_REFERENCIA" as const }] : []),
     ...anexosPrecos.map((a) => ({ nome: a.titulo, origemUrl: a.url, categoria: "ANEXO_PRECOS" as const })),
   ];
-  for (const d of novos) {
+  const registrados = new Set(
+    (await prisma.document.findMany({ where: { editalId: edital.id, tipo: "DOCUMENTO_PNCP" }, select: { origemUrl: true } })).map((d) => d.origemUrl)
+  );
+  let novos = 0;
+  for (const d of principais) {
+    if (registrados.has(d.origemUrl)) continue;
     await prisma.document.create({
       data: { editalId: edital.id, nome: d.nome, tipo: "DOCUMENTO_PNCP", categoria: d.categoria, status: "DISPONIVEL", origemUrl: d.origemUrl, conteudoBase64: null },
     });
+    novos++;
   }
   await prisma.edital.update({ where: { id: edital.id }, data: { documentosConsultadosEm: new Date() } });
-  return novos.length;
+  return { novos, removida: false };
 }
 
 /** Texto de um PDF SEM OCR (não usa IA): só a camada de texto. Outros formatos ou PDF escaneado = null. */
@@ -159,25 +199,30 @@ export async function repararEditais(opts: { companyId?: string; limite?: number
     }
   });
 
-  // 2. Editais do PNCP sem nenhum documento registrado (consulta falhou na captura)
+  // 2. Completa os arquivos do PNCP: editais ainda não conferidos (os de antes desta rotina, falha na captura, capa no
+  // lugar do edital) e os que seguem sem documento depois de um dia.
   if (Date.now() < fim) {
-    const semArquivos = await prisma.edital.findMany({
+    const paraCompletar = await prisma.edital.findMany({
       where: {
         ...dono,
         ...vivos,
         fonte: "PNCP",
-        documents: { none: { tipo: "DOCUMENTO_PNCP" } },
-        OR: [{ documentosConsultadosEm: null }, { documentosConsultadosEm: { lt: new Date(Date.now() - TENTAR_DE_NOVO_APOS_MS) } }],
+        situacao: { not: SITUACAO_REMOVIDA_PNCP },
+        OR: [
+          { documentosConsultadosEm: null },
+          { documents: { none: { tipo: "DOCUMENTO_PNCP" } }, documentosConsultadosEm: { lt: new Date(Date.now() - TENTAR_DE_NOVO_APOS_MS) } },
+        ],
       },
       select: { id: true, numeroControlePNCP: true },
       orderBy: { createdAt: "desc" },
       take: limite * 2,
     });
-    await mapComLimite(semArquivos, 4, async (e) => {
+    await mapComLimite(paraCompletar, 4, async (e) => {
       if (Date.now() > fim) return;
       try {
-        resultado.documentosRegistrados += await registrarDocumentosPncpSeFaltar(e);
-        // Mesmo sem arquivo publicado, marca a consulta para não repetir a cada rodada.
+        const r = await completarDocumentosPncp(e);
+        resultado.documentosRegistrados += r.novos;
+        // Mesmo sem arquivo novo, marca a consulta para não repetir a cada rodada.
         await prisma.edital.updateMany({ where: { id: e.id, documentosConsultadosEm: null }, data: { documentosConsultadosEm: new Date() } });
       } catch {
         resultado.falhas++;
@@ -221,7 +266,7 @@ export async function repararUmEdital(editalId: string): Promise<void> {
   });
   if (!e || e.etapaKanban === "RASCUNHO") return;
   if (e.fonte === "PNCP") {
-    await registrarDocumentosPncpSeFaltar(e).catch(() => null);
+    await completarDocumentosPncp(e).catch(() => null);
     if (e.valorGlobal == null && !e.orcamentoSigiloso && e.valorTentadoEm == null) await preencherValorPelosItens(e).catch(() => null);
   }
   await baixarEditalPrincipal(e.id).catch(() => null);

@@ -17,6 +17,7 @@ import { dispararAuditoriaHabilitacao } from "@/lib/agents/auditoria-dispatch";
 import { notificarPrazosVencendo } from "@/lib/notifications";
 import { escolherMelhorDocumento } from "@/lib/documentos-empresa";
 import { comContextoIA } from "@/lib/ia-contexto";
+import { completarDocumentosPncp } from "@/lib/agents/edital-disponivel";
 import {
   CATALOGO_DOCUMENTOS,
   CATEGORIAS_CATALOGO,
@@ -77,7 +78,7 @@ type Bruta = {
   aplicavelSe: string | null;
 };
 
-type MotivoArquivo = "download" | "demorou" | "formato";
+type MotivoArquivo = "download" | "demorou" | "formato" | "removido";
 
 // Progresso salvo no banco: cada execução retoma de onde a anterior parou. Campos novos são
 // opcionais para continuar lendo registros gravados antes desta versão.
@@ -752,7 +753,16 @@ async function rodar(
 
   const edital = await prisma.edital.findUniqueOrThrow({
     where: { id: editalId },
-    select: { id: true, companyId: true, titulo: true, dataAberturaProposta: true, dataEncerramentoProposta: true },
+    select: {
+      id: true,
+      companyId: true,
+      titulo: true,
+      fonte: true,
+      numeroControlePNCP: true,
+      documentosConsultadosEm: true,
+      dataAberturaProposta: true,
+      dataEncerramentoProposta: true,
+    },
   });
   const dataReferencia = dataReferenciaDoEdital(edital);
 
@@ -872,6 +882,10 @@ async function rodar(
     if (!ok) await prisma.auditoriaHabilitacao.update({ where: { editalId }, data: { estado: "NA_FILA" } });
     return "continua";
   };
+
+  // Antes de ler: completa a lista de arquivos com o que o PNCP publica hoje (o edital de verdade pode ter ficado
+  // atrás de uma capa, ou a captura pode ter falhado em listar os arquivos).
+  if (edital.fonte === "PNCP" && !edital.documentosConsultadosEm) await completarDocumentosPncp(edital).catch(() => null);
 
   // 1. Baixar e extrair o texto de cada arquivo (cada um com prazo próprio).
   const todos = await prisma.document.findMany({
@@ -1052,6 +1066,12 @@ async function prepararDocumento(
         baixou = true;
       } catch (err) {
         console.error(`Falha ao baixar "${d.nome}" (edital ${d.editalId}):`, err);
+        // 404 do PNCP: confirma se o órgão apagou a contratação (aí não adianta tentar de novo).
+        if (d.tipo === "DOCUMENTO_PNCP" && err instanceof Error && err.message.includes("(404)")) {
+          const ed = await prisma.edital.findUnique({ where: { id: d.editalId }, select: { id: true, numeroControlePNCP: true } });
+          const r = ed ? await completarDocumentosPncp(ed).catch(() => null) : null;
+          if (r?.removida) return { texto: null, motivo: "removido" };
+        }
         return { texto: null, motivo: "download" };
       }
       if (baixou) doc = await prisma.document.findUniqueOrThrow({ where: { id: d.id } });

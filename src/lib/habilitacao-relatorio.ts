@@ -79,6 +79,12 @@ export function explicarArquivo(nome: string, motivo?: string): ArquivoComProble
         problema: "Não consegui baixar este arquivo do portal de origem (o site não respondeu).",
         oQueFazer: "Vou tentar de novo automaticamente. Se persistir, baixe o arquivo no portal e envie em “Adicionar PDF”.",
       };
+    case "removido":
+      return {
+        nome,
+        problema: "O órgão apagou esta contratação do PNCP (geralmente para republicá-la com outro número), então o arquivo não existe mais.",
+        oQueFazer: "Procure no seu quadro a versão republicada (o histórico do card diz se ela já foi captada) ou envie o edital em PDF em “Adicionar PDF”.",
+      };
     case "demorou":
       return {
         nome,

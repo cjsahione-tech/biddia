@@ -461,9 +461,9 @@ async function executarAgente1Interno(
         }
       }
 
-      const { edital: docEdital, termoReferencia, anexosPrecos } = selecionarDocumentosPrincipais(arquivos);
+      const { editais: docsEdital, termoReferencia, anexosPrecos } = selecionarDocumentosPrincipais(arquivos);
       documentosParaCriar = [];
-      if (docEdital) documentosParaCriar.push({ nome: docEdital.titulo, origemUrl: docEdital.url, categoria: "EDITAL" });
+      for (const docEdital of docsEdital) documentosParaCriar.push({ nome: docEdital.titulo, origemUrl: docEdital.url, categoria: "EDITAL" });
       if (termoReferencia) documentosParaCriar.push({ nome: termoReferencia.titulo, origemUrl: termoReferencia.url, categoria: "TERMO_REFERENCIA" });
       for (const a of anexosPrecos) documentosParaCriar.push({ nome: a.titulo, origemUrl: a.url, categoria: "ANEXO_PRECOS" });
 

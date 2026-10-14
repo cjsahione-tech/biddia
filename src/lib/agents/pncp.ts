@@ -268,12 +268,20 @@ export function parseNumeroControlePNCP(numeroControlePNCP: string): { cnpj: str
  * parte (comum quando o TR não é um arquivo próprio) nunca chegava ao Agente
  * Financeiro: só edital e TR eram baixados.
  */
+const REGEX_CAPA = /(^|[s_-])capa([s_.-]|$)/i;
+
 export function selecionarDocumentosPrincipais(arquivos: PncpArquivo[]) {
-  const edital = arquivos.find((a) => EDITAL_TIPO_IDS.has(a.tipoDocumentoId)) ?? null;
+  // Alguns órgãos publicam VÁRIOS arquivos do tipo "Edital" (uma capa e o edital de verdade, edital e republicação...).
+  // Pegar só o primeiro lia a capa e a auditoria não achava exigência nenhuma: ficam todos (até 3), com a capa por último.
+  const editais = arquivos
+    .filter((a) => EDITAL_TIPO_IDS.has(a.tipoDocumentoId))
+    .sort((a, b) => Number(REGEX_CAPA.test(a.titulo)) - Number(REGEX_CAPA.test(b.titulo)) || a.sequencialDocumento - b.sequencialDocumento)
+    .slice(0, 3);
+  const edital = editais[0] ?? null;
   const termoReferencia = arquivos.find((a) => TERMO_REFERENCIA_TIPO_IDS.has(a.tipoDocumentoId)) ?? null;
 
   const restantes = arquivos
-    .filter((a) => a.sequencialDocumento !== edital?.sequencialDocumento)
+    .filter((a) => !editais.some((e) => e.sequencialDocumento === a.sequencialDocumento))
     .filter((a) => a.sequencialDocumento !== termoReferencia?.sequencialDocumento);
 
   const porTitulo = restantes.filter((a) => REGEX_TITULO_PRECOS.test(a.titulo));
@@ -291,7 +299,7 @@ export function selecionarDocumentosPrincipais(arquivos: PncpArquivo[]) {
     return true;
   }).slice(0, 3);
 
-  return { edital, termoReferencia, anexosPrecos };
+  return { edital, editais, termoReferencia, anexosPrecos };
 }
 
 /**
