@@ -5,7 +5,7 @@ import { getCurrentUser } from "@/lib/auth";
 // vírgula) decide quem é admin — sem role editável pela interface nem fluxo de
 // auto-promoção. Pra adicionar um admin novo, edite ADMIN_EMAILS nas configurações do
 // projeto na Vercel (Settings → Environment Variables) e faça um redeploy.
-function emailsAdmin(): string[] {
+export function emailsAdmin(): string[] {
   return (process.env.ADMIN_EMAILS ?? "")
     .split(",")
     .map((e) => e.trim().toLowerCase())

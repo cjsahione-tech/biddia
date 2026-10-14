@@ -15,6 +15,15 @@ enum TipoConta {
   ANALISTA
 }
 
+// Situação comercial da conta. Ainda não há gateway de pagamento: o admin muda o status à mão
+// (aba Usuários do /admin) e o sistema só informa — não bloqueia o acesso por causa dele.
+enum StatusAssinatura {
+  EM_TESTE
+  ATIVA
+  PAGAMENTO_PENDENTE
+  CANCELADA
+}
+
 enum TipoDocumentoAnalista {
   CPF
   CNPJ
@@ -36,6 +45,13 @@ model User {
   resetCodeAttempts  Int       @default(0)
 
   tipoConta             TipoConta              @default(EMPRESA)
+
+  // Assinatura da conta (vale para Empresa e para Analista): situação, valor combinado que substitui o preço
+  // do plano (null = vale o preço do plano) e fim do período de teste.
+  statusAssinatura           StatusAssinatura @default(EM_TESTE)
+  statusAssinaturaAtualizadoEm DateTime?
+  valorMensalPersonalizado   Float?
+  emTesteAte                 DateTime?
   // CPF ou CNPJ do próprio Analista (identidade da conta) — só preenchido quando
   // tipoConta = ANALISTA. Empresa continua se identificando pelo Company.cnpj de sempre.
   documentoAnalista     String?
@@ -952,6 +968,8 @@ model ConsumoIA {
   id        String   @id @default(cuid())
   agente    String // chave do agente (ex.: "agente2-analista") ou "outros"
   editalId  String?
+  // Empresa que gerou o gasto (quando dá para saber) — base do custo por conta na aba Usuários do /admin.
+  companyId String?
   modelo    String
   entrada   Int
   saida     Int
@@ -959,4 +977,5 @@ model ConsumoIA {
 
   @@index([createdAt])
   @@index([agente, createdAt])
+  @@index([companyId, createdAt])
 }

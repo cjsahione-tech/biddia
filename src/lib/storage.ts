@@ -103,3 +103,33 @@ export async function baixarAnexo(path: string): Promise<Uint8Array> {
   if (error) throw error;
   return new Uint8Array(await data.arrayBuffer());
 }
+
+/** Todos os arquivos sob um prefixo do bucket (desce nas subpastas). Usado para apagar tudo de uma empresa. */
+export async function listarArquivosDoPrefixo(prefixo: string): Promise<string[]> {
+  const caminhos: string[] = [];
+  const pastas = [prefixo.replace(/\/+$/, "")];
+  while (pastas.length > 0) {
+    const pasta = pastas.pop()!;
+    for (let offset = 0; ; offset += 100) {
+      const { data, error } = await getClient().storage.from(BUCKET).list(pasta, { limit: 100, offset });
+      if (error) throw error;
+      if (!data || data.length === 0) break;
+      for (const item of data) {
+        // Pasta não tem id; arquivo tem.
+        if (item.id === null || item.id === undefined) pastas.push(`${pasta}/${item.name}`);
+        else caminhos.push(`${pasta}/${item.name}`);
+      }
+      if (data.length < 100) break;
+    }
+  }
+  return caminhos;
+}
+
+/** Apaga vários arquivos de uma vez (em blocos). Devolve quantos foram pedidos para apagar. */
+export async function apagarArquivos(caminhos: string[]): Promise<number> {
+  for (let i = 0; i < caminhos.length; i += 100) {
+    const { error } = await getClient().storage.from(BUCKET).remove(caminhos.slice(i, i + 100));
+    if (error) throw error;
+  }
+  return caminhos.length;
+}

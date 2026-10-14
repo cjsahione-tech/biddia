@@ -118,7 +118,7 @@ export type ProgressoCaptacao = { fase: "buscando" | "classificando" | "criando"
 
 /** Busca de editais da empresa. O consumo de IA feito aqui é registrado no nome do Agente Comercial. */
 export function executarAgente1(companyId: string, onProgresso?: (p: ProgressoCaptacao) => void | Promise<void>) {
-  return comContextoIA({ agente: "agente1-comercial" }, () => executarAgente1Interno(companyId, onProgresso));
+  return comContextoIA({ agente: "agente1-comercial", companyId }, () => executarAgente1Interno(companyId, onProgresso));
 }
 
 async function executarAgente1Interno(
