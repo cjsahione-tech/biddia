@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { askJSON, MODELO_HAIKU } from "@/lib/anthropic";
 import { obterTextoCompletoEdital } from "@/lib/agents/pdf-extract";
 import { withAgentRun, logAudit } from "@/lib/agents/run-tracker";
+import { normalizarGruposHabilitacao, normalizarLista, paraTexto } from "@/lib/analise-dados";
 
 // Cada grupo é uma seção de habilitação/qualificação TAL COMO o próprio edital a
 // organiza (ex: "13.1 Regularidade Fiscal, Trabalhista, Econômico-Financeira e
@@ -133,30 +134,28 @@ Retorne um objeto JSON com exatamente estas chaves:
       { model: MODELO_HAIKU, maxTokens: 8000 }
     );
 
+    // O que a IA devolve passa por aqui antes de ser gravado: grupo de habilitação sem "itens", objeto no
+    // lugar de texto etc. quebravam a tela (React: objeto como filho) e o Agente Secretário.
+    const dadosSeguros = {
+      resumoObjeto: paraTexto(result.resumoObjeto),
+      obrigacoesContratada: JSON.stringify(normalizarLista(result.obrigacoesContratada)),
+      habilitacao: JSON.stringify(normalizarGruposHabilitacao(result.habilitacao)),
+      requisitosObrigatorios: JSON.stringify(normalizarLista(result.requisitosObrigatorios)),
+      requisitosAdicionais: JSON.stringify(normalizarLista(result.requisitosAdicionais)),
+      riscos: JSON.stringify(normalizarLista(result.riscos)),
+      parecer: paraTexto(result.parecer),
+      prazos: JSON.stringify(Array.isArray(result.prazos) ? result.prazos.filter((x) => x && x.tipo && x.prazo) : []),
+      baseadoEmTextoCompleto: temTextoCompleto,
+    };
+
     await prisma.analysis.upsert({
       where: { editalId },
       create: {
         editalId,
-        resumoObjeto: result.resumoObjeto,
-        obrigacoesContratada: JSON.stringify(result.obrigacoesContratada),
-        habilitacao: JSON.stringify(result.habilitacao),
-        requisitosObrigatorios: JSON.stringify(result.requisitosObrigatorios),
-        requisitosAdicionais: JSON.stringify(result.requisitosAdicionais),
-        riscos: JSON.stringify(result.riscos),
-        parecer: result.parecer,
-        prazos: JSON.stringify(Array.isArray(result.prazos) ? result.prazos.filter((x) => x && x.tipo && x.prazo) : []),
-        baseadoEmTextoCompleto: temTextoCompleto,
+        ...dadosSeguros,
       },
       update: {
-        resumoObjeto: result.resumoObjeto,
-        obrigacoesContratada: JSON.stringify(result.obrigacoesContratada),
-        habilitacao: JSON.stringify(result.habilitacao),
-        requisitosObrigatorios: JSON.stringify(result.requisitosObrigatorios),
-        requisitosAdicionais: JSON.stringify(result.requisitosAdicionais),
-        riscos: JSON.stringify(result.riscos),
-        parecer: result.parecer,
-        prazos: JSON.stringify(Array.isArray(result.prazos) ? result.prazos.filter((x) => x && x.tipo && x.prazo) : []),
-        baseadoEmTextoCompleto: temTextoCompleto,
+        ...dadosSeguros,
       },
     });
 

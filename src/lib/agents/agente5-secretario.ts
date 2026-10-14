@@ -5,6 +5,7 @@ import { withAgentRun, logAudit } from "@/lib/agents/run-tracker";
 import { dentroDaValidadeComMargem, FORMA_LABEL } from "@/lib/documentos-empresa";
 import { CHECKLIST_BASE, CATEGORIA_BASE } from "@/lib/checklist-base";
 import { CHECKLIST_BASE_PARA_CATALOGO, chaveEfetivaDoDocumento } from "@/lib/catalogo-documentos";
+import { lerGruposHabilitacao } from "@/lib/analise-dados";
 
 export { CHECKLIST_BASE, CATEGORIA_BASE };
 
@@ -185,16 +186,8 @@ export async function executarAgente5(editalId: string) {
     // caso trata como um grupo sem cabeçalho, que cai no classificador item a item.
     let grupos: { categoriaEdital: string | null; itens: string[] }[] = [];
     if (edital.analysis?.habilitacao) {
-      try {
-        const parsed = JSON.parse(edital.analysis.habilitacao) as unknown;
-        if (Array.isArray(parsed) && parsed.every((g) => g && typeof g === "object" && "itens" in g)) {
-          grupos = parsed as { categoriaEdital: string | null; itens: string[] }[];
-        } else if (Array.isArray(parsed)) {
-          grupos = [{ categoriaEdital: null, itens: parsed as string[] }];
-        }
-      } catch {
-        grupos = [];
-      }
+      // Aceita o formato atual, o antigo e grupos malformados da IA (ex.: sem "itens") sem quebrar.
+      grupos = lerGruposHabilitacao(edital.analysis.habilitacao);
     }
 
     const habilitacaoEdital = grupos.flatMap((g) => g.itens);

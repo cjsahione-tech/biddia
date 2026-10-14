@@ -2,17 +2,12 @@ import { FonteBadge } from "@/components/ui/FonteBadge";
 import { AgentChat } from "@/components/editais/AgentChat";
 import type { EditalDetail } from "@/lib/types";
 
-function parseList(json: string | undefined): string[] {
-  if (!json) return [];
-  try {
-    const parsed = JSON.parse(json);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
+import { lerGruposHabilitacao, lerLista, type GrupoHabilitacao } from "@/lib/analise-dados";
 
-type GrupoHabilitacao = { categoriaEdital: string | null; itens: string[] };
+// Dados da IA passam sempre por lerLista/lerGruposHabilitacao: a IA às vezes devolve objeto onde o
+// formato pedia texto (ou um grupo sem "itens"), e desenhar um objeto na tela derruba a página inteira.
+const parseList = (json: string | undefined): string[] => lerLista(json);
+
 type PrazoEdital = { tipo: string; prazo: string; referencia: string | null };
 
 function parsePrazos(json: string | null | undefined): PrazoEdital[] {
@@ -54,20 +49,9 @@ function SectionPrazos({ prazos, analiseAntiga }: { prazos: PrazoEdital[]; anali
 
 // A habilitação vem agrupada exatamente como o próprio edital organiza suas seções (ex:
 // "13.1 Regularidade Fiscal..." vira um grupo só) — mas análises antigas ainda têm o
-// formato anterior, uma lista plana de strings, então aceita os dois.
-function parseHabilitacaoGrupos(json: string | undefined): GrupoHabilitacao[] {
-  if (!json) return [];
-  try {
-    const parsed = JSON.parse(json);
-    if (!Array.isArray(parsed)) return [];
-    if (parsed.every((g) => g && typeof g === "object" && "itens" in g)) {
-      return parsed as GrupoHabilitacao[];
-    }
-    return parsed.length > 0 ? [{ categoriaEdital: null, itens: parsed as string[] }] : [];
-  } catch {
-    return [];
-  }
-}
+// formato anterior, uma lista plana de strings; e a IA às vezes devolve grupos sem "itens".
+// lerGruposHabilitacao aceita tudo isso e devolve só grupos com texto.
+const parseHabilitacaoGrupos = (json: string | undefined): GrupoHabilitacao[] => lerGruposHabilitacao(json);
 
 function Section({ title, items }: { title: string; items: string[] }) {
   if (items.length === 0) return null;
