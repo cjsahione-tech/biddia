@@ -12,6 +12,7 @@ import {
 import { formatBRL } from "@/lib/format";
 import { COR_BRAND, COR_ACCENT, COR_GANHO, COR_PERDA } from "@/lib/chart-colors";
 import { Filtros } from "@/components/resultados/Filtros";
+import { CabecalhoMobile } from "@/components/shell/CabecalhoMobile";
 import { BarraHorizontal, DonutPortal, EvolucaoMensalChart } from "@/components/resultados/Graficos";
 
 function formatPercentual(v: number | null): string {
@@ -100,9 +101,10 @@ export function ResultadosClient() {
 
   return (
     <div className="mx-auto max-w-[1400px] px-4 py-6 sm:px-6 sm:py-8 lg:px-8 lg:py-10">
-      <div className="flex items-start justify-between gap-4">
+      <CabecalhoMobile titulo="Resultados" subtitulo="Desempenho das propostas" />
+      <div className="flex items-start justify-between gap-4 max-md:mt-4">
         <div>
-          <h1 className="text-2xl font-semibold text-foreground">Resultados</h1>
+          <h1 className="text-2xl font-semibold text-foreground max-md:hidden">Resultados</h1>
           <p className="mt-1 text-sm text-muted">
             Visão consolidada do desempenho da empresa nas licitações — conversão, valores e onde vale mais a pena atuar.
           </p>

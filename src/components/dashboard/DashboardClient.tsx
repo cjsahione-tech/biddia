@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Search, Loader2, RefreshCw, Upload, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { KanbanBoard } from "@/components/dashboard/KanbanBoard";
+import { InicioMobile } from "@/components/dashboard/InicioMobile";
 import type { EditalListItem } from "@/lib/types";
 
 type StatusLimite = { atual: number; limite: number | null; excedido: boolean };
@@ -236,7 +237,35 @@ export function DashboardClient() {
   }
 
   return (
-    <div className="mx-auto max-w-[1400px] px-4 py-6 sm:px-6 sm:py-8 lg:px-8 lg:py-10">
+    <>
+    <input ref={fileInputRef} type="file" accept="application/pdf" className="hidden" onChange={handleFileSelected} />
+    {/* Celular (até 768px): tela Início do design. O quadro de arrastar abaixo continua só para telas maiores. */}
+    {!loading && (
+      <InicioMobile
+        editais={editais}
+        onReload={load}
+        onBuscar={handleSearch}
+        onAdicionarPdf={() => fileInputRef.current?.click()}
+        buscando={searching}
+        enviandoPdf={uploading}
+        mensagem={
+          uploadError ??
+          (searching && progressoBusca
+            ? progressoBusca.fase === "buscando"
+              ? "Buscando nos portais — os editais aparecem sozinhos."
+              : progressoBusca.fase === "classificando"
+                ? `${progressoBusca.analisados} encontrado(s) — avaliando quais combinam com a sua empresa…`
+                : `${progressoBusca.novos} edital(is) novo(s) adicionado(s)…`
+            : searchMsg)
+        }
+      />
+    )}
+    {loading && (
+      <div className="flex items-center justify-center py-24 text-muted md:hidden">
+        <Loader2 className="h-5 w-5 animate-spin" />
+      </div>
+    )}
+    <div className="mx-auto hidden max-w-[1400px] px-4 py-6 sm:px-6 sm:py-8 md:block lg:px-8 lg:py-10">
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-foreground">Editais</h1>
@@ -249,13 +278,6 @@ export function DashboardClient() {
             {!uploading && <Upload className="h-4 w-4" />}
             Adicionar PDF
           </Button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="application/pdf"
-            className="hidden"
-            onChange={handleFileSelected}
-          />
           <Button onClick={handleSearch} loading={searching}>
             {!searching && <Search className="h-4 w-4" />}
             Buscar novos editais
@@ -324,5 +346,6 @@ export function DashboardClient() {
         </button>
       )}
     </div>
+    </>
   );
 }

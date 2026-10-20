@@ -61,18 +61,21 @@ export function AssistenteClient() {
   }
 
   return (
-    <div className="mx-auto flex h-[calc(100dvh-5rem)] max-w-3xl flex-col px-4 py-4 sm:px-6 sm:py-6 lg:h-[calc(100vh-2rem)] lg:px-8">
+    <div className="mx-auto flex h-[calc(100dvh-5rem)] max-w-3xl flex-col px-4 py-4 max-md:h-[calc(100dvh-8.5rem)] sm:px-6 sm:py-6 lg:h-[calc(100vh-2rem)] lg:px-8">
       <div className="flex items-center gap-2">
-        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-light text-brand">
+        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-light text-brand max-md:bg-[#312e81] max-md:text-[#fbbf24]">
           <Sparkles className="h-4.5 w-4.5" />
         </div>
         <div>
           <h1 className="text-lg font-semibold text-foreground">Bidd.IA</h1>
-          <p className="text-xs text-muted">Pergunte sobre qualquer processo ou peça pra gerar um arquivo.</p>
+          <p className="text-xs text-muted">
+            <span className="md:hidden">Assistente com os 6 agentes</span>
+            <span className="hidden md:inline">Pergunte sobre qualquer processo ou peça pra gerar um arquivo.</span>
+          </p>
         </div>
       </div>
 
-      <div ref={listRef} className="mt-4 flex-1 space-y-4 overflow-y-auto rounded-2xl border border-border bg-surface/30 p-4">
+      <div ref={listRef} className="mt-4 flex-1 space-y-4 overflow-y-auto rounded-2xl border border-border bg-surface/30 p-4 max-md:border-0 max-md:bg-transparent max-md:p-0">
         {mensagens.length === 0 && (
           <div className="flex h-full flex-col items-center justify-center gap-4 text-center">
             <p className="text-sm text-muted">
@@ -84,7 +87,7 @@ export function AssistenteClient() {
                 <button
                   key={s}
                   onClick={() => enviarMensagem(s)}
-                  className="rounded-full border border-border bg-background px-3 py-1.5 text-xs text-foreground hover:bg-surface"
+                  className="rounded-full border border-border bg-background px-3 py-1.5 text-xs text-foreground hover:bg-surface max-md:border-0 max-md:bg-white max-md:font-bold"
                 >
                   {s}
                 </button>
@@ -102,8 +105,8 @@ export function AssistenteClient() {
             )}
             <div
               className={`max-w-[85%] rounded-xl px-3.5 py-2.5 text-sm ${
-                m.role === "user" ? "bg-brand text-white" : "border border-border bg-background text-foreground"
-              }`}
+                m.role === "user" ? "bg-brand text-white" : "border border-border bg-background text-foreground max-md:border-0 max-md:bg-white"
+              } max-md:rounded-[18px]`}
             >
               <p className="whitespace-pre-wrap">{m.content}</p>
               {m.arquivos && m.arquivos.length > 0 && (
@@ -151,9 +154,9 @@ export function AssistenteClient() {
             rows={1}
             disabled={enviando}
             placeholder="Pergunte à Bidd.IA sobre seus editais, ou peça um arquivo..."
-            className="max-h-32 flex-1 resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
+            className="max-h-32 flex-1 resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20 max-md:rounded-[22px] max-md:border-0 max-md:bg-white max-md:px-4 max-md:py-3"
           />
-          <Button onClick={() => enviarMensagem(texto)} loading={enviando} disabled={!texto.trim()} className="shrink-0 px-3">
+          <Button onClick={() => enviarMensagem(texto)} loading={enviando} disabled={!texto.trim()} className="shrink-0 px-3 max-md:h-11 max-md:w-11 max-md:rounded-full max-md:p-0">
             {!enviando && <Send className="h-4 w-4" />}
           </Button>
         </div>

@@ -16,6 +16,9 @@ const NAV = [
   { href: "/notificacoes", label: "Notificações", icon: Bell },
 ];
 
+import { ShellProvider } from "@/components/shell/ShellContext";
+import { BarraNavegacaoMobile } from "@/components/shell/BarraNavegacaoMobile";
+
 const NAV_ADMIN = { href: "/admin/planos", label: "Admin", icon: ShieldCheck };
 
 export function AppShell({
@@ -125,6 +128,7 @@ export function AppShell({
   );
 
   return (
+    <ShellProvider value={{ userName, companyName, totalNotificacoes, isAdmin, operandoComoAnalista }}>
     <div className="flex min-h-screen flex-1 flex-col">
       {operandoComoAnalista && (
         <div className="flex flex-wrap items-center justify-between gap-2 bg-brand px-4 py-2 text-sm font-medium text-white sm:px-6">
@@ -149,8 +153,9 @@ export function AppShell({
           )}
         </div>
       )}
-      {/* Barra superior — só em telas estreitas (o menu lateral fixo some abaixo de 1024px) */}
-      <header className="flex items-center justify-between border-b border-border bg-surface/50 px-4 py-3 lg:hidden">
+      {/* Barra superior — só em tablet (768–1023px): o menu lateral fixo some abaixo de 1024px. No celular
+          (até 768px) quem navega é a barra inferior flutuante. */}
+      <header className="hidden items-center justify-between border-b border-border bg-surface/50 px-4 py-3 md:flex lg:hidden">
         {logo}
         <button
           onClick={() => setMenuAberto(true)}
@@ -196,8 +201,10 @@ export function AppShell({
           {conteudoMenu}
         </aside>
 
-        <main className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden bg-background">{children}</main>
+        <main className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden bg-background max-md:pb-28">{children}</main>
       </div>
+      <BarraNavegacaoMobile apenasAdmin={apenasAdmin} />
     </div>
+    </ShellProvider>
   );
 }

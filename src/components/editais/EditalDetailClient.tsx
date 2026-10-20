@@ -16,6 +16,8 @@ import { ChecklistTab } from "@/components/editais/tabs/ChecklistTab";
 import { AuditTab } from "@/components/editais/tabs/AuditTab";
 import { SeloHabilitacao } from "@/components/editais/SeloHabilitacao";
 import { HabilitacaoTab } from "@/components/editais/tabs/HabilitacaoTab";
+import { ViabilidadeTab } from "@/components/editais/tabs/ViabilidadeTab";
+import { useCelular } from "@/lib/use-celular";
 
 const TABS = [
   { key: "analise", label: "Análise" },
@@ -26,14 +28,29 @@ const TABS = [
   { key: "auditoria", label: "Auditoria" },
 ] as const;
 
+// Abas do celular (design): Análise, Viabilidade, Financeiro, Advogado, Checklist e Auditoria. "Advogado" é a aba
+// Documentos (declarações e anexos que o Agente Advogado gera) e "Auditoria" junta o resultado da habilitação com o
+// histórico dos agentes. No computador continuam as abas de sempre.
+const TABS_CELULAR = [
+  { key: "analise", label: "Análise" },
+  { key: "viabilidade", label: "Viabilidade" },
+  { key: "financeiro", label: "Financeiro" },
+  { key: "documentos", label: "Advogado" },
+  { key: "checklist", label: "Checklist" },
+  { key: "auditoria", label: "Auditoria" },
+] as const;
+
 export function EditalDetailClient({ editalId }: { editalId: string }) {
+  const celular = useCelular();
   const searchParams = useSearchParams();
   const tabInicial =
     (TABS.find((t) => t.key === searchParams.get("tab"))?.key as (typeof TABS)[number]["key"] | undefined) ??
     "analise";
 
   const [edital, setEdital] = useState<EditalDetail | null>(null);
-  const [tab, setTab] = useState<(typeof TABS)[number]["key"]>(tabInicial);
+  const [tabEscolhida, setTab] = useState<(typeof TABS)[number]["key"] | "viabilidade">(tabInicial);
+  // No celular a aba "Habilitação" não existe sozinha: o resultado dela aparece dentro de "Auditoria".
+  const tab = celular && tabEscolhida === "habilitacao" ? "auditoria" : tabEscolhida;
   const [movendoEtapa, setMovendoEtapa] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -97,12 +114,12 @@ export function EditalDetailClient({ editalId }: { editalId: string }) {
   const pipelineRunning = edital.status === "APROVADO" && edital.agentRuns.length > 0;
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8 lg:py-10">
-      <Link href="/dashboard" className="inline-flex items-center gap-1.5 text-sm text-muted hover:text-foreground">
-        <ArrowLeft className="h-4 w-4" /> Voltar
+    <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8 lg:py-10 max-md:pt-5">
+      <Link href={celular ? "/editais" : "/dashboard"} className="inline-flex items-center gap-1.5 text-sm text-muted hover:text-foreground">
+        <ArrowLeft className="h-4 w-4" /> {celular ? "Editais" : "Voltar"}
       </Link>
 
-      <div className="mt-4 flex flex-col gap-4 md:flex-row md:items-start md:justify-between md:gap-6">
+      <div className="mt-4 flex flex-col gap-4 max-md:rounded-[22px] max-md:bg-white max-md:p-4 md:flex-row md:items-start md:justify-between md:gap-6">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <span className="rounded-full bg-brand-light px-2.5 py-0.5 text-xs font-medium text-brand">
@@ -175,6 +192,19 @@ export function EditalDetailClient({ editalId }: { editalId: string }) {
         </div>
       )}
 
+      {celular ? (
+        <div className="rolagem-oculta -mx-4 mt-5 flex gap-2 overflow-x-auto px-4 pb-1">
+          {TABS_CELULAR.map((t) => (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              className={`flex-none whitespace-nowrap rounded-[18px] px-3.5 py-2 text-[12.5px] font-bold ${tab === t.key ? "bg-brand text-white" : "bg-white text-muted"}`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      ) : (
       <div className="mt-8 flex items-center gap-1 overflow-x-auto border-b border-border">
         {TABS.map((t) => (
           <button
@@ -190,6 +220,7 @@ export function EditalDetailClient({ editalId }: { editalId: string }) {
           </button>
         ))}
       </div>
+      )}
 
       <div className="mt-6">
         {tab === "analise" && <AnalysisTab edital={edital} onUpdate={load} />}
@@ -200,6 +231,13 @@ export function EditalDetailClient({ editalId }: { editalId: string }) {
         )}
         {tab === "checklist" && (
           <ChecklistTab editalId={edital.id} items={edital.checklistItems} onUpdate={load} />
+        )}
+        {tab === "viabilidade" && <ViabilidadeTab editalId={edital.id} />}
+        {tab === "auditoria" && celular && (
+          <div className="mb-6">
+            <HabilitacaoTab editalId={edital.id} etapa={edital.etapaKanban} onMudou={load} />
+            <h3 className="mb-3 mt-8 text-[15px] font-bold text-foreground">Histórico dos agentes</h3>
+          </div>
         )}
         {tab === "auditoria" && <AuditTab editalId={edital.id} logs={edital.auditLogs} onUpdate={load} />}
       </div>

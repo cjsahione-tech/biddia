@@ -58,3 +58,50 @@ body {
   50%, 90% { opacity: 1; }
   100% { opacity: 0; }
 }
+
+/* ── Visual de celular (até 768px) ─────────────────────────────────────────
+   Só troca as cores e as fontes nomeadas acima: como as telas usam esses nomes (fundo, texto, destaque),
+   tudo ganha o visual do design mobile sem mexer no computador (acima de 768px nada muda). */
+@media (max-width: 767.98px) {
+  :root {
+    --background: #f1f2fb;
+    --surface: #ffffff;
+    --foreground: #1e1b4b;
+    --muted: #4b4a7a;
+    --border: #e3e6ff;
+    --brand: #4338ca;
+    --brand-light: #e0e7ff;
+    --accent: #14532d;
+    --danger: #b91c1c;
+    --warning: #92400e;
+    --roxo-escuro: #312e81;
+    --ambar: #fbbf24;
+  }
+  body,
+  button,
+  input,
+  select,
+  textarea {
+    font-family: var(--font-dmsans), Arial, sans-serif;
+  }
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-rubik), Arial, sans-serif;
+  }
+  /* Cartões que são só "borda + cantos arredondados" (sem fundo próprio) ficam brancos e sem borda, como no design. */
+  main :is(.rounded-2xl, .rounded-xl).border:not([class*="bg-"]),
+  main :is(.rounded-2xl, .rounded-xl).border[class*="bg-surface"] {
+    background-color: #ffffff;
+    border-color: transparent;
+    border-radius: 20px;
+  }
+}
+
+/* Linhas que rolam para o lado (chips de etapa, abas) sem mostrar a barra de rolagem. */
+.rolagem-oculta {
+  scrollbar-width: none;
+}
+.rolagem-oculta::-webkit-scrollbar {
+  display: none;
+}

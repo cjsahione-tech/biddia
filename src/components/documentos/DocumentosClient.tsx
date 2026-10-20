@@ -30,6 +30,8 @@ import {
 import type { CompanyDocumentItem } from "@/lib/types";
 import { FormularioEnvioDocumento, FORMA_LABEL } from "@/components/documentos/FormularioEnvioDocumento";
 import { EnvioEmLote } from "@/components/documentos/EnvioEmLote";
+import { CabecalhoMobile } from "@/components/shell/CabecalhoMobile";
+import { useShell } from "@/components/shell/ShellContext";
 
 type Filtro = "TODOS" | "P" | "S";
 
@@ -163,6 +165,7 @@ function MoverDocumento({
 }
 
 export function DocumentosClient() {
+  const { companyName } = useShell();
   const [documentos, setDocumentos] = useState<CompanyDocumentItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [erroCarga, setErroCarga] = useState<string | null>(null);
@@ -501,8 +504,9 @@ export function DocumentosClient() {
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8 lg:py-10">
-      <h1 className="text-2xl font-semibold text-foreground">Documentos</h1>
-      <p className="mt-1 text-sm text-muted">
+      <CabecalhoMobile titulo="Documentações" subtitulo={companyName || undefined} />
+      <h1 className="text-2xl font-semibold text-foreground max-md:hidden">Documentos</h1>
+      <p className="mt-1 text-sm text-muted max-md:mt-3">
         Documentação da empresa para habilitação em licitações. Envie só o que a empresa tem — todos os documentos são
         opcionais. O sistema usa isso para conferir, em cada edital, o que está atendido e o que falta.
       </p>
