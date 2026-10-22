@@ -29,6 +29,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           <Link href="/admin/saude" className="border-b-2 border-transparent pb-3 hover:text-foreground">
             Saúde dos agentes
           </Link>
+          <Link href="/admin/saude-auditorias" className="border-b-2 border-transparent pb-3 hover:text-foreground">
+            Saúde das auditorias
+          </Link>
         </nav>
       </div>
       {children}
