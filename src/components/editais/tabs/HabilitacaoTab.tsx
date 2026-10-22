@@ -232,7 +232,7 @@ export function HabilitacaoTab({ editalId, etapa, onMudou }: { editalId: string;
           )}
         </div>
 
-        {concluida && relatorio.percentual != null && (
+        {concluida && relatorio.percentual != null && status !== "REVISAR_MANUALMENTE" && (
           <div className="mt-4 h-2 overflow-hidden rounded-full bg-border/60" aria-hidden>
             <div
               className={`h-full rounded-full ${status === "HABILITADA" ? "bg-accent" : status === "HABILITADA_RESSALVAS" ? "bg-warning" : "bg-danger"}`}
@@ -322,6 +322,21 @@ export function HabilitacaoTab({ editalId, etapa, onMudou }: { editalId: string;
         </div>
       )}
 
+      {concluida && auditoria && auditoria.motivosRevisao.length > 0 && (
+        <div className="flex items-start gap-3 rounded-xl border border-warning/40 bg-warning/10 p-4 text-sm text-warning">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <div className="min-w-0">
+            <p className="font-medium">Revisar manualmente: o sistema não afirma que esta empresa está habilitada.</p>
+            <p className="mt-1 text-xs">Os documentos abaixo parecem em ordem, mas a leitura automática pode ter deixado exigências de fora. Confira o edital antes de decidir:</p>
+            <ul className="mt-1 list-disc space-y-1 pl-5 text-xs">
+              {auditoria.motivosRevisao.map((m) => (
+                <li key={m}>{m}</li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
+
       {concluida && auditoria && !auditoria.leituraCompleta && auditoria.arquivosComProblema.some((a) => a.principal) && (
         <div className="flex items-start gap-3 rounded-xl border border-warning/30 bg-warning/5 p-4 text-sm text-warning">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -351,7 +366,7 @@ export function HabilitacaoTab({ editalId, etapa, onMudou }: { editalId: string;
         </div>
       )}
 
-      {concluida && resumo.pendentes === 0 && (!auditoria || auditoria.leituraCompleta) && (
+      {concluida && resumo.pendentes === 0 && (!auditoria || (auditoria.leituraCompleta && auditoria.motivosRevisao.length === 0)) && (
         <div className="flex items-start gap-3 rounded-xl border border-accent/30 bg-accent/5 p-4 text-sm text-accent">
           <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
           <p>Sem pendências: todos os documentos exigidos estão enviados e válidos na data da sessão.</p>

@@ -33,7 +33,7 @@ const base = (pendentes: ItemRelatorio[]): RelatorioHabilitacao => ({
   empresa: { razaoSocial: "Empresa Teste LTDA", cnpj: "00000000000191" },
   status: pendentes.length ? "NAO_HABILITADA" : "HABILITADA",
   percentual: pendentes.length ? 40 : 100,
-  auditoria: { estado: "CONCLUIDA", mensagem: null, erroTipo: null, solicitadaEm: null, avisoAdmin: null, arquivosComProblema: [], andamento: null, retentativaAgendada: false, concluidaEm: "2026-10-09T18:00:00Z", dataReferencia: "2026-10-20T13:00:00Z", leituraCompleta: true, documentosLidos: [] },
+  auditoria: { estado: "CONCLUIDA", mensagem: null, erroTipo: null, solicitadaEm: null, avisoAdmin: null, arquivosComProblema: [], andamento: null, retentativaAgendada: false, concluidaEm: "2026-10-09T18:00:00Z", dataReferencia: "2026-10-20T13:00:00Z", leituraCompleta: true, motivosRevisao: [], documentosLidos: [] },
   resumo: { exigidas: 10, atendidas: 4, pendentes: pendentes.length, naoSeAplicam: 1 },
   pendencias: pendentes.length ? [{ categoria: "fiscal", titulo: "Regularidade Fiscal", itens: pendentes }] : [],
   atendidas: [item(99, { situacao: "ATENDIDA", situacaoTexto: "Atendida" })],
@@ -53,6 +53,14 @@ describe("relatório de pendências de habilitação", () => {
     expect(Buffer.from(pdf.slice(0, 4)).toString()).toBe("%PDF");
     expect(pdf.length).toBeGreaterThan(5_000);
   }, 30_000); // gerar PDF é lento; com a suíte inteira em paralelo o limite padrão de 5s estoura
+
+  it("gera o PDF com o aviso de revisão manual (sem afirmar 'Habilitada')", async () => {
+    const r = base([]);
+    r.status = "REVISAR_MANUALMENTE";
+    r.auditoria!.motivosRevisao = ["Foram encontradas só 4 exigência(s) de habilitação — um edital costuma ter mais."];
+    const pdf = await gerarPdfPendenciasHabilitacao(company, r);
+    expect(Buffer.from(pdf.slice(0, 4)).toString()).toBe("%PDF");
+  }, 30_000);
 
   it("gera o PDF 'sem pendências' quando tudo está atendido", async () => {
     const pdf = await gerarPdfPendenciasHabilitacao(company, base([]));

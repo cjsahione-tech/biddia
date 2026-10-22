@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { CATEGORIAS_CATALOGO, chaveEfetivaDoDocumento, itemPorChave, normalizarNomeTipo } from "@/lib/catalogo-documentos";
 import { escolherMelhorDocumento } from "@/lib/documentos-empresa";
+import { lerMotivosDeRevisao } from "@/lib/habilitacao-confianca";
 import { calcularResultado, dataReferenciaDoEdital, type SituacaoExigencia } from "@/lib/habilitacao";
 import { classificarErro, ErroTipado, tipoDeMensagemAntiga, type TipoErroIA } from "@/lib/ia-erros";
 
@@ -55,6 +56,8 @@ export type RelatorioHabilitacao = {
     concluidaEm: string | null;
     dataReferencia: string | null;
     leituraCompleta: boolean;
+    /** Por que o resultado pede revisão manual (vazio = não pede). */
+    motivosRevisao: string[];
     documentosLidos: DocumentoLidoRelatorio[];
     /** Arquivos que não puderam ser lidos: qual, por quê e o que fazer (linguagem simples). */
     arquivosComProblema: ArquivoComProblema[];
@@ -268,6 +271,7 @@ export async function montarRelatorioHabilitacao(
           concluidaEm: aud.concluidaEm?.toISOString() ?? null,
           dataReferencia: (aud.dataReferencia ?? dataReferenciaDoEdital(edital)).toISOString(),
           leituraCompleta: aud.leituraCompleta,
+          motivosRevisao: lerMotivosDeRevisao(aud.motivosRevisao),
           documentosLidos: docsLidos,
           arquivosComProblema: arquivosComProblemaDe(docsLidos),
           andamento: ["RODANDO", "NA_FILA"].includes(aud.estado) ? textoAndamento(aud.progresso) : null,

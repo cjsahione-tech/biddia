@@ -8,7 +8,7 @@ import {
 } from "@/lib/auditoria-politica";
 import { ErroTipado, mensagemAmigavelDoTipo, mensagemDefinitivaDoTipo, mensagemDeRetentativaDoTipo, tipoDoErro } from "@/lib/ia-erros";
 import { ArmazenamentoIndisponivelError } from "@/lib/armazenamento-estado";
-import { statusHabilitacaoDefinitivaDoErro, statusHabilitacaoDoErro } from "@/lib/habilitacao";
+import { DICA_STATUS_HABILITACAO, GRUPOS_HABILITACAO, passaFiltroHabilitacao, ROTULO_STATUS_HABILITACAO, statusHabilitacaoDefinitivaDoErro, statusHabilitacaoDoErro } from "@/lib/habilitacao";
 
 describe("decidirAposFalha — o que fazer quando uma auditoria falha", () => {
   it("saldo ou chave: guarda e espera a IA voltar (não conta tentativa nem repete)", () => {
@@ -67,5 +67,17 @@ describe("textos e selos", () => {
     expect(tipoDoErro(new ArmazenamentoIndisponivelError())).toBe("ARMAZENAMENTO_INDISPONIVEL");
     expect(tipoDoErro(new ErroTipado("ARMAZENAMENTO_INDISPONIVEL", "x"))).toBe("ARMAZENAMENTO_INDISPONIVEL");
     expect(mensagemAmigavelDoTipo("ARMAZENAMENTO_INDISPONIVEL")).toMatch(/guardada/);
+  });
+});
+
+describe("selo 'Revisar manualmente'", () => {
+  it("tem rótulo, explicação e um grupo próprio na coluna Qualificação (nunca junto das Habilitadas)", () => {
+    expect(ROTULO_STATUS_HABILITACAO.REVISAR_MANUALMENTE).toBe("Revisar manualmente");
+    expect(DICA_STATUS_HABILITACAO.REVISAR_MANUALMENTE).toMatch(/conferir/);
+    const grupo = GRUPOS_HABILITACAO.find((g) => g.status.includes("REVISAR_MANUALMENTE"));
+    expect(grupo?.chave).toBe("REVISAR");
+    expect(GRUPOS_HABILITACAO.find((g) => g.chave === "HABILITADAS")!.status).not.toContain("REVISAR_MANUALMENTE");
+    expect(passaFiltroHabilitacao("REVISAR_MANUALMENTE", "grupo:REVISAR")).toBe(true);
+    expect(passaFiltroHabilitacao("REVISAR_MANUALMENTE", "grupo:HABILITADAS")).toBe(false);
   });
 });

@@ -129,7 +129,7 @@ export function EditalDetailClient({ editalId }: { editalId: string }) {
               {edital.fonte === "MANUAL" ? "Adicionado manualmente" : edital.numeroControlePNCP}
             </span>
             <SeloHabilitacao status={edital.habilitacaoStatus} percentual={edital.habilitacaoPercentual} tamanho="normal" etapa={edital.etapaKanban} />
-            {["HABILITADA_RESSALVAS", "NAO_HABILITADA"].includes(edital.habilitacaoStatus) && (
+            {["HABILITADA_RESSALVAS", "NAO_HABILITADA", "REVISAR_MANUALMENTE"].includes(edital.habilitacaoStatus) && (
               <button onClick={() => setTab("habilitacao")} className="text-xs font-medium text-brand hover:underline">
                 Ver pendências
               </button>

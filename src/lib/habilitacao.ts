@@ -151,6 +151,7 @@ export const ROTULO_STATUS_HABILITACAO: Record<string, string> = {
   ARQUIVO_ILEGIVEL: "Não consegui ler os arquivos",
   EDITAL_GRANDE: "Edital muito grande",
   TEMPO_ESGOTADO: "Tempo esgotado – tentando de novo",
+  REVISAR_MANUALMENTE: "Revisar manualmente",
 };
 
 /** Explicação em linguagem simples de cada selo (aparece ao passar o mouse). */
@@ -166,6 +167,7 @@ export const DICA_STATUS_HABILITACAO: Record<string, string> = {
   ARQUIVO_ILEGIVEL: "Os arquivos do edital não puderam ser baixados ou lidos. Abra a aba Habilitação para ver qual arquivo e o que fazer.",
   EDITAL_GRANDE: "O edital é muito grande e está sendo lido em partes; pode levar um pouco mais.",
   TEMPO_ESGOTADO: "A leitura passou do tempo previsto. O sistema continua de onde parou, sem precisar de ação sua.",
+  REVISAR_MANUALMENTE: "O resultado parece bom, mas a leitura automática pode ter deixado exigências de fora. Abra a aba Habilitação para ver o motivo e conferir o edital antes de decidir.",
 };
 
 /** Selo quando as tentativas automáticas acabaram: nada de "tentando de novo" — o usuário decide. */
@@ -280,11 +282,12 @@ export function etapaAudita(etapaKanban: string): boolean {
 
 // ── Grupos da coluna Qualificação ───────────────────────────────────────────
 
-export type GrupoHabilitacaoChave = "EM_AUDITORIA" | "HABILITADAS" | "NAO_HABILITADAS" | "COM_PROBLEMA" | "SEM_AUDITORIA";
+export type GrupoHabilitacaoChave = "EM_AUDITORIA" | "REVISAR" | "HABILITADAS" | "NAO_HABILITADAS" | "COM_PROBLEMA" | "SEM_AUDITORIA";
 
 /** Ordem em que os grupos aparecem na coluna Qualificação: o que está rodando primeiro, depois o resultado. */
 export const GRUPOS_HABILITACAO: { chave: GrupoHabilitacaoChave; titulo: string; status: string[] }[] = [
   { chave: "EM_AUDITORIA", titulo: "Auditando / na fila", status: ["AUDITANDO", "NA_FILA", "AGUARDANDO_IA", "TEMPO_ESGOTADO", "EDITAL_GRANDE"] },
+  { chave: "REVISAR", titulo: "Revisar manualmente", status: ["REVISAR_MANUALMENTE"] },
   { chave: "HABILITADAS", titulo: "Habilitadas", status: ["HABILITADA", "HABILITADA_RESSALVAS"] },
   { chave: "NAO_HABILITADAS", titulo: "Não habilitadas", status: ["NAO_HABILITADA"] },
   { chave: "COM_PROBLEMA", titulo: "Auditoria com problema", status: ["ERRO", "ARQUIVO_ILEGIVEL"] },

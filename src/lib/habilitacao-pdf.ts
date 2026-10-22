@@ -33,6 +33,14 @@ export async function gerarPdfPendenciasHabilitacao(company: Company, r: Relator
     ],
   });
 
+  if (r.auditoria && r.auditoria.motivosRevisao.length > 0) {
+    secoes.push({
+      tipo: "texto",
+      titulo: "Atenção: revisar manualmente",
+      texto: `O sistema não afirma que a empresa está habilitada, porque a leitura automática pode ter deixado exigências de fora: ${r.auditoria.motivosRevisao.join(" ")} Confira o edital antes de decidir.`,
+    });
+  }
+
   if (r.auditoria && !r.auditoria.leituraCompleta) {
     const ilegiveis = r.auditoria.arquivosComProblema.filter((a) => a.principal).map((a) => `${a.nome} — ${a.problema}`);
     secoes.push({
@@ -42,7 +50,7 @@ export async function gerarPdfPendenciasHabilitacao(company: Company, r: Relator
     });
   }
 
-  if (r.resumo.pendentes === 0 && (!r.auditoria || r.auditoria.leituraCompleta)) {
+  if (r.resumo.pendentes === 0 && (!r.auditoria || (r.auditoria.leituraCompleta && r.auditoria.motivosRevisao.length === 0))) {
     secoes.push({
       tipo: "texto",
       titulo: "Pendências",

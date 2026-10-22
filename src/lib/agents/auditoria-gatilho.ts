@@ -30,7 +30,7 @@ export type Solicitacao = {
 
 const EM_ANDAMENTO_MS = 10 * 60_000;
 const TIPOS_DOCUMENTO_LIDOS = ["DOCUMENTO_PNCP", "DOCUMENTO_LICITANET", "DOCUMENTO_USUARIO"] as const;
-const RESULTADOS_FINAIS = ["HABILITADA", "HABILITADA_RESSALVAS", "NAO_HABILITADA"];
+const RESULTADOS_FINAIS = ["HABILITADA", "HABILITADA_RESSALVAS", "NAO_HABILITADA", "REVISAR_MANUALMENTE"];
 
 export async function solicitarAuditoriaHabilitacao(
   editalId: string,

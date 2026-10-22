@@ -15,11 +15,12 @@ const ESTILO: Record<HabilitacaoStatusTipo, string> = {
   ARQUIVO_ILEGIVEL: "bg-danger/10 text-danger",
   EDITAL_GRANDE: "bg-warning/10 text-warning",
   TEMPO_ESGOTADO: "bg-warning/10 text-warning",
+  REVISAR_MANUALMENTE: "bg-warning/10 text-warning",
 };
 
 const EM_ANDAMENTO = ["AUDITANDO", "AGUARDANDO_IA", "TEMPO_ESGOTADO", "EDITAL_GRANDE"];
 
-const RESULTADOS = ["HABILITADA", "HABILITADA_RESSALVAS", "NAO_HABILITADA"];
+const RESULTADOS = ["HABILITADA", "HABILITADA_RESSALVAS", "NAO_HABILITADA", "REVISAR_MANUALMENTE"];
 
 export function SeloHabilitacao({
   status,

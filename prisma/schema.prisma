@@ -644,6 +644,7 @@ enum HabilitacaoStatus {
   ARQUIVO_ILEGIVEL // nenhum arquivo do edital pôde ser baixado/lido
   EDITAL_GRANDE // edital grande demais para uma leitura só (lido em partes)
   TEMPO_ESGOTADO // passou do tempo; nova tentativa automática agendada
+  REVISAR_MANUALMENTE // o resultado parece bom, mas os sinais dizem que a leitura pode estar incompleta: uma pessoa precisa conferir
 }
 
 enum SituacaoExigencia {
@@ -692,6 +693,9 @@ model AuditoriaHabilitacao {
   // Data usada para decidir se um documento está válido: abertura da sessão (ou hoje, se o
   // edital não informa).
   dataReferencia DateTime?
+
+  // Por que o resultado pede revisão manual (JSON: lista de frases em português) — null = não pede.
+  motivosRevisao String?
 
   totalExigencias Int @default(0)
   atendidas       Int @default(0)

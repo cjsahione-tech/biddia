@@ -286,7 +286,7 @@ export function KanbanBoard({
                   {g.titulo} (grupo)
                 </option>
               ))}
-              {(["HABILITADA", "HABILITADA_RESSALVAS", "NAO_HABILITADA", "AGUARDANDO", "NA_FILA", "AUDITANDO", "AGUARDANDO_IA", "TEMPO_ESGOTADO", "ARQUIVO_ILEGIVEL", "EDITAL_GRANDE", "ERRO"] as const).map((st) => (
+              {(["REVISAR_MANUALMENTE", "HABILITADA", "HABILITADA_RESSALVAS", "NAO_HABILITADA", "AGUARDANDO", "NA_FILA", "AUDITANDO", "AGUARDANDO_IA", "TEMPO_ESGOTADO", "ARQUIVO_ILEGIVEL", "EDITAL_GRANDE", "ERRO"] as const).map((st) => (
                 <option key={st} value={st}>
                   {ROTULO_STATUS_HABILITACAO[st]}
                 </option>

@@ -5,7 +5,8 @@ import { askJSON, MODELO_HAIKU, MODELO_SONNET, verificarIADisponivel, type UsoTo
 import { classificarErro, ErroTipado, mensagemDeRetentativaDoTipo, mensagemDefinitivaDoTipo, tipoDoErro } from "@/lib/ia-erros";
 import { ehErroDeArmazenamentoIndisponivel } from "@/lib/armazenamento-estado";
 import { PAUSA_MS } from "@/lib/controle-ia";
-import { statusHabilitacaoDefinitivaDoErro, statusHabilitacaoDoErro } from "@/lib/habilitacao";
+import { statusHabilitacaoDefinitivaDoErro, statusHabilitacaoDoErro, type StatusHabilitacao } from "@/lib/habilitacao";
+import { avaliarConfianca } from "@/lib/habilitacao-confianca";
 import { mapComLimite } from "@/lib/concorrencia";
 import { logAudit } from "@/lib/agents/run-tracker";
 import { baixarEPersistirDocumento } from "@/lib/agents/document-download";
@@ -567,7 +568,13 @@ async function gravarResultado(opts: {
   uso?: { haikuEntrada: number; haikuSaida: number; sonnetEntrada: number; sonnetSaida: number };
 }) {
   const { editalId, linhas, dataReferencia, leituraCompleta, docsEmpresa } = opts;
-  const r = calcularResultado({ situacoes: linhas.map((l) => l.situacao), leituraCompleta });
+  const calculado = calcularResultado({ situacoes: linhas.map((l) => l.situacao), leituraCompleta });
+  // Resultado "bom" com sinais de leitura incompleta: não afirma — pede revisão de uma pessoa.
+  const confianca = avaliarConfianca({
+    linhas: linhas.map((l) => ({ categoria: l.categoria, situacao: l.situacao, certeza: l.certezaMapeamento })),
+    statusCalculado: calculado.status,
+  });
+  const r = { ...calculado, status: (confianca.revisar ? "REVISAR_MANUALMENTE" : calculado.status) as StatusHabilitacao | "REVISAR_MANUALMENTE" };
 
   // Preserva o aviso de vencimento já enviado para a mesma exigência (não repete a mensagem).
   const anteriores = await prisma.exigenciaHabilitacao.findMany({
@@ -588,6 +595,7 @@ async function gravarResultado(opts: {
     atendidas: r.atendidas,
     pendentes: r.pendentes,
     leituraCompleta,
+    motivosRevisao: confianca.revisar ? JSON.stringify(confianca.motivos) : null,
     docsFingerprint: fingerprintDocumentos(docsEmpresa),
     ...(opts.editalFingerprint ? { editalFingerprint: opts.editalFingerprint } : {}),
     concluidaEm: new Date(),
@@ -1110,7 +1118,7 @@ async function rodar(
     "Auditoria de habilitação",
     r.status === "HABILITADA" ? "OK" : "ALERTA",
     `${r.atendidas} de ${r.total} exigências de habilitação atendidas (${r.percentual}%) — ${
-      r.status === "HABILITADA" ? "Habilitada" : r.status === "HABILITADA_RESSALVAS" ? "Habilitada com ressalvas" : "Não habilitada"
+      r.status === "HABILITADA" ? "Habilitada" : r.status === "HABILITADA_RESSALVAS" ? "Habilitada com ressalvas" : r.status === "REVISAR_MANUALMENTE" ? "Revisar manualmente (a leitura pode estar incompleta)" : "Não habilitada"
     }.${aviso}`
   );
   return "concluida";
@@ -1265,11 +1273,11 @@ export async function reavaliarEditaisDaEmpresa(companyId: string, origem?: stri
   const editais = await prisma.edital.findMany({
     where: opts.editalId
       ? // Pedido para UM edital (o analista anexou um documento nele): reavalia mesmo com a sessão encerrada.
-        { id: opts.editalId, companyId, habilitacaoStatus: { in: ["HABILITADA", "HABILITADA_RESSALVAS", "NAO_HABILITADA"] } }
+        { id: opts.editalId, companyId, habilitacaoStatus: { in: ["HABILITADA", "HABILITADA_RESSALVAS", "NAO_HABILITADA", "REVISAR_MANUALMENTE"] } }
       : {
           companyId,
           etapaKanban: { not: "RASCUNHO" },
-          habilitacaoStatus: { in: ["HABILITADA", "HABILITADA_RESSALVAS", "NAO_HABILITADA"] },
+          habilitacaoStatus: { in: ["HABILITADA", "HABILITADA_RESSALVAS", "NAO_HABILITADA", "REVISAR_MANUALMENTE"] },
           OR: [{ dataEncerramentoProposta: null }, { dataEncerramentoProposta: { gt: new Date() } }],
         },
     select: { id: true, titulo: true, etapaKanban: true, dataAberturaProposta: true, dataEncerramentoProposta: true },
