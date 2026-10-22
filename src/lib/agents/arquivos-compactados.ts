@@ -1,9 +1,10 @@
 import JSZip from "jszip";
+import { ehPacoteXlsx, extrairTextoCsv, extrairTextoXlsx } from "@/lib/agents/planilhas";
 
 // Editais do LicitaNet (e alguns do PNCP) chegam dentro de um ZIP com vários arquivos —
 // termo de referência, anexos, o edital em si. Aqui o ZIP é aberto e cada arquivo lido por
-// inteiro. Suporta PDF, DOCX e TXT; outros formatos (planilhas, imagens) são ignorados por
-// não carregarem exigências de habilitação em texto.
+// inteiro. Suporta PDF, DOCX, XLSX, CSV e TXT (planilhas de preços e de quantitativo são documentos principais);
+// outros formatos (imagens etc.) são ignorados.
 
 const MAX_ARQUIVOS = 60;
 // Proteção contra "bomba de ZIP" (arquivo pequeno que expande para gigabytes).
@@ -66,6 +67,10 @@ export async function extrairTextoDeZip(
   if (zip.file("word/document.xml")) {
     return extrairTextoDocx(bytes);
   }
+  // Idem para uma planilha do Excel (.xlsx): o arquivo todo é o documento.
+  if (ehPacoteXlsx(Object.keys(zip.files))) {
+    return extrairTextoXlsx(bytes);
+  }
 
   const entradas = Object.values(zip.files)
     .filter((f) => !f.dir && !f.name.startsWith("__MACOSX/"))
@@ -82,7 +87,9 @@ export async function extrairTextoDeZip(
     const ehPdf = minusculo.endsWith(".pdf");
     const ehDocx = minusculo.endsWith(".docx");
     const ehTxt = minusculo.endsWith(".txt");
-    if (!ehPdf && !ehDocx && !ehTxt) continue;
+    const ehXlsx = minusculo.endsWith(".xlsx");
+    const ehCsv = minusculo.endsWith(".csv");
+    if (!ehPdf && !ehDocx && !ehTxt && !ehXlsx && !ehCsv) continue;
 
     const conteudo = await entrada.async("uint8array");
     total += conteudo.byteLength;
@@ -92,6 +99,8 @@ export async function extrairTextoDeZip(
     try {
       if (ehPdf) texto = await lerPdf(conteudo);
       else if (ehDocx) texto = await extrairTextoDocx(conteudo);
+      else if (ehXlsx) texto = await extrairTextoXlsx(conteudo);
+      else if (ehCsv) texto = extrairTextoCsv(conteudo);
       else texto = new TextDecoder("utf-8").decode(conteudo).trim() || null;
     } catch (err) {
       console.error(`Falha ao ler "${nome}" dentro do ZIP:`, err);

@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { baixarArquivoPncp } from "@/lib/agents/pncp";
 import { baixarArquivoLicitaNet } from "@/lib/agents/licitanet";
 import { subirAnexo, apagarAnexo, caminhoDocumentoEdital, isStorageConfigured } from "@/lib/storage";
+import { ehErroDeArmazenamentoIndisponivel } from "@/lib/armazenamento-estado";
 
 // Sem Storage configurado, só o que cabe no banco (base64) é guardado; acima disso exige o Storage.
 const LIMITE_BASE64_INLINE = 4 * 1024 * 1024;
@@ -44,6 +45,12 @@ export async function baixarEPersistirDocumento(
       if (count === 0) await apagarAnexo(path).catch(() => null);
       return arquivo;
     } catch (err) {
+      // Storage bloqueado: NÃO enche o banco com cópias (já deixou 44 MB lá). O arquivo recém-baixado serve para esta
+      // leitura; sem cópia salva, na próxima vez ele é baixado de novo da origem.
+      if (ehErroDeArmazenamentoIndisponivel(err)) {
+        console.warn(`Armazenamento indisponível — documento ${doc.id} usado sem salvar cópia.`);
+        return arquivo;
+      }
       if (grande) throw err; // arquivo grande não cabe no banco
       console.error(`Storage indisponível para o documento ${doc.id} — guardando no banco:`, err);
     }

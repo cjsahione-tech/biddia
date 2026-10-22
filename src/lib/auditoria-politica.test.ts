@@ -6,13 +6,18 @@ import {
   MAX_CONTINUACOES_NA_CADEIA,
   MAX_TENTATIVAS_AUTOMATICAS,
 } from "@/lib/auditoria-politica";
-import { mensagemDefinitivaDoTipo, mensagemDeRetentativaDoTipo } from "@/lib/ia-erros";
+import { ErroTipado, mensagemAmigavelDoTipo, mensagemDefinitivaDoTipo, mensagemDeRetentativaDoTipo, tipoDoErro } from "@/lib/ia-erros";
+import { ArmazenamentoIndisponivelError } from "@/lib/armazenamento-estado";
 import { statusHabilitacaoDefinitivaDoErro, statusHabilitacaoDoErro } from "@/lib/habilitacao";
 
 describe("decidirAposFalha — o que fazer quando uma auditoria falha", () => {
   it("saldo ou chave: guarda e espera a IA voltar (não conta tentativa nem repete)", () => {
     expect(decidirAposFalha("SALDO_INSUFICIENTE", 0)).toEqual({ acao: "aguardar_ia" });
     expect(decidirAposFalha("CHAVE_INVALIDA", 2)).toEqual({ acao: "aguardar_ia" });
+  });
+
+  it("armazenamento bloqueado: guarda e espera (nunca vira erro final nem gasta tentativa), por mais vezes que aconteça", () => {
+    for (const n of [0, 1, 2, 9]) expect(decidirAposFalha("ARMAZENAMENTO_INDISPONIVEL", n)).toEqual({ acao: "aguardar_armazenamento" });
   });
 
   it("erro passageiro: tenta de novo com espera crescente, até o limite", () => {
@@ -55,5 +60,12 @@ describe("textos e selos", () => {
     expect(statusHabilitacaoDoErro("SOBRECARGA")).toBe("AGUARDANDO_IA");
     expect(statusHabilitacaoDefinitivaDoErro("SOBRECARGA")).toBe("ERRO");
     expect(statusHabilitacaoDefinitivaDoErro("ARQUIVO_ILEGIVEL")).toBe("ARQUIVO_ILEGIVEL");
+  });
+
+  it("armazenamento bloqueado aparece como espera calma (nunca como 'arquivo ilegível') e o erro tipado é reconhecido", () => {
+    expect(statusHabilitacaoDoErro("ARMAZENAMENTO_INDISPONIVEL")).toBe("AGUARDANDO_IA");
+    expect(tipoDoErro(new ArmazenamentoIndisponivelError())).toBe("ARMAZENAMENTO_INDISPONIVEL");
+    expect(tipoDoErro(new ErroTipado("ARMAZENAMENTO_INDISPONIVEL", "x"))).toBe("ARMAZENAMENTO_INDISPONIVEL");
+    expect(mensagemAmigavelDoTipo("ARMAZENAMENTO_INDISPONIVEL")).toMatch(/guardada/);
   });
 });

@@ -3,7 +3,11 @@ import { prisma } from "@/lib/prisma";
 import { baixarArquivoPncp } from "@/lib/agents/pncp";
 import { transcreverPdfViaVisao, OCR_VISAO_LIMITE_PAGINAS, OCR_VISAO_LIMITE_BYTES } from "@/lib/anthropic";
 import { logAudit } from "@/lib/agents/run-tracker";
+import { baixarArquivoLicitaNet } from "@/lib/agents/licitanet";
 import { baixarAnexo } from "@/lib/storage";
+import { ArmazenamentoIndisponivelError, ehErroDeArmazenamentoIndisponivel } from "@/lib/armazenamento-estado";
+import { detectarFormato, extrairTextoPdfEmLotes, type ContextoOcr } from "@/lib/agents/leitura-documentos";
+import { extrairTextoCsv } from "@/lib/agents/planilhas";
 import type { Document as DocumentRow } from "@prisma/client";
 import { ehZip, extrairTextoDeZip } from "@/lib/agents/arquivos-compactados";
 import {
@@ -263,28 +267,48 @@ export function selecionarTrechoRelevante(
     .join("\n\n[...]\n\n");
 }
 
+/** Baixa o arquivo direto do portal de origem (PNCP ou LicitaNet); null se falhar. */
+async function baixarDaOrigem(doc: DocumentRow): Promise<Uint8Array | null> {
+  const baixar = doc.tipo === "DOCUMENTO_LICITANET" ? baixarArquivoLicitaNet : baixarArquivoPncp;
+  const arquivo = await baixar(doc.origemUrl!).catch((err) => {
+    console.error(`Falha ao baixar "${doc.nome}" de ${doc.origemUrl}:`, err);
+    return null;
+  });
+  return arquivo ? arquivo.bytes : null;
+}
+
 /**
  * Texto BRUTO (sem corte) de um documento. Reaproveita `doc.textoExtraido` se já foi
  * extraído antes; senão extrai do PDF (cópia local ou, em último caso, baixando da
  * fonte) e grava o resultado para as próximas leituras não reprocessarem o mesmo PDF.
  */
-export async function obterTextoBrutoDocumento(doc: DocumentRow): Promise<string | null> {
+export async function obterTextoBrutoDocumento(
+  doc: DocumentRow,
+  // true = se o arquivo só existe no Storage e ele está bloqueado, LANÇA ArmazenamentoIndisponivelError (a auditoria
+  // espera o Storage voltar) em vez de devolver null (que pareceria "arquivo ilegível").
+  // bytes: arquivo que o chamador acabou de baixar (e não conseguiu guardar) — evita baixar duas vezes.
+  // ocr: leitura por imagem em lotes com progresso guardado; lança OcrEmAndamento se ainda não terminou.
+  opts: { lancarSeArmazenamentoIndisponivel?: boolean; bytes?: Uint8Array; ocr?: ContextoOcr } = {}
+): Promise<string | null> {
   if (doc.textoExtraido) return doc.textoExtraido;
 
-  let bytes: Uint8Array | null = null;
-  if (doc.storagePath) {
+  let bytes: Uint8Array | null = opts.bytes ?? null;
+  if (bytes) {
+    // já temos o arquivo em mãos
+  } else if (doc.storagePath) {
+    let bloqueado = false;
     bytes = await baixarAnexo(doc.storagePath).catch((err) => {
-      console.error(`Falha ao baixar "${doc.nome}" do Storage (${doc.storagePath}):`, err);
+      if (ehErroDeArmazenamentoIndisponivel(err)) bloqueado = true;
+      else console.error(`Falha ao baixar "${doc.nome}" do Storage (${doc.storagePath}):`, err);
       return null;
     });
+    // Plano B: documento que veio do portal (PNCP/LicitaNet) pode ser baixado de novo da origem.
+    if (!bytes && doc.origemUrl) bytes = await baixarDaOrigem(doc);
+    if (!bytes && bloqueado && opts.lancarSeArmazenamentoIndisponivel) throw new ArmazenamentoIndisponivelError();
   } else if (doc.conteudoBase64) {
     bytes = base64ParaBytes(doc.conteudoBase64);
   } else if (doc.origemUrl) {
-    const arquivo = await baixarArquivoPncp(doc.origemUrl).catch((err) => {
-      console.error(`Falha ao baixar "${doc.nome}" de ${doc.origemUrl}:`, err);
-      return null;
-    });
-    if (arquivo) bytes = arquivo.bytes;
+    bytes = await baixarDaOrigem(doc);
   }
   if (!bytes) return null;
 
@@ -304,7 +328,24 @@ export async function obterTextoBrutoDocumento(doc: DocumentRow): Promise<string
     return textoZip;
   }
 
-  const { texto, viaOcr } = await extrairTextoPdfComOrigem(bytes);
+  // Planilha em CSV/TXT soltos (não vêm como PDF): decodifica direto.
+  const formato = detectarFormato(bytes, doc.nome);
+  if (formato === "csv" || formato === "txt") {
+    const textoPlano = formato === "csv" ? extrairTextoCsv(bytes) : new TextDecoder("utf-8").decode(bytes).trim() || null;
+    if (textoPlano) {
+      await prisma.document
+        .update({ where: { id: doc.id }, data: { textoExtraido: textoPlano } })
+        .catch((err) => console.error(`Falha ao cachear texto do documento ${doc.id}:`, err));
+    }
+    return textoPlano;
+  }
+  // Página de login/captcha/erro no lugar do arquivo, ou Word/Excel antigo: não é um PDF, não adianta tentar ler como um.
+  if (formato === "html" || formato === "doc_antigo") return null;
+
+  // Com contexto de OCR (auditoria): lê por imagem em lotes, guardando o progresso (ver leitura-documentos.ts).
+  const { texto, viaOcr } = opts.ocr
+    ? await extrairTextoPdfEmLotes(bytes, opts.ocr)
+    : await extrairTextoPdfComOrigem(bytes);
   if (!texto) return null;
 
   if (viaOcr) {

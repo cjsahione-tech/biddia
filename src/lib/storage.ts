@@ -1,4 +1,11 @@
 import { createClient } from "@supabase/supabase-js";
+import {
+  ArmazenamentoIndisponivelError,
+  ehRestricaoDeArmazenamento,
+  exigirArmazenamentoLiberado,
+  marcarArmazenamentoBloqueado,
+  marcarArmazenamentoLiberado,
+} from "@/lib/armazenamento-estado";
 
 // Bucket privado dedicado a anexos do checklist (certidões, contrato social, alvarás
 // etc.) — existe pra fugir do teto de ~4,5MB de corpo de requisição das funções
@@ -18,6 +25,36 @@ function getClient() {
   }
   if (!client) client = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
   return client;
+}
+
+/** Erro devolvido pelo Supabase Storage → se for bloqueio do projeto (cota/plano), vira ArmazenamentoIndisponivelError e
+ * liga o disjuntor; qualquer outro erro segue como está (arquivo inexistente, permissão etc.). */
+function converterErro(error: unknown): unknown {
+  const e = error as { message?: string; status?: number | string; statusCode?: number | string; originalError?: unknown } | null;
+  let texto = String(e?.message ?? "");
+  try {
+    if (e?.originalError) texto += " " + (typeof e.originalError === "string" ? e.originalError : JSON.stringify(e.originalError));
+  } catch {
+    /* sem detalhe extra */
+  }
+  if (ehRestricaoDeArmazenamento(texto, e?.status ?? e?.statusCode)) {
+    marcarArmazenamentoBloqueado();
+    return new ArmazenamentoIndisponivelError(texto.slice(0, 300) || undefined);
+  }
+  return error;
+}
+
+/** Sonda barata (lista 1 item do bucket, sem baixar nada): o Storage está liberado? Ignora o disjuntor, porque é ela quem o reabre. */
+export async function verificarArmazenamento(): Promise<boolean> {
+  if (!isStorageConfigured()) return true;
+  try {
+    const { error } = await getClient().storage.from(BUCKET).list("", { limit: 1 });
+    if (error) throw converterErro(error);
+    marcarArmazenamentoLiberado();
+    return true;
+  } catch (err) {
+    return !(err instanceof ArmazenamentoIndisponivelError);
+  }
 }
 
 function sanitizarNomeArquivo(nome: string): string {
@@ -71,16 +108,19 @@ export async function criarUrlPublicaDeLongaDuracao(path: string) {
 /** Gera uma URL assinada de upload — o navegador faz PUT direto nela, o arquivo nunca
  * passa pelo corpo da nossa função serverless. Token válido por tempo curto. */
 export async function criarUrlUpload(path: string) {
+  exigirArmazenamentoLiberado();
   const { data, error } = await getClient().storage.from(BUCKET).createSignedUploadUrl(path);
-  if (error) throw error;
+  if (error) throw converterErro(error);
   return data; // { path, token, signedUrl }
 }
 
 /** URL assinada de download, válida por 5 minutos — gerada sob demanda a cada request
  * de download, não armazenada. */
 export async function criarUrlDownload(path: string) {
+  exigirArmazenamentoLiberado();
   const { data, error } = await getClient().storage.from(BUCKET).createSignedUrl(path, 300);
-  if (error) throw error;
+  if (error) throw converterErro(error);
+  marcarArmazenamentoLiberado();
   return data.signedUrl;
 }
 
@@ -88,8 +128,10 @@ export async function criarUrlDownload(path: string) {
  * o arquivo já está em memória no backend, ex: documento baixado do PNCP/LicitaNet
  * grande demais pra guardar como base64 inline no Postgres (ver agente1-comercial.ts). */
 export async function subirAnexo(path: string, bytes: Uint8Array, contentType = "application/pdf") {
+  exigirArmazenamentoLiberado();
   const { error } = await getClient().storage.from(BUCKET).upload(path, bytes, { contentType });
-  if (error) throw error;
+  if (error) throw converterErro(error);
+  marcarArmazenamentoLiberado();
 }
 
 export async function apagarAnexo(path: string) {
@@ -99,8 +141,10 @@ export async function apagarAnexo(path: string) {
 /** Baixa os bytes de um anexo direto (sem passar por URL assinada) — usado pelo ZIP da
  * pasta completa, que precisa do conteúdo de todos os anexos de uma vez no servidor. */
 export async function baixarAnexo(path: string): Promise<Uint8Array> {
+  exigirArmazenamentoLiberado();
   const { data, error } = await getClient().storage.from(BUCKET).download(path);
-  if (error) throw error;
+  if (error) throw converterErro(error);
+  marcarArmazenamentoLiberado();
   return new Uint8Array(await data.arrayBuffer());
 }
 

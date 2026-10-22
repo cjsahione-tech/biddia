@@ -4,6 +4,8 @@
 // determinístico, ex: caractere que o PDF não consegue codificar), e traduz cada caso numa
 // mensagem que diz o que está acontecendo, em vez de um genérico "tente de novo".
 
+import { ehErroDeArmazenamentoIndisponivel } from "@/lib/armazenamento-estado";
+
 export function mensagemDoErro(err: unknown): string {
   if (err instanceof Error) return err.message;
   return typeof err === "string" ? err : "erro desconhecido";
@@ -47,6 +49,7 @@ export type TipoErroIA =
   | "SEM_DOCUMENTO"
   | "EDITAL_GRANDE"
   | "SEM_EXIGENCIAS"
+  | "ARMAZENAMENTO_INDISPONIVEL" // o Storage de arquivos está bloqueado/fora do ar: não é culpa do arquivo
   | "DESCONHECIDO";
 
 /** Erro que já nasce com tipo (usado pela auditoria para os casos de edital/arquivo). */
@@ -87,6 +90,8 @@ const MSG_USUARIO: Record<TipoErroIA, string> = {
   SEM_DOCUMENTO: "Este edital não tem documentos para ler. Envie o PDF do edital na tela de Editais.",
   EDITAL_GRANDE: "Este edital é muito grande e está sendo lido em partes. Pode levar um pouco mais.",
   SEM_EXIGENCIAS: "Não encontrei exigências de habilitação nos documentos lidos. Confira se o arquivo do edital está completo.",
+  ARMAZENAMENTO_INDISPONIVEL:
+    "O armazenamento de arquivos está temporariamente indisponível, então não consegui abrir os documentos agora. Sua auditoria foi guardada e será retomada automaticamente — nenhum resultado foi dado por engano.",
   DESCONHECIDO: "Ocorreu um problema inesperado na auditoria. Vamos tentar de novo automaticamente.",
 };
 
@@ -130,6 +135,7 @@ const TIPOS_TRANSIENTES = new Set<TipoErroIA>(["LIMITE_TAXA", "SOBRECARGA", "SER
 
 export function tipoDoErro(err: unknown): TipoErroIA {
   if (err instanceof ErroTipado) return err.tipo;
+  if (ehErroDeArmazenamentoIndisponivel(err)) return "ARMAZENAMENTO_INDISPONIVEL";
   return tipoDaMensagem(mensagemDoErro(err), statusHttp(err));
 }
 

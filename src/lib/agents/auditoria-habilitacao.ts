@@ -3,6 +3,7 @@ import type { Document as DocumentRow, HabilitacaoStatus, Prisma } from "@prisma
 import { prisma } from "@/lib/prisma";
 import { askJSON, MODELO_HAIKU, MODELO_SONNET, verificarIADisponivel, type UsoTokens } from "@/lib/anthropic";
 import { classificarErro, ErroTipado, mensagemDeRetentativaDoTipo, mensagemDefinitivaDoTipo } from "@/lib/ia-erros";
+import { ehErroDeArmazenamentoIndisponivel } from "@/lib/armazenamento-estado";
 import { PAUSA_MS } from "@/lib/controle-ia";
 import { statusHabilitacaoDefinitivaDoErro, statusHabilitacaoDoErro } from "@/lib/habilitacao";
 import { mapComLimite } from "@/lib/concorrencia";
@@ -10,8 +11,9 @@ import { logAudit } from "@/lib/agents/run-tracker";
 import { baixarEPersistirDocumento } from "@/lib/agents/document-download";
 import { colocarNaFila, haVaga, iniciarProximasDaFila } from "@/lib/agents/auditoria-fila";
 import { densidadeDeHabilitacao, selecionarTrechosDeHabilitacao } from "@/lib/habilitacao-trechos";
-import { BATIMENTO_VIVO_MS, decidirAposFalha, MAX_CONTINUACOES_NA_CADEIA, MAX_PASSOS_LEITURA, MAX_PASSOS_SEM_AVANCO } from "@/lib/auditoria-politica";
+import { BATIMENTO_VIVO_MS, decidirAposFalha, ESPERA_ARMAZENAMENTO_MS, MAX_CONTINUACOES_NA_CADEIA, MAX_PASSOS_LEITURA, MAX_PASSOS_SEM_AVANCO } from "@/lib/auditoria-politica";
 import { obterTextoBrutoDocumento } from "@/lib/agents/pdf-extract";
+import { ehOcrEmAndamento, type ContextoOcr, type EstadoOcr } from "@/lib/agents/leitura-documentos";
 import { MARCA_ILEGIVEL, textoSoIlegivel } from "@/lib/agents/arquivos-compactados";
 import { dispararAuditoriaHabilitacao } from "@/lib/agents/auditoria-dispatch";
 import { notificarPrazosVencendo } from "@/lib/notifications";
@@ -78,7 +80,7 @@ type Bruta = {
   aplicavelSe: string | null;
 };
 
-type MotivoArquivo = "download" | "demorou" | "formato" | "removido";
+type MotivoArquivo = "download" | "demorou" | "formato" | "removido" | "armazenamento" | "ocr";
 
 // Progresso salvo no banco: cada execução retoma de onde a anterior parou. Campos novos são
 // opcionais para continuar lendo registros gravados antes desta versão.
@@ -94,6 +96,10 @@ type Progresso = {
   falhas?: Record<string, { n: number; motivo: MotivoArquivo }>;
   /** Resultado da conferência por lote (índice → exigências conferidas). */
   lotes?: Record<string, Final[]>;
+  /** Leitura por imagem (OCR) dos documentos escaneados, por id do documento: páginas já lidas, para não refazer. */
+  ocr?: Record<string, EstadoOcr>;
+  /** O analista liberou a leitura completa (sem o teto de 60 páginas por imagem). */
+  leituraCompletaLiberada?: boolean;
 };
 
 type Pedaco = { docNome: string; indice: number; total: number; texto: string; densidade: number };
@@ -897,17 +903,39 @@ async function rodar(
   const textos = new Map<string, string>(); // id do documento → texto
   for (const d of lidos) if (d.textoExtraido) textos.set(d.id, d.textoExtraido);
 
+  let armazenamentoBloqueado = false;
+  const emLeituraPorImagem = new Set<string>();
   const aProcessar = lidos.filter((d) => !textos.has(d.id) && (progresso.falhas![d.id]?.n ?? 0) < FALHAS_ATE_DESISTIR_DO_ARQUIVO);
   await rodarComPrazo(aProcessar, 3, () => restante() > FOLGA_PREPARO_MS, async (d) => {
-    const r = await prepararDocumento(d, edital.companyId, () => Math.min(LIMITE_ARQUIVO_MS, restante() - MARGEM_FINAL_MS));
+    progresso.ocr ??= {};
+    const ocr: ContextoOcr = {
+      estado: (progresso.ocr[d.id] ??= { lidas: {} }),
+      restanteMs: () => restante() - MARGEM_FINAL_MS,
+      aoAvancar: async (avancou) => {
+        if (avancou) avancos++;
+        await salvar();
+      },
+      semTeto: progresso.leituraCompletaLiberada,
+    };
+    const r = await prepararDocumento(d, edital.companyId, () => Math.min(LIMITE_ARQUIVO_MS, restante() - MARGEM_FINAL_MS), ocr);
     if (r.texto !== null) {
       textos.set(d.id, r.texto);
       delete progresso.falhas![d.id];
+      delete progresso.ocr[d.id]; // texto pronto e guardado no documento: o progresso do OCR não é mais necessário
       avancos++;
+    } else if (r.motivo === "armazenamento") {
+      armazenamentoBloqueado = true; // não conta como falha do arquivo
+    } else if (r.motivo === "ocr") {
+      emLeituraPorImagem.add(d.id); // continua na próxima execução, sem contar como falha
     } else {
       progresso.falhas![d.id] = { n: (progresso.falhas![d.id]?.n ?? 0) + 1, motivo: r.motivo };
     }
   });
+  // Storage bloqueado: guarda o que já foi lido e espera ele voltar. Nunca fecha um resultado com arquivos que não deu para abrir.
+  if (armazenamentoBloqueado) {
+    await salvar();
+    throw new ErroTipado("ARMAZENAMENTO_INDISPONIVEL", "O armazenamento de arquivos está bloqueado.");
+  }
 
   docsLidos = lidos.map((d) => {
     const texto = textos.get(d.id);
@@ -915,7 +943,7 @@ async function rodar(
       nome: d.nome,
       caracteres: texto?.length ?? 0,
       ok: !!texto && !texto.includes(MARCA_ILEGIVEL),
-      ...(texto ? {} : { motivo: progresso.falhas![d.id]?.motivo ?? ("download" as MotivoArquivo) }),
+      ...(texto ? {} : { motivo: emLeituraPorImagem.has(d.id) ? ("ocr" as MotivoArquivo) : (progresso.falhas![d.id]?.motivo ?? ("download" as MotivoArquivo)) }),
     };
   });
   leituraCompleta = docsLidos.every((d) => d.ok);
@@ -1050,10 +1078,12 @@ async function rodar(
 async function prepararDocumento(
   d: DocumentRow,
   companyId: string,
-  limiteMs: () => number
+  limiteMs: () => number,
+  ocr?: ContextoOcr
 ): Promise<{ texto: string; motivo?: undefined } | { texto: null; motivo: MotivoArquivo }> {
   try {
     let doc = d;
+    let bytesBaixados: Uint8Array | undefined;
     const precisaBaixar = (d.tipo === "DOCUMENTO_PNCP" || d.tipo === "DOCUMENTO_LICITANET") && !d.conteudoBase64 && !d.storagePath && !!d.origemUrl;
     if (precisaBaixar) {
       let baixou = false;
@@ -1064,6 +1094,7 @@ async function prepararDocumento(
         );
         if (r === ESGOTOU) return { texto: null, motivo: "demorou" };
         baixou = true;
+        bytesBaixados = r.bytes;
       } catch (err) {
         console.error(`Falha ao baixar "${d.nome}" (edital ${d.editalId}):`, err);
         // 404 do PNCP: confirma se o órgão apagou a contratação (aí não adianta tentar de novo).
@@ -1076,11 +1107,19 @@ async function prepararDocumento(
       }
       if (baixou) doc = await prisma.document.findUniqueOrThrow({ where: { id: d.id } });
     }
-    const texto = await comPrazo(obterTextoBrutoDocumento(doc), limiteMs());
-    if (texto === ESGOTOU) return { texto: null, motivo: "demorou" };
+    // A leitura por imagem trabalha em lotes e tem controle de tempo próprio: usa todo o tempo que sobra da execução.
+    const texto = await comPrazo(
+      obterTextoBrutoDocumento(doc, { lancarSeArmazenamentoIndisponivel: true, bytes: bytesBaixados, ocr }),
+      ocr ? Math.max(limiteMs(), ocr.restanteMs()) : limiteMs()
+    );
+    if (texto === ESGOTOU) return { texto: null, motivo: ocr?.estado.escolhidas ? "ocr" : "demorou" };
     if (!texto) return { texto: null, motivo: "formato" };
     return { texto };
   } catch (err) {
+    // Storage bloqueado não é culpa do arquivo: a auditoria espera em vez de marcar o documento como ilegível.
+    if (ehErroDeArmazenamentoIndisponivel(err)) return { texto: null, motivo: "armazenamento" };
+    // Leitura por imagem em andamento: o progresso já foi guardado, a próxima execução continua (não é falha do arquivo).
+    if (ehOcrEmAndamento(err)) return { texto: null, motivo: "ocr" };
     console.error(`Falha ao preparar "${d.nome}" (edital ${d.editalId}):`, err);
     return { texto: null, motivo: "formato" };
   }
@@ -1116,6 +1155,10 @@ async function registrarFalha(editalId: string, err: unknown, reconferindo: bool
 
     if (decisao.acao === "aguardar_ia") {
       dados = { estado: "AGUARDANDO_SALDO", mensagem: c.mensagemUsuario, proximaTentativaEm: new Date(Date.now() + PAUSA_MS) };
+      status = statusHabilitacaoDoErro(c.tipo);
+      aviso = c.mensagemUsuario;
+    } else if (decisao.acao === "aguardar_armazenamento") {
+      dados = { estado: "AGUARDANDO_SALDO", mensagem: c.mensagemUsuario, proximaTentativaEm: new Date(Date.now() + ESPERA_ARMAZENAMENTO_MS) };
       status = statusHabilitacaoDoErro(c.tipo);
       aviso = c.mensagemUsuario;
     } else if (decisao.acao === "tentar_de_novo") {

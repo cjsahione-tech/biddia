@@ -32,13 +32,18 @@ const TIPOS_QUE_TENTAM_DE_NOVO = new Set<TipoErroIA>([
   "ARQUIVO_ILEGIVEL", // quase sempre o portal do órgão que não respondeu ao baixar
 ]);
 
+/** Espera entre uma checagem e outra do Storage bloqueado (o vigia só testa quando esse prazo vence). */
+export const ESPERA_ARMAZENAMENTO_MS = 10 * 60_000;
+
 export type DecisaoAposFalha =
   | { acao: "aguardar_ia" } // saldo/chave: guarda e retoma sozinho (o disjuntor cuida; não conta tentativa)
+  | { acao: "aguardar_armazenamento" } // Storage bloqueado: guarda e retoma quando voltar (não conta tentativa nem vira erro)
   | { acao: "tentar_de_novo"; esperaMs: number }
   | { acao: "definitivo" }; // erro final: o usuário vê o motivo e "Tentar novamente"
 
 export function decidirAposFalha(tipo: TipoErroIA, tentativasAutomaticas: number): DecisaoAposFalha {
   if (tipo === "SALDO_INSUFICIENTE" || tipo === "CHAVE_INVALIDA") return { acao: "aguardar_ia" };
+  if (tipo === "ARMAZENAMENTO_INDISPONIVEL") return { acao: "aguardar_armazenamento" };
   if (TIPOS_QUE_TENTAM_DE_NOVO.has(tipo) && tentativasAutomaticas < MAX_TENTATIVAS_AUTOMATICAS) {
     return { acao: "tentar_de_novo", esperaMs: ESPERAS_RETENTATIVA_MS[Math.min(tentativasAutomaticas, ESPERAS_RETENTATIVA_MS.length - 1)] };
   }

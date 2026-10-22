@@ -91,6 +91,18 @@ export function explicarArquivo(nome: string, motivo?: string): ArquivoComProble
         problema: "Este arquivo demorou demais para baixar ou ler.",
         oQueFazer: "Vou tentar de novo. Se persistir, envie o arquivo manualmente em “Adicionar PDF”.",
       };
+    case "ocr":
+      return {
+        nome,
+        problema: "Este arquivo é um documento escaneado e está sendo lido por imagem (leva alguns minutos).",
+        oQueFazer: "Não precisa fazer nada: a leitura continua sozinha de onde parou.",
+      };
+    case "armazenamento":
+      return {
+        nome,
+        problema: "O armazenamento de arquivos está temporariamente indisponível, então não consegui abrir este arquivo agora.",
+        oQueFazer: "Não precisa fazer nada: a auditoria foi guardada e continua sozinha quando o armazenamento voltar.",
+      };
     case "formato":
       return {
         nome,

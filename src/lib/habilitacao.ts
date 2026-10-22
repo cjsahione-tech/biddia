@@ -147,7 +147,7 @@ export const ROTULO_STATUS_HABILITACAO: Record<string, string> = {
   NAO_HABILITADA: "Não habilitada",
   ERRO: "Auditoria com erro",
   NA_FILA: "Na fila",
-  AGUARDANDO_IA: "Aguardando IA (será retomada)",
+  AGUARDANDO_IA: "Aguardando serviço (será retomada)",
   ARQUIVO_ILEGIVEL: "Não consegui ler os arquivos",
   EDITAL_GRANDE: "Edital muito grande",
   TEMPO_ESGOTADO: "Tempo esgotado – tentando de novo",
@@ -162,7 +162,7 @@ export const DICA_STATUS_HABILITACAO: Record<string, string> = {
   NAO_HABILITADA: "Faltam documentos importantes. Abra a aba Habilitação para ver a lista do que enviar.",
   ERRO: "A auditoria não pôde ser concluída. Use \"Tentar novamente\" na aba Habilitação.",
   NA_FILA: "Há outras auditorias em andamento. Esta começa assim que uma vaga abrir.",
-  AGUARDANDO_IA: "O serviço de IA está indisponível agora. A auditoria está guardada e será retomada sozinha — você não precisa fazer nada.",
+  AGUARDANDO_IA: "Um serviço de apoio (a IA ou o armazenamento de arquivos) está indisponível agora. A auditoria está guardada e será retomada sozinha — você não precisa fazer nada.",
   ARQUIVO_ILEGIVEL: "Os arquivos do edital não puderam ser baixados ou lidos. Abra a aba Habilitação para ver qual arquivo e o que fazer.",
   EDITAL_GRANDE: "O edital é muito grande e está sendo lido em partes; pode levar um pouco mais.",
   TEMPO_ESGOTADO: "A leitura passou do tempo previsto. O sistema continua de onde parou, sem precisar de ação sua.",
@@ -190,6 +190,7 @@ export function statusHabilitacaoDoErro(tipo: TipoErroIA): HabilitacaoStatus {
     case "SOBRECARGA":
     case "SERVICO_IA":
     case "CONEXAO":
+    case "ARMAZENAMENTO_INDISPONIVEL":
       return "AGUARDANDO_IA";
     case "TEMPO_ESGOTADO":
       return "TEMPO_ESGOTADO";

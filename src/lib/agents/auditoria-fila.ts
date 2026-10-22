@@ -3,9 +3,11 @@ import { verificarIADisponivel } from "@/lib/anthropic";
 import { dispararAuditoriaHabilitacao } from "@/lib/agents/auditoria-dispatch";
 import { LISTA_ETAPAS_QUE_AUDITAM } from "@/lib/habilitacao";
 import { mensagemAmigavelDoTipo, mensagemDefinitivaDoTipo } from "@/lib/ia-erros";
+import { verificarArmazenamento } from "@/lib/storage";
 import {
   BATIMENTO_VIVO_MS,
   decidirAposFalha,
+  ESPERA_ARMAZENAMENTO_MS,
   LIMITE_AUDITORIAS_SIMULTANEAS,
   MAX_TENTATIVAS_AUTOMATICAS,
   TEMPO_PARADA_MS,
@@ -162,19 +164,37 @@ export async function vigiarAuditorias(opts: { origem?: string; companyId?: stri
   // 3. Guardadas por falta de saldo/chave: se a IA voltou (o disjuntor testa com 1 token), voltam para a fila.
   const guardadas = await prisma.auditoriaHabilitacao.findMany({
     where: { estado: "AGUARDANDO_SALDO", edital: { ...FILTRO_ETAPA, ...empresa } },
-    select: { editalId: true },
+    select: { editalId: true, erroTipo: true, proximaTentativaEm: true },
     take: 20,
   });
-  if (guardadas.length > 0) {
+  // As que esperam o ARMAZENAMENTO de arquivos só são testadas quando o prazo de espera vence (a sonda é barata, mas não precisa ser frequente).
+  const porArmazenamento = guardadas.filter((a) => a.erroTipo === "ARMAZENAMENTO_INDISPONIVEL");
+  const porIA = guardadas.filter((a) => a.erroTipo !== "ARMAZENAMENTO_INDISPONIVEL");
+  if (porIA.length > 0) {
     const iaVoltou = await verificarIADisponivel().then(
       () => true,
       () => false
     );
     if (iaVoltou) {
-      for (const a of guardadas) {
+      for (const a of porIA) {
         await colocarNaFila(a.editalId);
         resumo.retomadas++;
       }
+    }
+  }
+  const armazenamentoParaTestar = porArmazenamento.filter((a) => !a.proximaTentativaEm || a.proximaTentativaEm <= agora);
+  if (armazenamentoParaTestar.length > 0) {
+    if (await verificarArmazenamento()) {
+      for (const a of armazenamentoParaTestar) {
+        await colocarNaFila(a.editalId);
+        resumo.retomadas++;
+      }
+    } else {
+      // Continua bloqueado: adia a próxima checagem (não gasta tentativa nem vira erro).
+      await prisma.auditoriaHabilitacao.updateMany({
+        where: { editalId: { in: armazenamentoParaTestar.map((a) => a.editalId) } },
+        data: { proximaTentativaEm: new Date(agora.getTime() + ESPERA_ARMAZENAMENTO_MS) },
+      });
     }
   }
 
