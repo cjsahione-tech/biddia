@@ -9,6 +9,9 @@ export type PapelDocumento = "principal" | "apoio";
 
 type DocParaPapel = { id: string; nome: string; tipo: string; categoria: string | null };
 
+/** Trecho que marca, no texto lido, as páginas deixadas de fora pelo teto de leitura por imagem. */
+export const MARCA_ACIMA_DO_LIMITE = "acima do limite de leitura por imagem";
+
 const CATEGORIAS_PRINCIPAIS = new Set(["EDITAL", "TERMO_REFERENCIA", "ANEXO_PRECOS"]);
 const CATEGORIAS_DE_APOIO = new Set(["CHECKLIST", "CORRECAO_AGENTE"]);
 
@@ -30,6 +33,14 @@ export function papelDoDocumento(d: Omit<DocParaPapel, "id">): PapelDocumento {
  */
 export function papeisDosDocumentos(docs: DocParaPapel[]): Map<string, PapelDocumento> {
   const mapa = new Map(docs.map((d) => [d.id, papelDoDocumento(d)] as const));
+  // Arquivo do portal que o analista SUBSTITUIU (enviou um da mesma categoria, ex.: outro "Edital"): o do portal passa a
+  // ser de apoio — se ele não abre, é justamente por isso que a pessoa mandou outro, e isso não pode travar o resultado.
+  const categoriasEnviadasPelaPessoa = new Set(
+    docs.filter((d) => d.tipo === "DOCUMENTO_USUARIO" && d.categoria && CATEGORIAS_PRINCIPAIS.has(d.categoria)).map((d) => d.categoria)
+  );
+  for (const d of docs) {
+    if (d.tipo !== "DOCUMENTO_USUARIO" && d.categoria && categoriasEnviadasPelaPessoa.has(d.categoria)) mapa.set(d.id, "apoio");
+  }
   if (docs.length > 0 && ![...mapa.values()].includes("principal")) {
     for (const d of docs) mapa.set(d.id, "principal");
   }
@@ -48,4 +59,17 @@ export function descreverNaoLido(texto: string): string[] {
     out.push(/^páginas /.test(conteudo) ? conteudo : `arquivo "${conteudo}" (dentro do pacote)`);
   }
   return out;
+}
+
+/** Quantas páginas há num aviso como "páginas 61-100, 130 não lidas (...)" (61 a 100 = 40, mais a 130 = 41). */
+export function contarPaginasDoAviso(aviso: string): number {
+  const m = aviso.match(/p[áa]ginas ([\d,\s-]+) n[ãa]o lidas/i);
+  if (!m) return 0;
+  let total = 0;
+  for (const parte of m[1].split(",")) {
+    const [a, b] = parte.trim().split("-").map(Number);
+    if (Number.isFinite(a) && Number.isFinite(b)) total += Math.max(0, b - a + 1);
+    else if (Number.isFinite(a)) total += 1;
+  }
+  return total;
 }

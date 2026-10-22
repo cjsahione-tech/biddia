@@ -7,6 +7,9 @@ import { FormularioEnvioDocumento } from "@/components/documentos/FormularioEnvi
 import { SeloHabilitacao } from "@/components/editais/SeloHabilitacao";
 import type { HabilitacaoStatusTipo } from "@/lib/types";
 import { CUSTO_MEDIO_AUDITORIA_USD, custoEstimadoBrl, etapaAudita } from "@/lib/habilitacao";
+import { CUSTO_POR_PAGINA_OCR_USD, TETO_CUSTO_LIBERADO_USD } from "@/lib/auditoria-politica";
+import { TETO_PAGINAS_OCR as TETO_PAGINAS_POR_EDITAL } from "@/lib/limites-leitura";
+import type { AcaoHumana } from "@/lib/ia-erros";
 import type { ItemRelatorio, RelatorioHabilitacao } from "@/lib/habilitacao-relatorio";
 
 const AVISO_IA = "Gerado por IA. Confirme com o analista responsável antes de enviar a proposta.";
@@ -71,6 +74,129 @@ function DocumentosAnalisados({ auditoria, concluida }: { auditoria: AuditoriaRe
         ))}
       </ul>
     </details>
+  );
+}
+
+const LIMITE_ENVIO_BYTES = 3.5 * 1024 * 1024;
+const CATEGORIAS_DE_ENVIO = [
+  { valor: "EDITAL", rotulo: "Edital" },
+  { valor: "TERMO_REFERENCIA", rotulo: "Termo de referência" },
+  { valor: "ANEXO_PRECOS", rotulo: "Anexo de preços / planilha" },
+] as const;
+
+/** "Precisa de ação humana": explica em português simples o que travou e oferece o botão certo. */
+function CartaoAcaoHumana({
+  editalId,
+  mensagem,
+  acoes,
+  ocupado,
+  onTentarDeNovo,
+  onLiberarLeitura,
+  onArquivoEnviado,
+}: {
+  editalId: string;
+  mensagem: string | null;
+  acoes: AcaoHumana[];
+  ocupado: boolean;
+  onTentarDeNovo: () => void;
+  onLiberarLeitura: () => void;
+  onArquivoEnviado: () => void;
+}) {
+  const [enviando, setEnviando] = useState(false);
+  const [categoria, setCategoria] = useState<(typeof CATEGORIAS_DE_ENVIO)[number]["valor"]>("EDITAL");
+  const [erro, setErro] = useState<string | null>(null);
+
+  async function enviar(arquivo: File | undefined) {
+    if (!arquivo) return;
+    setErro(null);
+    if (arquivo.size > LIMITE_ENVIO_BYTES) {
+      setErro("Arquivo grande demais para enviar por aqui (limite de 3,5 MB). Envie só as páginas de habilitação, ou divida o PDF em partes.");
+      return;
+    }
+    setEnviando(true);
+    try {
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const leitor = new FileReader();
+        leitor.onload = () => resolve(String(leitor.result).split(",")[1] ?? "");
+        leitor.onerror = () => reject(new Error("leitura"));
+        leitor.readAsDataURL(arquivo);
+      });
+      const res = await fetch(`/api/editais/${editalId}/documents`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nome: arquivo.name, arquivoBase64: base64, categoria }),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => null))?.error ?? "envio");
+      onArquivoEnviado();
+    } catch (e) {
+      setErro(e instanceof Error && e.message !== "envio" && e.message !== "leitura" ? e.message : "Não consegui enviar o arquivo. Tente novamente.");
+    } finally {
+      setEnviando(false);
+    }
+  }
+
+  return (
+    <div className="rounded-xl border border-warning/40 bg-warning/10 p-4 text-sm">
+      <div className="flex items-start gap-3 text-warning">
+        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+        <div className="min-w-0 flex-1">
+          <p className="font-medium">Precisa da sua ajuda para continuar</p>
+          <p className="mt-1 text-xs text-foreground/80">{mensagem ?? "A auditoria parou porque só uma pessoa resolve."}</p>
+        </div>
+      </div>
+      <div className="mt-3 flex flex-wrap items-center gap-2 pl-7">
+        {acoes.includes("enviar_arquivo") && (
+          <>
+            <select
+              value={categoria}
+              onChange={(e) => setCategoria(e.target.value as typeof categoria)}
+              className="rounded-lg border border-border bg-background px-2 py-1.5 text-xs text-foreground"
+              aria-label="Que arquivo você vai enviar"
+            >
+              {CATEGORIAS_DE_ENVIO.map((c) => (
+                <option key={c.valor} value={c.valor}>
+                  {c.rotulo}
+                </option>
+              ))}
+            </select>
+            <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-brand/30 bg-brand-light/30 px-3 py-1.5 text-xs font-medium text-brand hover:bg-brand-light/60">
+              {enviando || ocupado ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Paperclip className="h-3.5 w-3.5" />} Enviar arquivo
+              <input
+                type="file"
+                accept=".pdf,.doc,.docx,.xlsx,.csv,.txt"
+                className="hidden"
+                disabled={enviando || ocupado}
+                onChange={(e) => {
+                  void enviar(e.target.files?.[0]);
+                  e.target.value = "";
+                }}
+              />
+            </label>
+          </>
+        )}
+        {acoes.includes("liberar_leitura") && (
+          <button
+            onClick={() => {
+              if (window.confirm(`Liberar a leitura completa eleva o limite de custo deste edital para US$ ${TETO_CUSTO_LIBERADO_USD.toFixed(2).replace(".", ",")}. Confirma?`)) onLiberarLeitura();
+            }}
+            disabled={ocupado}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground hover:bg-surface disabled:opacity-60"
+          >
+            <FileText className="h-3.5 w-3.5" /> Liberar leitura completa (custo extra)
+          </button>
+        )}
+        {acoes.includes("tentar_de_novo") && (
+          <button
+            onClick={onTentarDeNovo}
+            disabled={ocupado}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground hover:bg-surface disabled:opacity-60"
+          >
+            <RefreshCw className="h-3.5 w-3.5" /> Tentar de novo
+          </button>
+        )}
+      </div>
+      {erro && <p className="mt-2 pl-7 text-xs text-danger">{erro}</p>}
+    </div>
   );
 }
 
@@ -185,13 +311,19 @@ export function HabilitacaoTab({ editalId, etapa, onMudou }: { editalId: string;
   }
 
   // "Auditar agora" / "Tentar novamente": gasta IA, então pede confirmação mostrando o custo.
-  async function pedirAuditoria() {
-    const custo = `cerca de US$ ${CUSTO_MEDIO_AUDITORIA_USD.toFixed(2).replace(".", ",")} (aprox. R$ ${brl(custoEstimadoBrl(1))})`;
-    if (!window.confirm(`A auditoria usa IA e custa em média ${custo} por edital. Deseja auditar agora?`)) return;
+  async function pedirAuditoria(opts: { liberarLeitura?: boolean; semConfirmar?: boolean } = {}) {
+    if (!opts.semConfirmar) {
+      const custo = `cerca de US$ ${CUSTO_MEDIO_AUDITORIA_USD.toFixed(2).replace(".", ",")} (aprox. R$ ${brl(custoEstimadoBrl(1))})`;
+      if (!window.confirm(`A auditoria usa IA e custa em média ${custo} por edital. Deseja auditar agora?`)) return;
+    }
     setPedindo(true);
     setErroPedido(null);
     try {
-      const res = await fetch(`/api/editais/${editalId}/habilitacao/solicitar`, { method: "POST" });
+      const res = await fetch(`/api/editais/${editalId}/habilitacao/solicitar`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ liberarLeitura: opts.liberarLeitura === true }),
+      });
       if (!res.ok) throw new Error();
       await carregar();
       onMudou?.();
@@ -254,7 +386,8 @@ export function HabilitacaoTab({ editalId, etapa, onMudou }: { editalId: string;
   // "Aguardando IA" e "tempo esgotado" se resolvem sozinhos: aparecem como aviso calmo, não como erro.
   const seResolveSozinho =
     ["AGUARDANDO_IA", "TEMPO_ESGOTADO", "NA_FILA", "EDITAL_GRANDE"].includes(status) || auditoria?.estado === "AGUARDANDO_SALDO" || !!auditoria?.retentativaAgendada;
-  const comErro = !concluida && !seResolveSozinho && (status === "ERRO" || status === "ARQUIVO_ILEGIVEL" || auditoria?.estado === "ERRO");
+  const precisaAcao = !concluida && !!auditoria && auditoria.acoes.length > 0 && !seResolveSozinho;
+  const comErro = !concluida && !seResolveSozinho && !precisaAcao && (status === "ERRO" || status === "ARQUIVO_ILEGIVEL" || auditoria?.estado === "ERRO");
 
   return (
     <div className="space-y-6">
@@ -294,7 +427,7 @@ export function HabilitacaoTab({ editalId, etapa, onMudou }: { editalId: string;
         {concluida && (
           <p className="mt-3 text-xs text-muted">
             Sessão em {dataBr(auditoria!.dataReferencia)} · auditado em {dataHoraBr(auditoria!.concluidaEm)} · atualizado sozinho quando a documentação da empresa muda.{" "}
-            <button onClick={pedirAuditoria} disabled={pedindo} className="font-medium text-brand hover:underline disabled:opacity-60">
+            <button onClick={() => pedirAuditoria()} disabled={pedindo} className="font-medium text-brand hover:underline disabled:opacity-60">
               Auditar novamente
             </button>
           </p>
@@ -326,7 +459,7 @@ export function HabilitacaoTab({ editalId, etapa, onMudou }: { editalId: string;
             </span>
           </p>
           <button
-            onClick={pedirAuditoria}
+            onClick={() => pedirAuditoria()}
             disabled={pedindo}
             className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-1.5 text-xs font-medium text-foreground hover:bg-border/30 disabled:opacity-60"
           >
@@ -348,12 +481,45 @@ export function HabilitacaoTab({ editalId, etapa, onMudou }: { editalId: string;
 
       {!concluida && auditoria && <DocumentosAnalisados auditoria={auditoria} concluida={false} />}
 
+      {precisaAcao && auditoria && (
+        <CartaoAcaoHumana
+          editalId={editalId}
+          mensagem={auditoria.mensagem}
+          acoes={auditoria.acoes}
+          ocupado={pedindo}
+          onTentarDeNovo={() => pedirAuditoria()}
+          onLiberarLeitura={() => pedirAuditoria({ liberarLeitura: true, semConfirmar: true })}
+          onArquivoEnviado={() => pedirAuditoria({ semConfirmar: true })}
+        />
+      )}
+
+      {concluida && auditoria && auditoria.paginasForaDoLimite > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-background p-4 text-sm">
+          <p className="min-w-0 flex-1 text-muted">
+            <span className="font-medium text-foreground">{auditoria.paginasForaDoLimite} página(s) escaneada(s) ficaram sem leitura</span> pelo limite de {TETO_PAGINAS_POR_EDITAL} páginas por imagem por edital. Se a conferência manual
+            não for suficiente, você pode liberar a leitura completa.
+          </p>
+          <button
+            onClick={() => {
+              const usd = auditoria.paginasForaDoLimite * CUSTO_POR_PAGINA_OCR_USD;
+              if (window.confirm(`Ler as ${auditoria.paginasForaDoLimite} páginas restantes por imagem custa cerca de US$ ${usd.toFixed(2).replace(".", ",")} a mais (aprox. R$ ${brl(custoEstimadoBrl(usd / CUSTO_MEDIO_AUDITORIA_USD))}), além de refazer a conferência. Liberar a leitura completa?`)) {
+                pedirAuditoria({ liberarLeitura: true, semConfirmar: true });
+              }
+            }}
+            disabled={pedindo}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-brand/30 bg-brand-light/30 px-3 py-1.5 text-xs font-medium text-brand hover:bg-brand-light/60 disabled:opacity-60"
+          >
+            {pedindo ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />} Liberar leitura completa (custo extra)
+          </button>
+        </div>
+      )}
+
       {comErro && (
         <div className="flex items-start gap-3 rounded-xl border border-danger/30 bg-danger/5 p-4 text-sm text-danger">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
           <p className="min-w-0 flex-1">{auditoria?.mensagem ?? "Não foi possível concluir a auditoria deste edital."}</p>
           <button
-            onClick={pedirAuditoria}
+            onClick={() => pedirAuditoria()}
             disabled={pedindo}
             className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-danger/30 bg-background px-3 py-1.5 text-xs font-medium text-danger hover:bg-danger/10 disabled:opacity-60"
           >

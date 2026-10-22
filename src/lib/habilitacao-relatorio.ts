@@ -3,7 +3,8 @@ import { CATEGORIAS_CATALOGO, chaveEfetivaDoDocumento, itemPorChave, normalizarN
 import { escolherMelhorDocumento } from "@/lib/documentos-empresa";
 import { lerMotivosDeRevisao } from "@/lib/habilitacao-confianca";
 import { calcularResultado, dataReferenciaDoEdital, type SituacaoExigencia } from "@/lib/habilitacao";
-import { classificarErro, ErroTipado, tipoDeMensagemAntiga, type TipoErroIA } from "@/lib/ia-erros";
+import { acoesHumanasDoTipo, classificarErro, ErroTipado, tipoDeMensagemAntiga, type AcaoHumana, type TipoErroIA } from "@/lib/ia-erros";
+import { contarPaginasDoAviso, MARCA_ACIMA_DO_LIMITE } from "@/lib/leitura-papel";
 
 // Dados do relatório de pendências de habilitação — a mesma estrutura alimenta a aba
 // "Habilitação" da tela do edital e o PDF. Tudo vem da última auditoria gravada; nada é
@@ -81,6 +82,10 @@ export type RelatorioHabilitacao = {
     /** Por que o resultado pede revisão manual (vazio = não pede). */
     motivosRevisao: string[];
     documentosLidos: DocumentoLidoRelatorio[];
+    /** Botões do caso "Precisa de ação humana" (vazio = nenhuma ação necessária). */
+    acoes: AcaoHumana[];
+    /** Páginas escaneadas que ficaram sem leitura por causa do teto de 60 por edital (0 = nenhuma): permite "Liberar leitura completa". */
+    paginasForaDoLimite: number;
     /** Todos os documentos do processo com o selo de leitura de cada um (principais primeiro). */
     documentos: LinhaDocumento[];
     resumoLeitura: ResumoLeitura;
@@ -186,6 +191,36 @@ export function explicarArquivo(nome: string, motivo?: string, detalhe?: string)
         nome,
         problema: "Este arquivo é um documento escaneado e está sendo lido por imagem (leva alguns minutos).",
         oQueFazer: "Não precisa fazer nada: a leitura continua sozinha de onde parou.",
+      };
+    case "protegido":
+      return {
+        nome,
+        problema: "Este arquivo tem senha de proteção e não pode ser aberto.",
+        oQueFazer: "Peça ao órgão a versão sem senha (ou baixe de novo no portal) e envie o arquivo aqui.",
+      };
+    case "corrompido":
+      return {
+        nome,
+        problema: "Este arquivo está corrompido (o PDF não abre).",
+        oQueFazer: "Baixe o arquivo de novo no portal e envie aqui; se continuar assim, peça outra cópia ao órgão.",
+      };
+    case "login":
+      return {
+        nome,
+        problema: "O portal do órgão pediu login ou verificação (captcha) no lugar do arquivo.",
+        oQueFazer: "Baixe o arquivo no portal, com o seu acesso, e envie aqui.",
+      };
+    case "pagina":
+      return {
+        nome,
+        problema: "O endereço do arquivo devolveu uma página da internet, não o documento.",
+        oQueFazer: "Abra o link no portal, baixe o documento e envie aqui.",
+      };
+    case "ilegivel":
+      return {
+        nome,
+        problema: "O documento é escaneado e a imagem está ruim demais para ler com segurança.",
+        oQueFazer: "Envie uma versão mais nítida ou um PDF com texto.",
       };
     case "armazenamento":
       return {
@@ -342,6 +377,10 @@ export async function montarRelatorioHabilitacao(
           dataReferencia: (aud.dataReferencia ?? dataReferenciaDoEdital(edital)).toISOString(),
           leituraCompleta: aud.leituraCompleta,
           motivosRevisao: lerMotivosDeRevisao(aud.motivosRevisao),
+          acoes: aud.estado === "CONCLUIDA" ? [] : acoesHumanasDoTipo(erroTipo),
+          paginasForaDoLimite: docsLidos
+            .filter((d) => d.detalhe?.includes(MARCA_ACIMA_DO_LIMITE))
+            .reduce((n, d) => n + contarPaginasDoAviso(d.detalhe!), 0),
           documentosLidos: docsLidos,
           documentos: linhasDeDocumentos(docsLidos),
           resumoLeitura: resumoDeLeitura(linhasDeDocumentos(docsLidos)),

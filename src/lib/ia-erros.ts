@@ -50,6 +50,12 @@ export type TipoErroIA =
   | "EDITAL_GRANDE"
   | "SEM_EXIGENCIAS"
   | "ARMAZENAMENTO_INDISPONIVEL" // o Storage de arquivos está bloqueado/fora do ar: não é culpa do arquivo
+  // Casos que repetir não resolve: só uma pessoa resolve ("Precisa de ação humana").
+  | "PDF_PROTEGIDO" // PDF com senha ou corrompido
+  | "EDITAL_REMOVIDO" // o órgão apagou a contratação do portal
+  | "LOGIN_OU_CAPTCHA" // o portal devolveu uma página de login/captcha no lugar do arquivo
+  | "ESCANEADO_ILEGIVEL" // documento escaneado sem condições de leitura
+  | "CUSTO_EXCEDIDO" // a auditoria passou do teto de custo por edital
   | "DESCONHECIDO";
 
 /** Erro que já nasce com tipo (usado pela auditoria para os casos de edital/arquivo). */
@@ -92,8 +98,33 @@ const MSG_USUARIO: Record<TipoErroIA, string> = {
   SEM_EXIGENCIAS: "Não encontrei exigências de habilitação nos documentos lidos. Confira se o arquivo do edital está completo.",
   ARMAZENAMENTO_INDISPONIVEL:
     "O armazenamento de arquivos está temporariamente indisponível, então não consegui abrir os documentos agora. Sua auditoria foi guardada e será retomada automaticamente — nenhum resultado foi dado por engano.",
+  PDF_PROTEGIDO: "O arquivo do edital está protegido por senha ou corrompido, então não consigo abri-lo. Envie uma cópia sem senha (ou baixe de novo no portal) para continuar.",
+  EDITAL_REMOVIDO: "O órgão apagou esta contratação do portal (geralmente para republicá-la com outro número). Procure a versão republicada ou envie o edital em PDF para continuar.",
+  LOGIN_OU_CAPTCHA: "O portal do órgão pediu login ou verificação (captcha) no lugar do arquivo, e o sistema não consegue passar por isso. Baixe o edital no portal e envie o PDF para continuar.",
+  ESCANEADO_ILEGIVEL: "O edital é um documento escaneado e a imagem está ruim demais para eu ler com segurança. Envie uma versão mais nítida (ou em PDF com texto) para continuar.",
+  CUSTO_EXCEDIDO: "A leitura deste edital passou do limite de custo previsto por edital, então parei para não gastar à toa. Se quiser mesmo assim, libere a leitura completa (custo extra).",
   DESCONHECIDO: "Ocorreu um problema inesperado na auditoria. Vamos tentar de novo automaticamente.",
 };
+
+/** Botões que a tela oferece para cada caso em que só uma pessoa resolve. */
+export type AcaoHumana = "enviar_arquivo" | "tentar_de_novo" | "liberar_leitura";
+
+const ACOES_HUMANAS: Partial<Record<TipoErroIA, AcaoHumana[]>> = {
+  PDF_PROTEGIDO: ["enviar_arquivo", "tentar_de_novo"],
+  EDITAL_REMOVIDO: ["enviar_arquivo"],
+  LOGIN_OU_CAPTCHA: ["enviar_arquivo", "tentar_de_novo"],
+  ESCANEADO_ILEGIVEL: ["enviar_arquivo", "tentar_de_novo"],
+  CUSTO_EXCEDIDO: ["liberar_leitura", "enviar_arquivo"],
+};
+
+/** Esse tipo de erro pede uma pessoa (não adianta tentar sozinho)? */
+export function pedeAcaoHumana(tipo: TipoErroIA | null | undefined): boolean {
+  return !!tipo && tipo in ACOES_HUMANAS;
+}
+
+export function acoesHumanasDoTipo(tipo: TipoErroIA | null | undefined): AcaoHumana[] {
+  return (tipo && ACOES_HUMANAS[tipo]) || [];
+}
 
 const MSG_ADMIN: Partial<Record<TipoErroIA, string>> = {
   SALDO_INSUFICIENTE: "Saldo da API Anthropic insuficiente. Recarregue em console.anthropic.com → Plans & Billing.",

@@ -60,3 +60,15 @@ describe("lerMotivosDeRevisao", () => {
     expect(lerMotivosDeRevisao('["a", 3]')).toEqual(["a"]);
   });
 });
+
+describe("avisos da leitura pedem revisão", () => {
+  it("anexo em link externo ou contradição entre documentos: revisar, mesmo com o resto sólido", () => {
+    const linhas = [...nucleo, ...mais(8)];
+    const r = avaliarConfianca({ linhas, statusCalculado: "HABILITADA", avisos: ["O edital manda buscar anexo(s) em link externo (https://x.com/a.pdf)."] });
+    expect(r.revisar).toBe(true);
+    expect(r.motivos).toHaveLength(1);
+  });
+  it("'Não habilitada' continua sem revisão", () => {
+    expect(avaliarConfianca({ linhas: [], statusCalculado: "NAO_HABILITADA", avisos: ["aviso"] }).revisar).toBe(false);
+  });
+});

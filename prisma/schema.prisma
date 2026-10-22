@@ -644,6 +644,7 @@ enum HabilitacaoStatus {
   ARQUIVO_ILEGIVEL // nenhum arquivo do edital pôde ser baixado/lido
   EDITAL_GRANDE // edital grande demais para uma leitura só (lido em partes)
   TEMPO_ESGOTADO // passou do tempo; nova tentativa automática agendada
+  PRECISA_ACAO_HUMANA // a auditoria parou: só uma pessoa resolve (enviar arquivo, liberar custo...)
   REVISAR_MANUALMENTE // o resultado parece bom, mas os sinais dizem que a leitura pode estar incompleta: uma pessoa precisa conferir
 }
 

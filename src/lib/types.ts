@@ -26,7 +26,8 @@ export type HabilitacaoStatusTipo =
   | "ARQUIVO_ILEGIVEL"
   | "EDITAL_GRANDE"
   | "TEMPO_ESGOTADO"
-  | "REVISAR_MANUALMENTE";
+  | "REVISAR_MANUALMENTE"
+  | "PRECISA_ACAO_HUMANA";
 
 export type EditalListItem = {
   id: string;

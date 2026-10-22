@@ -13,12 +13,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (error) return error;
   const { id } = await params;
 
-  const s = await solicitarAuditoriaHabilitacao(id, { companyId: company!.id, origem: new URL(req.url).origin, forcar: true });
+  const corpo = (await req.json().catch(() => null)) as { liberarLeitura?: unknown } | null;
+  const liberarLeitura = corpo?.liberarLeitura === true;
+
+  const s = await solicitarAuditoriaHabilitacao(id, { companyId: company!.id, origem: new URL(req.url).origin, forcar: true, liberarLeitura });
   if (s.resultado === "nao_encontrado") return NextResponse.json({ error: "Edital não encontrado" }, { status: 404 });
 
   if (s.disparar) {
     after(s.disparar);
-    await logAudit(id, "Usuário", "Auditoria de habilitação", "OK", "Auditoria de habilitação pedida manualmente (Auditar agora).").catch(() => null);
+    await logAudit(id, "Usuário", "Auditoria de habilitação", "OK", liberarLeitura ? "Leitura completa liberada pelo usuário (custo extra): auditoria refeita sem o limite de páginas por imagem." : "Auditoria de habilitação pedida manualmente (Auditar agora).").catch(() => null);
   }
   return NextResponse.json({ resultado: s.resultado }, { status: 202 });
 }

@@ -53,7 +53,7 @@ export async function haVaga(excetoEditalId?: string): Promise<boolean> {
  * Campos de uma auditoria NOVA na fila: zera consumo e tentativas. O progresso anterior só mantém o que já foi LIDO do
  * edital (pedaços, leitura por imagem) — isso não depende da situação do momento e custa dinheiro refazer; o resto recomeça.
  */
-export function dadosAuditoriaNova(agora: Date, progressoAnterior: string | null = null) {
+export function dadosAuditoriaNova(agora: Date, progressoAnterior: string | null = null, opts: { liberarLeitura?: boolean } = {}) {
   return {
     estado: "NA_FILA" as const,
     solicitadaEm: agora,
@@ -61,7 +61,7 @@ export function dadosAuditoriaNova(agora: Date, progressoAnterior: string | null
     erroTipo: null,
     detalheTecnico: null,
     proximaTentativaEm: null,
-    progresso: reaproveitarProgresso(progressoAnterior),
+    progresso: reaproveitarProgresso(progressoAnterior, { liberar: opts.liberarLeitura }),
     tentativasAutomaticas: 0,
     haikuEntrada: 0,
     haikuSaida: 0,

@@ -6,7 +6,14 @@ import { logAudit } from "@/lib/agents/run-tracker";
 import { baixarArquivoLicitaNet } from "@/lib/agents/licitanet";
 import { baixarAnexo } from "@/lib/storage";
 import { ArmazenamentoIndisponivelError, ehErroDeArmazenamentoIndisponivel } from "@/lib/armazenamento-estado";
-import { detectarFormato, extrairTextoPdfEmLotes, type ContextoOcr } from "@/lib/agents/leitura-documentos";
+import {
+  detectarFormato,
+  diagnosticarHtml,
+  diagnosticarPdf,
+  extrairTextoPdfEmLotes,
+  type ContextoOcr,
+  type DiagnosticoArquivo,
+} from "@/lib/agents/leitura-documentos";
 import { extrairTextoCsv } from "@/lib/agents/planilhas";
 import type { Document as DocumentRow } from "@prisma/client";
 import { ehZip, extrairTextoDeZip } from "@/lib/agents/arquivos-compactados";
@@ -288,7 +295,8 @@ export async function obterTextoBrutoDocumento(
   // espera o Storage voltar) em vez de devolver null (que pareceria "arquivo ilegível").
   // bytes: arquivo que o chamador acabou de baixar (e não conseguiu guardar) — evita baixar duas vezes.
   // ocr: leitura por imagem em lotes com progresso guardado; lança OcrEmAndamento se ainda não terminou.
-  opts: { lancarSeArmazenamentoIndisponivel?: boolean; bytes?: Uint8Array; ocr?: ContextoOcr } = {}
+  // diagnostico: preenchido com o motivo quando o arquivo não abre e só uma pessoa resolve (senha, login/captcha, escaneado ilegível).
+  opts: { lancarSeArmazenamentoIndisponivel?: boolean; bytes?: Uint8Array; ocr?: ContextoOcr; diagnostico?: { motivo?: DiagnosticoArquivo } } = {}
 ): Promise<string | null> {
   if (doc.textoExtraido) return doc.textoExtraido;
 
@@ -340,13 +348,22 @@ export async function obterTextoBrutoDocumento(
     return textoPlano;
   }
   // Página de login/captcha/erro no lugar do arquivo, ou Word/Excel antigo: não é um PDF, não adianta tentar ler como um.
-  if (formato === "html" || formato === "doc_antigo") return null;
+  if (formato === "html") {
+    if (opts.diagnostico) opts.diagnostico.motivo = diagnosticarHtml(bytes);
+    return null;
+  }
+  if (formato === "doc_antigo") return null;
 
   // Com contexto de OCR (auditoria): lê por imagem em lotes, guardando o progresso (ver leitura-documentos.ts).
-  const { texto, viaOcr } = opts.ocr
-    ? await extrairTextoPdfEmLotes(bytes, opts.ocr)
-    : await extrairTextoPdfComOrigem(bytes);
-  if (!texto) return null;
+  const lido = opts.ocr ? await extrairTextoPdfEmLotes(bytes, opts.ocr) : await extrairTextoPdfComOrigem(bytes);
+  const { texto, viaOcr } = lido;
+  if (!texto) {
+    if (opts.diagnostico) {
+      if ("todasIlegiveis" in lido && lido.todasIlegiveis) opts.diagnostico.motivo = "ilegivel";
+      else opts.diagnostico.motivo = (await diagnosticarPdf(bytes)) ?? undefined;
+    }
+    return null;
+  }
 
   if (viaOcr) {
     await logAudit(

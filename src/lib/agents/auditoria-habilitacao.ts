@@ -4,6 +4,9 @@ import { prisma } from "@/lib/prisma";
 import { askJSON, MODELO_HAIKU, MODELO_SONNET, verificarIADisponivel, type UsoTokens } from "@/lib/anthropic";
 import { classificarErro, ErroTipado, mensagemDeRetentativaDoTipo, mensagemDefinitivaDoTipo, tipoDoErro } from "@/lib/ia-erros";
 import { ehErroDeArmazenamentoIndisponivel } from "@/lib/armazenamento-estado";
+import { avisoDeAnexosExternos, detectarAnexosExternos, detectarContradicoes } from "@/lib/habilitacao-sinais";
+import { erroQuandoNenhumPrincipalFoiLido, MOTIVOS_SEM_REMEDIO_AUTOMATICO } from "@/lib/auditoria-acao-humana";
+import type { DiagnosticoArquivo } from "@/lib/agents/leitura-documentos";
 import { novaMeta, registrarTentativa, type MetaExecucao, type ResultadoTentativa } from "@/lib/agents/auditoria-tentativas";
 import { PAUSA_MS } from "@/lib/controle-ia";
 import { statusHabilitacaoDefinitivaDoErro, statusHabilitacaoDoErro, type StatusHabilitacao } from "@/lib/habilitacao";
@@ -18,10 +21,17 @@ import {
   falhaDoPedacoPedeDivisao,
   migrarProgressoLegado,
   planejarPedacos,
+  progressoParaGuardar,
   TAMANHO_MINIMO_PARA_DIVIDIR,
   type PedacoPlano,
 } from "@/lib/agents/auditoria-pedacos";
-import { BATIMENTO_VIVO_MS, decidirAposFalha, ESPERA_ARMAZENAMENTO_MS, MAX_CONTINUACOES_NA_CADEIA, MAX_PASSOS_LEITURA, MAX_PASSOS_SEM_AVANCO } from "@/lib/auditoria-politica";
+import {
+  BATIMENTO_VIVO_MS,
+  CUSTO_POR_PAGINA_OCR_USD,
+  TETO_CUSTO_LIBERADO_USD,
+  TETO_CUSTO_POR_EDITAL_USD,
+  decidirAposFalha,
+  ESPERA_ARMAZENAMENTO_MS, MAX_CONTINUACOES_NA_CADEIA, MAX_PASSOS_LEITURA, MAX_PASSOS_SEM_AVANCO } from "@/lib/auditoria-politica";
 import { obterTextoBrutoDocumento } from "@/lib/agents/pdf-extract";
 import { ehOcrEmAndamento, type ContextoOcr, type EstadoOcr } from "@/lib/agents/leitura-documentos";
 import { descreverNaoLido, papeisDosDocumentos, type PapelDocumento } from "@/lib/leitura-papel";
@@ -90,7 +100,20 @@ type Bruta = {
   aplicavelSe: string | null;
 };
 
-export type MotivoArquivo = "download" | "demorou" | "formato" | "removido" | "armazenamento" | "ocr" | "parcial";
+export type MotivoArquivo =
+  | "download"
+  | "demorou"
+  | "formato"
+  | "removido"
+  | "armazenamento"
+  | "ocr"
+  | "parcial"
+  // Só uma pessoa resolve (repetir não adianta):
+  | "protegido"
+  | "corrompido"
+  | "login"
+  | "pagina"
+  | "ilegivel";
 
 // Progresso salvo no banco: cada execução retoma de onde a anterior parou. Campos novos são
 // opcionais para continuar lendo registros gravados antes desta versão.
@@ -110,6 +133,10 @@ type Progresso = {
   ocr?: Record<string, EstadoOcr>;
   /** O analista liberou a leitura completa (sem o teto de 60 páginas por imagem). */
   leituraCompletaLiberada?: boolean;
+  /** O analista liberou o custo extra: vale o teto ampliado. */
+  custoLiberado?: boolean;
+  /** Páginas já lidas por imagem em documentos concluídos (para somar no custo). */
+  paginasOcr?: number;
   /** Tamanho dos pedaços de leitura, fixado no início: mudar a constante depois não faz uma leitura em andamento recomeçar. */
   tamanhoPedaco?: number;
   /** Pedaços já lidos (chave = conteúdo do pedaço) e as exigências que cada um rendeu. */
@@ -567,6 +594,10 @@ async function gravarResultado(opts: {
    */
   descartarSeDocumentosMudaram?: { companyId: string };
   uso?: { haikuEntrada: number; haikuSaida: number; sonnetEntrada: number; sonnetSaida: number };
+  /** O que guardar do progresso ao terminar (leitura do edital já feita; ver progressoParaGuardar). */
+  progressoFinal?: string | null;
+  /** Avisos da leitura que pedem revisão manual (anexo em link externo, documentos que se contradizem). */
+  avisosExtras?: string[];
 }) {
   const { editalId, linhas, dataReferencia, leituraCompleta, docsEmpresa } = opts;
   const calculado = calcularResultado({ situacoes: linhas.map((l) => l.situacao), leituraCompleta });
@@ -574,6 +605,7 @@ async function gravarResultado(opts: {
   const confianca = avaliarConfianca({
     linhas: linhas.map((l) => ({ categoria: l.categoria, situacao: l.situacao, certeza: l.certezaMapeamento })),
     statusCalculado: calculado.status,
+    avisos: opts.avisosExtras,
   });
   const r = { ...calculado, status: (confianca.revisar ? "REVISAR_MANUALMENTE" : calculado.status) as StatusHabilitacao | "REVISAR_MANUALMENTE" };
 
@@ -600,7 +632,7 @@ async function gravarResultado(opts: {
     docsFingerprint: fingerprintDocumentos(docsEmpresa),
     ...(opts.editalFingerprint ? { editalFingerprint: opts.editalFingerprint } : {}),
     concluidaEm: new Date(),
-    progresso: null,
+    progresso: opts.progressoFinal ?? null,
     ...(opts.docsLidos ? { documentosLidos: JSON.stringify(opts.docsLidos) } : {}),
     ...(opts.uso ? { ...opts.uso, custoUsd: custoEstimadoUsd(opts.uso) } : {}),
   };
@@ -901,9 +933,20 @@ async function rodar(
   let docsLidos: DocumentoLido[] | null = null;
   let leituraCompleta = true;
 
+  // Custo da auditoria até agora: tokens de texto + páginas lidas por imagem (que não passam pelos contadores de tokens).
+  const paginasOcrTotal = () =>
+    (progresso.paginasOcr ?? 0) + Object.values(progresso.ocr ?? {}).reduce((n, e) => n + Object.values(e.lidas).filter(Boolean).length, 0);
+  const custoAgora = () => custoEstimadoUsd(usoTotal()) + paginasOcrTotal() * CUSTO_POR_PAGINA_OCR_USD;
+  /** Passou do teto de custo por edital? Para e pede a decisão de uma pessoa (nunca gasta à toa). */
+  const checarTeto = () => {
+    const teto = progresso.custoLiberado ? TETO_CUSTO_LIBERADO_USD : TETO_CUSTO_POR_EDITAL_USD;
+    if (custoAgora() > teto) {
+      throw new ErroTipado("CUSTO_EXCEDIDO", `Custo da auditoria (US$ ${custoAgora().toFixed(2)}) passou do teto de US$ ${teto.toFixed(2)}.`);
+    }
+  };
   let pedacosAtuais: PedacoPlano[] | null = null;
   const salvar = () => {
-    meta.custoAtualUsd = custoEstimadoUsd(usoTotal());
+    meta.custoAtualUsd = custoAgora();
     if (pedacosAtuais) {
       const feitos = new Set(progresso.feitosChaves);
       progresso.chunksTotal = pedacosAtuais.length;
@@ -956,6 +999,7 @@ async function rodar(
   const emLeituraPorImagem = new Set<string>();
   const aProcessar = lidos.filter((d) => !textos.has(d.id) && (progresso.falhas![d.id]?.n ?? 0) < FALHAS_ATE_DESISTIR_DO_ARQUIVO);
   await rodarComPrazo(aProcessar, 3, () => restante() > FOLGA_PREPARO_MS, async (d) => {
+    checarTeto();
     progresso.ocr ??= {};
     const ocr: ContextoOcr = {
       estado: (progresso.ocr[d.id] ??= { lidas: {} }),
@@ -970,14 +1014,22 @@ async function rodar(
     if (r.texto !== null) {
       textos.set(d.id, r.texto);
       delete progresso.falhas![d.id];
-      delete progresso.ocr[d.id]; // texto pronto e guardado no documento: o progresso do OCR não é mais necessário
+      // Texto pronto e guardado no documento. Se ficaram páginas de fora (teto), o OCR já feito é mantido para o "liberar leitura
+      // completa" ler só o que falta; senão, o progresso do OCR não é mais necessário (as páginas lidas entram na conta de custo).
+      const est = progresso.ocr[d.id];
+      if (est && (est.deixadas?.length ?? 0) === 0) {
+        progresso.paginasOcr = (progresso.paginasOcr ?? 0) + Object.values(est.lidas).filter(Boolean).length;
+        delete progresso.ocr[d.id];
+      }
       avancos++;
     } else if (r.motivo === "armazenamento") {
       armazenamentoBloqueado = true; // não conta como falha do arquivo
     } else if (r.motivo === "ocr") {
       emLeituraPorImagem.add(d.id); // continua na próxima execução, sem contar como falha
     } else {
-      progresso.falhas![d.id] = { n: (progresso.falhas![d.id]?.n ?? 0) + 1, motivo: r.motivo };
+      // Motivo que repetir não resolve (senha, login/captcha, escaneado ilegível, edital apagado): desiste já deste arquivo.
+      const semRemedio = MOTIVOS_SEM_REMEDIO_AUTOMATICO.has(r.motivo);
+      progresso.falhas![d.id] = { n: semRemedio ? FALHAS_ATE_DESISTIR_DO_ARQUIVO : (progresso.falhas![d.id]?.n ?? 0) + 1, motivo: r.motivo };
     }
   });
   // Storage bloqueado: guarda o que já foi lido e espera ele voltar. Nunca fecha um resultado com arquivos que não deu para abrir.
@@ -1001,9 +1053,10 @@ async function rodar(
   const comConteudo = lidos.filter((d) => temConteudo(d) && papeis.get(d.id) === "principal").length;
   if (comConteudo === 0) {
     await salvar();
-    throw lidos.length === 0
-      ? new ErroTipado("SEM_DOCUMENTO", "Este edital não tem nenhum documento para ler.")
-      : new ErroTipado("ARQUIVO_ILEGIVEL", "Nenhum documento deste edital pôde ser baixado ou lido.");
+    if (lidos.length === 0) throw new ErroTipado("SEM_DOCUMENTO", "Este edital não tem nenhum documento para ler.");
+    // Se todos os principais falharam por motivo que só uma pessoa resolve, não adianta tentar de novo sozinho.
+    const motivosDosPrincipais = lidos.filter((d) => papeis.get(d.id) === "principal" && !temConteudo(d)).map((d) => progresso.falhas![d.id]?.motivo);
+    throw new ErroTipado(erroQuandoNenhumPrincipalFoiLido(motivosDosPrincipais), "Nenhum documento principal deste edital pôde ser baixado ou lido.");
   }
 
   // 2. Só os trechos de habilitação vão para a IA; os mais relevantes são lidos primeiro. Cada pedaço tem uma chave que
@@ -1031,6 +1084,7 @@ async function rodar(
   if (faltam.length > 0) {
     try {
       await rodarComPrazo(faltam, PEDACOS_EM_PARALELO, () => restante() > FOLGA_NOVO_PEDACO_MS, async (p) => {
+        checarTeto();
         try {
           const brutas = await extrairDoPedaco(p, uso.haiku, sinal);
           progresso.feitosChaves!.push(p.chave);
@@ -1089,6 +1143,7 @@ async function rodar(
   if (lotesFaltam.length > 0) {
     try {
       await rodarComPrazo(lotesFaltam, 4, () => restante() > FOLGA_NOVO_LOTE_MS, async (i) => {
+        checarTeto();
         try {
           progresso.lotes![String(i)] = await conferirLote(lotes[i], ctx, uso.sonnet, sinal);
           avancos++;
@@ -1108,12 +1163,21 @@ async function rodar(
   if (finais.length === 0) throw new ErroTipado("RESPOSTA_INVALIDA", "A conferência final não devolveu resultado.");
   const avaliadas = avaliarTodas(finais, docs, dataReferencia);
 
+  // Sinais da leitura que pedem revisão de uma pessoa: anexo em link externo e documentos que se contradizem.
+  const avisosExtras: string[] = [];
+  const textoDosPrincipais = lidos.filter((d) => papeis.get(d.id) === "principal" && textos.has(d.id)).map((d) => textos.get(d.id)!).join("\n");
+  const avisoExterno = avisoDeAnexosExternos(detectarAnexosExternos(textoDosPrincipais));
+  if (avisoExterno) avisosExtras.push(avisoExterno);
+  avisosExtras.push(...detectarContradicoes(brutas));
+
   const r = await gravarResultado({
     editalId,
     linhas: avaliadas,
     dataReferencia,
     leituraCompleta,
     docsLidos,
+    avisosExtras,
+    progressoFinal: progressoParaGuardar(progresso),
     docsEmpresa: docs,
     editalFingerprint: fingerprintEdital(todos, edital),
     uso: usoTotal(),
@@ -1198,12 +1262,13 @@ async function prepararDocumento(
       if (baixou) doc = await prisma.document.findUniqueOrThrow({ where: { id: d.id } });
     }
     // A leitura por imagem trabalha em lotes e tem controle de tempo próprio: usa todo o tempo que sobra da execução.
+    const diagnostico: { motivo?: DiagnosticoArquivo } = {};
     const texto = await comPrazo(
-      obterTextoBrutoDocumento(doc, { lancarSeArmazenamentoIndisponivel: true, bytes: bytesBaixados, ocr }),
+      obterTextoBrutoDocumento(doc, { lancarSeArmazenamentoIndisponivel: true, bytes: bytesBaixados, ocr, diagnostico }),
       ocr ? Math.max(limiteMs(), ocr.restanteMs()) : limiteMs()
     );
     if (texto === ESGOTOU) return { texto: null, motivo: ocr?.estado.escolhidas ? "ocr" : "demorou" };
-    if (!texto) return { texto: null, motivo: "formato" };
+    if (!texto) return { texto: null, motivo: diagnostico.motivo ?? "formato" };
     return { texto };
   } catch (err) {
     // Storage bloqueado não é culpa do arquivo: a auditoria espera em vez de marcar o documento como ilegível.
@@ -1244,7 +1309,8 @@ async function registrarFalha(editalId: string, err: unknown, reconferindo: bool
     let status: HabilitacaoStatus;
     let aviso: string;
 
-    resultadoLog = decisao.acao === "tentar_de_novo" ? "retentativa" : decisao.acao === "definitivo" ? "definitivo" : "espera";
+    resultadoLog =
+      decisao.acao === "tentar_de_novo" ? "retentativa" : decisao.acao === "definitivo" ? "definitivo" : decisao.acao === "acao_humana" ? "acao_humana" : "espera";
     if (decisao.acao === "aguardar_ia") {
       dados = { estado: "AGUARDANDO_SALDO", mensagem: c.mensagemUsuario, proximaTentativaEm: new Date(Date.now() + PAUSA_MS) };
       status = statusHabilitacaoDoErro(c.tipo);

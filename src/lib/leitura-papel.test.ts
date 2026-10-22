@@ -51,3 +51,23 @@ describe("descreverNaoLido", () => {
     expect(descreverNaoLido("sem marcas")).toEqual([]);
   });
 });
+
+describe("arquivo do portal trocado pelo analista", () => {
+  it("o 'Edital' do portal que não abre vira apoio quando o analista enviou outro 'Edital' (não trava o resultado)", () => {
+    const m = papeisDosDocumentos([
+      { id: "portal", nome: "Edital.pdf", tipo: "DOCUMENTO_PNCP", categoria: "EDITAL" },
+      { id: "tr", nome: "TR.pdf", tipo: "DOCUMENTO_PNCP", categoria: "TERMO_REFERENCIA" },
+      { id: "meu", nome: "Edital sem senha.pdf", tipo: "DOCUMENTO_USUARIO", categoria: "EDITAL" },
+    ]);
+    expect(m.get("portal")).toBe("apoio");
+    expect(m.get("meu")).toBe("principal");
+    expect(m.get("tr")).toBe("principal"); // o TR não foi trocado
+  });
+  it("arquivo do analista sem categoria não troca nada", () => {
+    const m = papeisDosDocumentos([
+      { id: "portal", nome: "Edital.pdf", tipo: "DOCUMENTO_PNCP", categoria: "EDITAL" },
+      { id: "extra", nome: "contrato assinado.pdf", tipo: "DOCUMENTO_USUARIO", categoria: null },
+    ]);
+    expect(m.get("portal")).toBe("principal");
+  });
+});

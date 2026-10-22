@@ -10,6 +10,8 @@ const TAMANHO_MAXIMO_ANEXO = 3.5 * 1024 * 1024;
 const schema = z.object({
   nome: z.string().trim().min(1).max(200),
   arquivoBase64: z.string().min(1),
+  // Quando o analista envia o arquivo para SUBSTITUIR um que o sistema não conseguiu abrir (ex.: o edital).
+  categoria: z.enum(["EDITAL", "TERMO_REFERENCIA", "ANEXO_PRECOS"]).optional(),
 });
 
 /** Anexo avulso enviado pelo usuário direto no card (ex: contrato assinado, print de
@@ -39,6 +41,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       editalId: id,
       nome: parsed.data.nome,
       tipo: "DOCUMENTO_USUARIO",
+      ...(parsed.data.categoria ? { categoria: parsed.data.categoria } : {}),
       status: "DISPONIVEL",
       conteudoBase64: parsed.data.arquivoBase64,
     },

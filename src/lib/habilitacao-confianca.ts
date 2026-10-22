@@ -28,7 +28,12 @@ export type LinhaParaConfianca = { categoria: string; situacao: SituacaoExigenci
 
 export type AvaliacaoDeConfianca = { revisar: boolean; motivos: string[] };
 
-export function avaliarConfianca(opts: { linhas: LinhaParaConfianca[]; statusCalculado: StatusHabilitacao }): AvaliacaoDeConfianca {
+export function avaliarConfianca(opts: {
+  linhas: LinhaParaConfianca[];
+  statusCalculado: StatusHabilitacao;
+  /** Avisos já prontos vindos da leitura (anexo em link externo, documentos que se contradizem): cada um pede revisão. */
+  avisos?: string[];
+}): AvaliacaoDeConfianca {
   if (opts.statusCalculado === "NAO_HABILITADA") return { revisar: false, motivos: [] };
 
   const motivos: string[] = [];
@@ -53,6 +58,8 @@ export function avaliarConfianca(opts: { linhas: LinhaParaConfianca[]; statusCal
       `Em ${incertas} de ${consideradas.length} exigências a conferência não teve certeza de qual documento da empresa atende.`
     );
   }
+
+  motivos.push(...(opts.avisos ?? []));
 
   return { revisar: motivos.length > 0, motivos };
 }

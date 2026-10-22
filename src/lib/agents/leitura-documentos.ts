@@ -3,6 +3,8 @@ import { extractText, getDocumentProxy } from "unpdf";
 import { transcreverPdfViaVisao, OCR_VISAO_LIMITE_BYTES } from "@/lib/anthropic";
 import { MARCA_ILEGIVEL } from "@/lib/agents/arquivos-compactados";
 import { densidadeDeHabilitacao } from "@/lib/habilitacao-trechos";
+import { MARCA_ACIMA_DO_LIMITE } from "@/lib/leitura-papel";
+import { TETO_PAGINAS_OCR } from "@/lib/limites-leitura";
 import {
   MIN_PAGINAS_SEM_TEXTO_PARA_OCR,
   mesclarTextoComOcr,
@@ -43,12 +45,33 @@ export function detectarFormato(bytes: Uint8Array, nome = "", zipInterno?: strin
   return "desconhecido";
 }
 
+// ── Diagnóstico de arquivo que não abriu ────────────────────────────────────
+
+/** Por que um arquivo não pôde ser lido, quando dá para saber (e só uma pessoa resolve). */
+export type DiagnosticoArquivo = "protegido" | "corrompido" | "login" | "pagina" | "ilegivel";
+
+/** O PDF tem senha ou está corrompido? Só é chamado quando a leitura já falhou (carregar um PDF grande é caro). */
+export async function diagnosticarPdf(bytes: Uint8Array): Promise<"protegido" | "corrompido" | null> {
+  try {
+    await PDFDocument.load(bytes);
+    return null;
+  } catch (err) {
+    const nome = err instanceof Error ? err.constructor.name + " " + err.message : String(err);
+    return /encrypt|password|senha/i.test(nome) ? "protegido" : "corrompido";
+  }
+}
+
+/** Uma página da web no lugar do arquivo: tela de login/captcha/bloqueio, ou só uma página com links. */
+export function diagnosticarHtml(bytes: Uint8Array): "login" | "pagina" {
+  const texto = new TextDecoder("utf-8").decode(bytes.slice(0, 20_000)).toLowerCase();
+  return /captcha|recaptcha|hcaptcha|just a moment|verify you are human|verifique que voc|type="password"|name="senha"|entrar|fa[cç]a login|acesso restrito|access denied|forbidden/.test(texto) ? "login" : "pagina";
+}
+
 // ── OCR por lotes ───────────────────────────────────────────────────────────
 
 /** Páginas lidas por imagem em cada chamada (lotes pequenos: rápido, barato de repetir e de recuperar). */
 export const PAGINAS_POR_LOTE_OCR = 10;
-/** Teto de páginas lidas por imagem em um edital, a não ser que o analista libere a leitura completa (custo extra). */
-export const TETO_PAGINAS_OCR = 60;
+export { TETO_PAGINAS_OCR };
 /** Só começa um novo lote se ainda houver este tempo (um lote de 10 páginas leva ~15–25 s). */
 export const MARGEM_NOVO_LOTE_OCR_MS = 28_000;
 
@@ -119,6 +142,8 @@ export function escolherPaginasParaOcr(vazias: number[], porPagina: string[], te
 export type ResultadoPdfEmLotes = {
   texto: string | null;
   viaOcr: boolean;
+  /** true = nada pôde ser lido (nem texto, nem imagem): documento escaneado ilegível. */
+  todasIlegiveis?: boolean;
   /** Páginas que não puderam ser lidas (acima do teto ou ilegíveis). Vazio = leitura completa. */
   paginasNaoLidas: number[];
 };
@@ -221,10 +246,12 @@ export async function extrairTextoPdfEmLotes(bytes: Uint8Array, ctx: ContextoOcr
 
   const mapa = new Map<number, string>();
   for (const [p, t] of Object.entries(est.lidas)) if (t) mapa.set(Number(p), t);
+  // Sem camada de texto e nenhuma página legível por imagem: documento escaneado sem condições de leitura.
+  if (mapa.size === 0 && !temTexto) return { texto: null, viaOcr: false, todasIlegiveis: true, paginasNaoLidas: est.escolhidas };
   const naoLidas = [...(est.deixadas ?? []), ...est.escolhidas.filter((p) => !mapa.has(p))];
   let texto = mesclarTextoComOcr(porPagina, mapa);
   if (naoLidas.length > 0) {
-    const motivo = (est.deixadas?.length ?? 0) > 0 ? "acima do limite de leitura por imagem" : "ilegíveis";
+    const motivo = (est.deixadas?.length ?? 0) > 0 ? MARCA_ACIMA_DO_LIMITE : "ilegíveis";
     texto += `\n\n${MARCA_ILEGIVEL} páginas ${formatarIntervalos(naoLidas)} não lidas (${motivo})]]`;
   }
   return { texto, viaOcr: mapa.size > 0, paginasNaoLidas: naoLidas.sort((a, b) => a - b) };

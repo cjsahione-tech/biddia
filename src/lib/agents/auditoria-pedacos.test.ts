@@ -7,6 +7,7 @@ import {
   hashDoPlanoLegado,
   migrarProgressoLegado,
   planejarPedacos,
+  progressoParaGuardar,
   reaproveitarProgresso,
   type ProgressoDePedacos,
 } from "@/lib/agents/auditoria-pedacos";
@@ -147,5 +148,38 @@ describe("falhaDoPedacoPedeDivisao", () => {
   it("só falhas do próprio pedaço pedem divisão; falhas do serviço não", () => {
     for (const t of ["RESPOSTA_INVALIDA", "TEMPO_ESGOTADO", "EDITAL_GRANDE"] as const) expect(falhaDoPedacoPedeDivisao(t)).toBe(true);
     for (const t of ["LIMITE_TAXA", "SOBRECARGA", "SERVICO_IA", "CONEXAO", "SALDO_INSUFICIENTE", "CHAVE_INVALIDA", "DESCONHECIDO"] as const) expect(falhaDoPedacoPedeDivisao(t)).toBe(false);
+  });
+});
+
+describe("liberar leitura completa e progresso final", () => {
+  it("liberar: marca as flags, mantém o OCR já lido e refaz só o plano de páginas", () => {
+    const json = JSON.stringify({ feitosChaves: ["k"], ocr: { d1: { lidas: { "1": "t" }, escolhidas: [1, 2], deixadas: [3, 4] } }, paginasOcr: 12, passos: 5 });
+    const novo = JSON.parse(reaproveitarProgresso(json, { liberar: true })!);
+    expect(novo.leituraCompletaLiberada).toBe(true);
+    expect(novo.custoLiberado).toBe(true);
+    expect(novo.ocr.d1.lidas["1"]).toBe("t");
+    expect(novo.ocr.d1.escolhidas).toBeUndefined();
+    expect(novo.ocr.d1.deixadas).toBeUndefined();
+    expect(novo.paginasOcr).toBe(12);
+    expect(novo.passos).toBeUndefined();
+  });
+  it("liberar funciona mesmo sem progresso anterior", () => {
+    expect(JSON.parse(reaproveitarProgresso(null, { liberar: true })!)).toEqual({ leituraCompletaLiberada: true, custoLiberado: true });
+  });
+  it("ao terminar, guarda a leitura do edital e só o OCR dos documentos com páginas de fora", () => {
+    const guardado = JSON.parse(
+      progressoParaGuardar({
+        tamanhoPedaco: 30_000,
+        feitosChaves: ["a", "b"],
+        brutasPorChave: { a: [{ documento: "X" }], b: [] },
+        divididos: ["z"],
+        paginasOcr: 7,
+        ocr: { completo: { lidas: { "1": "t" } }, comFora: { lidas: { "1": "t" }, deixadas: [61, 62] } },
+      })!
+    );
+    expect(guardado.feitosChaves).toEqual(["a", "b"]);
+    expect(guardado.paginasOcr).toBe(7);
+    expect(Object.keys(guardado.ocr)).toEqual(["comFora"]);
+    expect(progressoParaGuardar({})).toBeNull();
   });
 });

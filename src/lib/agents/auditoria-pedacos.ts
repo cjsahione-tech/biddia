@@ -130,17 +130,52 @@ export function migrarProgressoLegado(
  * conteúdo, então um documento trocado simplesmente gera pedaços novos. O que depende da situação do momento
  * (arquivos desistidos, contagem de passos, conferência com os documentos da empresa) recomeça.
  */
-export function reaproveitarProgresso(json: string | null): string | null {
-  if (!json) return null;
+export function reaproveitarProgresso(json: string | null, opts: { liberar?: boolean } = {}): string | null {
+  const mantido: Record<string, unknown> = {};
   try {
-    const p = JSON.parse(json) as Record<string, unknown>;
-    const mantido: Record<string, unknown> = {};
-    for (const campo of ["tamanhoPedaco", "feitosChaves", "brutasPorChave", "divididos", "ocr", "feitos", "brutas", "plano", "chunksTotal"]) {
+    const p = (json ? JSON.parse(json) : {}) as Record<string, unknown>;
+    for (const campo of ["tamanhoPedaco", "feitosChaves", "brutasPorChave", "divididos", "ocr", "paginasOcr", "feitos", "brutas", "plano", "chunksTotal"]) {
       if (p[campo] !== undefined) mantido[campo] = p[campo];
     }
-    if (!mantido.feitosChaves && !mantido.feitos) return null; // nada de leitura para aproveitar
-    return JSON.stringify(mantido);
   } catch {
-    return null;
+    /* progresso ilegível: começa limpo */
   }
+  if (opts.liberar) {
+    // O analista liberou a leitura completa (custo extra): sem teto de páginas e com o teto de custo ampliado. As páginas
+    // por imagem já lidas ficam; só o plano de quais páginas ler (com o teto antigo) é refeito.
+    mantido.leituraCompletaLiberada = true;
+    mantido.custoLiberado = true;
+    const ocr = (mantido.ocr ?? {}) as Record<string, Record<string, unknown>>;
+    for (const estado of Object.values(ocr)) {
+      delete estado.escolhidas;
+      delete estado.deixadas;
+    }
+  }
+  if (!opts.liberar && !mantido.feitosChaves && !mantido.feitos) return null; // nada de leitura para aproveitar
+  return JSON.stringify(mantido);
+}
+
+/**
+ * O que guardar quando a auditoria TERMINA: a leitura do edital (pedaços e exigências levantadas) para que "Auditar de novo"
+ * não pague tudo outra vez, e o OCR dos documentos que ficaram com páginas de fora (para "Liberar leitura completa" ler só o que falta).
+ */
+export function progressoParaGuardar(p: {
+  tamanhoPedaco?: number;
+  feitosChaves?: string[];
+  brutasPorChave?: Record<string, unknown[]>;
+  divididos?: string[];
+  paginasOcr?: number;
+  ocr?: Record<string, { lidas: Record<string, string>; deixadas?: number[] }>;
+}): string | null {
+  const guardar: Record<string, unknown> = {};
+  if (p.feitosChaves?.length) {
+    guardar.tamanhoPedaco = p.tamanhoPedaco;
+    guardar.feitosChaves = p.feitosChaves;
+    guardar.brutasPorChave = p.brutasPorChave ?? {};
+    guardar.divididos = p.divididos ?? [];
+  }
+  if (p.paginasOcr) guardar.paginasOcr = p.paginasOcr;
+  const comPaginasDeFora = Object.fromEntries(Object.entries(p.ocr ?? {}).filter(([, e]) => (e.deixadas?.length ?? 0) > 0));
+  if (Object.keys(comPaginasDeFora).length > 0) guardar.ocr = comPaginasDeFora;
+  return Object.keys(guardar).length > 0 ? JSON.stringify(guardar) : null;
 }

@@ -50,7 +50,7 @@ export function AppShell({
     fetch("/api/notificacoes")
       .then((r) => r.json())
       .then((data) => {
-        if (Array.isArray(data.notificacoes)) setTotalNotificacoes(data.notificacoes.length);
+        if (Array.isArray(data.notificacoes)) setTotalNotificacoes(data.notificacoes.length + (Array.isArray(data.auditoriasComAcao) ? data.auditoriasComAcao.length : 0));
       })
       .catch(() => {});
   }, [pathname]);

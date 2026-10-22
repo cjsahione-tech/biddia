@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { dispararAuditoriaHabilitacao } from "@/lib/agents/auditoria-dispatch";
 import { dadosAuditoriaNova, haVaga } from "@/lib/agents/auditoria-fila";
+import { MARCA_ACIMA_DO_LIMITE } from "@/lib/leitura-papel";
 import { etapaAudita, fingerprintDocumentos, fingerprintEdital } from "@/lib/habilitacao";
 
 // O "porteiro" da auditoria de habilitação: o ÚNICO lugar que decide se uma auditoria começa.
@@ -29,12 +30,13 @@ export type Solicitacao = {
 };
 
 const EM_ANDAMENTO_MS = 10 * 60_000;
+const INTERVALO_MINIMO_ENTRE_PEDIDOS_MS = 60_000;
 const TIPOS_DOCUMENTO_LIDOS = ["DOCUMENTO_PNCP", "DOCUMENTO_LICITANET", "DOCUMENTO_USUARIO"] as const;
 const RESULTADOS_FINAIS = ["HABILITADA", "HABILITADA_RESSALVAS", "NAO_HABILITADA", "REVISAR_MANUALMENTE"];
 
 export async function solicitarAuditoriaHabilitacao(
   editalId: string,
-  opts: { companyId?: string; origem?: string; forcar?: boolean } = {}
+  opts: { companyId?: string; origem?: string; forcar?: boolean; liberarLeitura?: boolean } = {}
 ): Promise<Solicitacao> {
   const edital = await prisma.edital.findFirst({
     where: { id: editalId, ...(opts.companyId ? { companyId: opts.companyId } : {}) },
@@ -58,6 +60,10 @@ export async function solicitarAuditoriaHabilitacao(
   const agora = Date.now();
 
   if (aud && (aud.estado === "RODANDO" || aud.estado === "NA_FILA") && agora - aud.updatedAt.getTime() < EM_ANDAMENTO_MS) {
+    return { resultado: "ja_em_andamento" };
+  }
+  // Pedido repetido em poucos segundos (clique duplo, tela recarregada): não vira outro reprocessamento.
+  if (aud?.solicitadaEm && agora - aud.solicitadaEm.getTime() < INTERVALO_MINIMO_ENTRE_PEDIDOS_MS && aud.estado !== "CONCLUIDA") {
     return { resultado: "ja_em_andamento" };
   }
   // Sem saldo: a auditoria já está guardada e a retomada automática cuida dela (sem repetir gasto).
@@ -89,7 +95,11 @@ export async function solicitarAuditoriaHabilitacao(
     // se o disparo se perder, o vigia retoma o que ficou na fila.
     const comVaga = await haVaga(editalId);
     const anterior = await prisma.auditoriaHabilitacao.findUnique({ where: { editalId }, select: { progresso: true } });
-    const novo = dadosAuditoriaNova(new Date(agora), anterior?.progresso ?? null);
+    const novo = dadosAuditoriaNova(new Date(agora), anterior?.progresso ?? null, { liberarLeitura: opts.liberarLeitura });
+    if (opts.liberarLeitura) {
+      // O texto guardado desses documentos tem as páginas de fora marcadas: apaga para ser lido de novo, agora sem o teto.
+      await prisma.document.updateMany({ where: { editalId, textoExtraido: { contains: MARCA_ACIMA_DO_LIMITE } }, data: { textoExtraido: null } });
+    }
     await prisma.auditoriaHabilitacao.upsert({ where: { editalId }, create: { editalId, ...novo }, update: novo });
     await prisma.edital.update({ where: { id: editalId }, data: { habilitacaoStatus: comVaga ? "AUDITANDO" : "NA_FILA" } });
   }

@@ -42,5 +42,19 @@ export async function GET() {
     .filter((n) => n.diasRestantes <= DIAS_ALERTA)
     .sort((a, b) => a.diasRestantes - b.diasRestantes);
 
-  return NextResponse.json({ notificacoes });
+  // Auditorias de habilitação que pararam e só uma pessoa resolve (enviar arquivo, liberar custo...): aviso dentro do app.
+  const comAcao = await prisma.edital.findMany({
+    where: { companyId: company!.id, habilitacaoStatus: "PRECISA_ACAO_HUMANA" },
+    select: { id: true, titulo: true, orgaoNome: true, auditoriaHabilitacao: { select: { mensagem: true, erroTipo: true } } },
+    orderBy: { updatedAt: "desc" },
+    take: 20,
+  });
+  const auditoriasComAcao = comAcao.map((e) => ({
+    editalId: e.id,
+    editalTitulo: e.titulo,
+    orgaoNome: e.orgaoNome,
+    mensagem: e.auditoriaHabilitacao?.mensagem ?? "A auditoria de habilitação parou e precisa da sua ajuda.",
+  }));
+
+  return NextResponse.json({ notificacoes, auditoriasComAcao });
 }

@@ -152,6 +152,7 @@ export const ROTULO_STATUS_HABILITACAO: Record<string, string> = {
   EDITAL_GRANDE: "Edital muito grande",
   TEMPO_ESGOTADO: "Tempo esgotado – tentando de novo",
   REVISAR_MANUALMENTE: "Revisar manualmente",
+  PRECISA_ACAO_HUMANA: "Precisa de ação",
 };
 
 /** Explicação em linguagem simples de cada selo (aparece ao passar o mouse). */
@@ -167,15 +168,28 @@ export const DICA_STATUS_HABILITACAO: Record<string, string> = {
   ARQUIVO_ILEGIVEL: "Os arquivos do edital não puderam ser baixados ou lidos. Abra a aba Habilitação para ver qual arquivo e o que fazer.",
   EDITAL_GRANDE: "O edital é muito grande e está sendo lido em partes; pode levar um pouco mais.",
   TEMPO_ESGOTADO: "A leitura passou do tempo previsto. O sistema continua de onde parou, sem precisar de ação sua.",
+  PRECISA_ACAO_HUMANA: "A auditoria parou porque só uma pessoa resolve (por exemplo, enviar um arquivo que o sistema não consegue abrir). Abra a aba Habilitação: ela explica o motivo e mostra o botão para continuar.",
   REVISAR_MANUALMENTE: "O resultado parece bom, mas a leitura automática pode ter deixado exigências de fora. Abra a aba Habilitação para ver o motivo e conferir o edital antes de decidir.",
 };
 
 /** Selo quando as tentativas automáticas acabaram: nada de "tentando de novo" — o usuário decide. */
 export function statusHabilitacaoDefinitivaDoErro(tipo: TipoErroIA): HabilitacaoStatus {
   switch (tipo) {
+    case "PDF_PROTEGIDO":
+    case "EDITAL_REMOVIDO":
+    case "LOGIN_OU_CAPTCHA":
+    case "ESCANEADO_ILEGIVEL":
+    case "CUSTO_EXCEDIDO":
+      return "PRECISA_ACAO_HUMANA";
     case "ARQUIVO_ILEGIVEL":
     case "SEM_DOCUMENTO":
       return "ARQUIVO_ILEGIVEL";
+    case "PDF_PROTEGIDO":
+    case "EDITAL_REMOVIDO":
+    case "LOGIN_OU_CAPTCHA":
+    case "ESCANEADO_ILEGIVEL":
+    case "CUSTO_EXCEDIDO":
+      return "PRECISA_ACAO_HUMANA";
     case "EDITAL_GRANDE":
       return "EDITAL_GRANDE";
     default:
@@ -199,6 +213,12 @@ export function statusHabilitacaoDoErro(tipo: TipoErroIA): HabilitacaoStatus {
     case "ARQUIVO_ILEGIVEL":
     case "SEM_DOCUMENTO":
       return "ARQUIVO_ILEGIVEL";
+    case "PDF_PROTEGIDO":
+    case "EDITAL_REMOVIDO":
+    case "LOGIN_OU_CAPTCHA":
+    case "ESCANEADO_ILEGIVEL":
+    case "CUSTO_EXCEDIDO":
+      return "PRECISA_ACAO_HUMANA";
     case "EDITAL_GRANDE":
       return "EDITAL_GRANDE";
     default:
@@ -282,11 +302,12 @@ export function etapaAudita(etapaKanban: string): boolean {
 
 // ── Grupos da coluna Qualificação ───────────────────────────────────────────
 
-export type GrupoHabilitacaoChave = "EM_AUDITORIA" | "REVISAR" | "HABILITADAS" | "NAO_HABILITADAS" | "COM_PROBLEMA" | "SEM_AUDITORIA";
+export type GrupoHabilitacaoChave = "EM_AUDITORIA" | "ACAO" | "REVISAR" | "HABILITADAS" | "NAO_HABILITADAS" | "COM_PROBLEMA" | "SEM_AUDITORIA";
 
 /** Ordem em que os grupos aparecem na coluna Qualificação: o que está rodando primeiro, depois o resultado. */
 export const GRUPOS_HABILITACAO: { chave: GrupoHabilitacaoChave; titulo: string; status: string[] }[] = [
   { chave: "EM_AUDITORIA", titulo: "Auditando / na fila", status: ["AUDITANDO", "NA_FILA", "AGUARDANDO_IA", "TEMPO_ESGOTADO", "EDITAL_GRANDE"] },
+  { chave: "ACAO", titulo: "Precisa de ação", status: ["PRECISA_ACAO_HUMANA"] },
   { chave: "REVISAR", titulo: "Revisar manualmente", status: ["REVISAR_MANUALMENTE"] },
   { chave: "HABILITADAS", titulo: "Habilitadas", status: ["HABILITADA", "HABILITADA_RESSALVAS"] },
   { chave: "NAO_HABILITADAS", titulo: "Não habilitadas", status: ["NAO_HABILITADA"] },
