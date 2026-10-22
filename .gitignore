@@ -51,3 +51,6 @@ next-env.d.ts
 
 # arquivos de rascunho gerados durante a sessão (relatórios, PDFs de teste etc.)
 /scratchpad/
+
+# Arquivos de trabalho (designs enviados, exportações) que não fazem parte do projeto
+/Claude outputs/
