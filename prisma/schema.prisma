@@ -983,3 +983,23 @@ model ConsumoIA {
   @@index([agente, createdAt])
   @@index([companyId, createdAt])
 }
+
+// Registro de CADA tentativa/execução da auditoria de habilitação (só leitura para análise): quando, por quê, com qual
+// método de leitura, quanto tempo e quanto custou. Alimenta o painel "Saúde das auditorias" do admin.
+// Sem vínculo (FK) com o edital de propósito: é um log, e gravar nele nunca pode atrapalhar a auditoria.
+model AuditoriaTentativa {
+  id        String   @id @default(cuid())
+  editalId  String
+  criadaEm  DateTime @default(now())
+  // "concluida" | "continua" | "retentativa" | "espera" | "definitivo" | "acao_humana" | "interrompida"
+  resultado String
+  tipoErro  String?
+  // "texto" | "texto+ocr" | "reconferencia"
+  metodo    String?
+  duracaoMs Int?
+  custoUsd  Float    @default(0)
+  detalhe   String?
+
+  @@index([editalId, criadaEm])
+  @@index([criadaEm])
+}

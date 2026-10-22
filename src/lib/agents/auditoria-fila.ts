@@ -5,6 +5,8 @@ import { LISTA_ETAPAS_QUE_AUDITAM } from "@/lib/habilitacao";
 import { mensagemAmigavelDoTipo, mensagemDefinitivaDoTipo } from "@/lib/ia-erros";
 import { verificarArmazenamento } from "@/lib/storage";
 import { reaproveitarProgresso } from "@/lib/agents/auditoria-pedacos";
+import { registrarTentativa } from "@/lib/agents/auditoria-tentativas";
+import { corrigirSeloPreso } from "@/lib/auditoria-selos";
 import {
   BATIMENTO_VIVO_MS,
   decidirAposFalha,
@@ -101,7 +103,10 @@ export async function iniciarProximasDaFila(opts: { origem?: string; companyId?:
   return naFila.length;
 }
 
-export type ResumoVigia = { interrompidas: number; retentativas: number; retomadas: number; iniciadas: number };
+export type ResumoVigia = { interrompidas: number; retentativas: number; retomadas: number; iniciadas: number; selosCorrigidos: number };
+
+/** Edital com selo de andamento há mais que isto sem ninguém mexer = candidato a selo preso. */
+const TEMPO_SELO_PRESO_MS = 15 * 60_000;
 
 // Evita rodar o vigia a cada requisição: no máximo uma vez a cada 20s por instância.
 let ultimaVarredura = 0;
@@ -112,7 +117,7 @@ const INTERVALO_MINIMO_MS = 20_000;
  * auditoria e por um agendador externo. É barato quando não há nada a fazer.
  */
 export async function vigiarAuditorias(opts: { origem?: string; companyId?: string; forcar?: boolean } = {}): Promise<ResumoVigia> {
-  const vazio: ResumoVigia = { interrompidas: 0, retentativas: 0, retomadas: 0, iniciadas: 0 };
+  const vazio: ResumoVigia = { interrompidas: 0, retentativas: 0, retomadas: 0, iniciadas: 0, selosCorrigidos: 0 };
   if (!opts.forcar && Date.now() - ultimaVarredura < INTERVALO_MINIMO_MS) return vazio;
   ultimaVarredura = Date.now();
 
@@ -142,6 +147,7 @@ export async function vigiarAuditorias(opts: { origem?: string; companyId?: stri
       });
       await prisma.edital.update({ where: { id: a.editalId }, data: { habilitacaoStatus: statusHabilitacaoDefinitivaDoErro("TEMPO_ESGOTADO") } });
     }
+    await registrarTentativa({ editalId: a.editalId, resultado: "interrompida", tipoErro: "TEMPO_ESGOTADO", detalhe: "Execução parada sem sinal de vida; o vigia retomou de onde parou." });
     resumo.interrompidas++;
   }
 
@@ -202,7 +208,26 @@ export async function vigiarAuditorias(opts: { origem?: string; companyId?: stri
     }
   }
 
-  // 4. Preenche as vagas livres com o que está na fila.
+  // 4. Selos "em andamento" sem nada andando por trás (auditoria apagada, terminou em erro...): corrige. Nada fica "processando" para sempre.
+  const presos = await prisma.edital.findMany({
+    where: {
+      ...FILTRO_ETAPA,
+      ...empresa,
+      habilitacaoStatus: { in: ["AUDITANDO", "NA_FILA", "AGUARDANDO_IA", "TEMPO_ESGOTADO"] },
+      updatedAt: { lt: new Date(agora.getTime() - TEMPO_SELO_PRESO_MS) },
+    },
+    select: { id: true, habilitacaoStatus: true, auditoriaHabilitacao: { select: { estado: true, erroTipo: true, proximaTentativaEm: true } } },
+    take: 30,
+  });
+  for (const e of presos) {
+    const correcao = corrigirSeloPreso({ statusEdital: e.habilitacaoStatus, auditoria: e.auditoriaHabilitacao });
+    if (!correcao) continue;
+    if (correcao.acao === "enfileirar") await colocarNaFila(e.id);
+    else await prisma.edital.update({ where: { id: e.id }, data: { habilitacaoStatus: correcao.status } });
+    resumo.selosCorrigidos++;
+  }
+
+  // 5. Preenche as vagas livres com o que está na fila.
   resumo.iniciadas = await iniciarProximasDaFila({ origem: opts.origem, companyId: opts.companyId });
   return resumo;
 }

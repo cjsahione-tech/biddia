@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { askJSON, MODELO_HAIKU, MODELO_SONNET, verificarIADisponivel, type UsoTokens } from "@/lib/anthropic";
 import { classificarErro, ErroTipado, mensagemDeRetentativaDoTipo, mensagemDefinitivaDoTipo, tipoDoErro } from "@/lib/ia-erros";
 import { ehErroDeArmazenamentoIndisponivel } from "@/lib/armazenamento-estado";
+import { novaMeta, registrarTentativa, type MetaExecucao, type ResultadoTentativa } from "@/lib/agents/auditoria-tentativas";
 import { PAUSA_MS } from "@/lib/controle-ia";
 import { statusHabilitacaoDefinitivaDoErro, statusHabilitacaoDoErro, type StatusHabilitacao } from "@/lib/habilitacao";
 import { avaliarConfianca } from "@/lib/habilitacao-confianca";
@@ -736,13 +737,15 @@ export async function executarAuditoriaHabilitacao(editalId: string, opts: Opcoe
   const timer = setTimeout(() => parar.abort(), Math.max(1_000, restante() - MARGEM_FINAL_MS));
 
   let resultado: ResultadoExecucao = "erro";
+  const meta = novaMeta(opts.modo);
   try {
     resultado = await comContextoIA({ agente: "auditoria-habilitacao", editalId }, () =>
-      rodar(editalId, { ...opts, continuacao }, restante, parar.signal)
+      rodar(editalId, { ...opts, continuacao }, restante, parar.signal, meta)
     );
+    await registrarTentativa({ editalId, resultado: resultado === "continua" ? "continua" : "concluida", meta });
     return resultado;
   } catch (err) {
-    await registrarFalha(editalId, err, opts.modo === "reconferir");
+    await registrarFalha(editalId, err, opts.modo === "reconferir", meta);
     return "erro";
   } finally {
     clearTimeout(timer);
@@ -780,7 +783,8 @@ async function rodar(
   editalId: string,
   opts: OpcoesExecucao & { continuacao: number },
   restante: () => number,
-  sinal: AbortSignal
+  sinal: AbortSignal,
+  meta: MetaExecucao
 ): Promise<ResultadoExecucao> {
   const { continuacao } = opts;
   const reconferindo = opts.modo === "reconferir";
@@ -827,13 +831,15 @@ async function rodar(
     sonnetEntrada: uso.sonnet.entrada,
     sonnetSaida: uso.sonnet.saida,
   });
+  meta.custoInicialUsd = custoEstimadoUsd(usoTotal());
+  meta.custoAtualUsd = meta.custoInicialUsd;
 
   // ── Só refazer a conferência (documentação da empresa mudou) — sem reler o edital ──
   if (reconferindo) {
     const linhas = await prisma.exigenciaHabilitacao.findMany({ where: { editalId }, orderBy: { ordem: "asc" } });
     if (linhas.length === 0) {
       // Nada para reconferir ainda: faz a auditoria completa.
-      return rodar(editalId, { ...opts, modo: "completo", continuacao: 0 }, restante, sinal);
+      return rodar(editalId, { ...opts, modo: "completo", continuacao: 0 }, restante, sinal, meta);
     }
     const docs = await carregarDocsDaEmpresa(edital.companyId);
     const empresa = await carregarFatosDaEmpresa(edital.companyId);
@@ -881,6 +887,13 @@ async function rodar(
 
   // ── Leitura completa do processo, em passos ──
   const progresso: Progresso = atual.progresso ? (JSON.parse(atual.progresso) as Progresso) : { chunksTotal: 0, feitos: [], brutas: [] };
+  // Nova tentativa automática (1ª execução depois de uma falha): os arquivos dados como perdidos na rodada anterior
+  // são tentados DE NOVO — senão a nova tentativa pularia o download e falharia igual. Os pedaços já lidos ficam.
+  if (continuacao === 0 && atual.tentativasAutomaticas > 0) {
+    progresso.falhas = {};
+    progresso.semAvanco = 0;
+    progresso.passos = 0;
+  }
   progresso.passos = (progresso.passos ?? 0) + 1;
   progresso.falhas ??= {};
   progresso.lotes ??= {};
@@ -890,6 +903,7 @@ async function rodar(
 
   let pedacosAtuais: PedacoPlano[] | null = null;
   const salvar = () => {
+    meta.custoAtualUsd = custoEstimadoUsd(usoTotal());
     if (pedacosAtuais) {
       const feitos = new Set(progresso.feitosChaves);
       progresso.chunksTotal = pedacosAtuais.length;
@@ -972,6 +986,7 @@ async function rodar(
     throw new ErroTipado("ARMAZENAMENTO_INDISPONIVEL", "O armazenamento de arquivos está bloqueado.");
   }
 
+  if (emLeituraPorImagem.size > 0 || Object.values(progresso.ocr ?? {}).some((o) => Object.keys(o.lidas).length > 0)) meta.metodo = "texto+ocr";
   const papeis = papeisDosDocumentos(lidos);
   docsLidos = montarDocumentosLidos(lidos, textos, papeis, (id) => (emLeituraPorImagem.has(id) ? "ocr" : progresso.falhas![id]?.motivo));
   // Só os documentos PRINCIPAIS decidem se a leitura foi completa; os de apoio viram aviso.
@@ -1205,11 +1220,12 @@ async function prepararDocumento(
  * agendada (erro passageiro, com espera crescente) ou erro final com o motivo em linguagem simples.
  * Nunca deixa a auditoria "rodando".
  */
-async function registrarFalha(editalId: string, err: unknown, reconferindo: boolean) {
+async function registrarFalha(editalId: string, err: unknown, reconferindo: boolean, meta?: MetaExecucao) {
   // O detalhe técnico (com request_id etc.) vai só para o log do servidor e para o campo
   // interno; a tela recebe sempre o texto amigável do tipo do erro.
   const c = classificarErro(err);
   console.error(`Auditoria de habilitação do edital ${editalId} falhou [${c.tipo}]:`, c.detalheTecnico);
+  let resultadoLog: ResultadoTentativa = "definitivo";
 
   try {
     // Numa reconferência o resultado anterior continua valendo: só registra o problema.
@@ -1228,6 +1244,7 @@ async function registrarFalha(editalId: string, err: unknown, reconferindo: bool
     let status: HabilitacaoStatus;
     let aviso: string;
 
+    resultadoLog = decisao.acao === "tentar_de_novo" ? "retentativa" : decisao.acao === "definitivo" ? "definitivo" : "espera";
     if (decisao.acao === "aguardar_ia") {
       dados = { estado: "AGUARDANDO_SALDO", mensagem: c.mensagemUsuario, proximaTentativaEm: new Date(Date.now() + PAUSA_MS) };
       status = statusHabilitacaoDoErro(c.tipo);
@@ -1256,6 +1273,7 @@ async function registrarFalha(editalId: string, err: unknown, reconferindo: bool
     });
     if (!reconferindo) await prisma.edital.update({ where: { id: editalId }, data: { habilitacaoStatus: status } });
     await logAudit(editalId, NOME_AGENTE, "Auditoria de habilitação", "ERRO", aviso);
+    await registrarTentativa({ editalId, resultado: resultadoLog, tipoErro: c.tipo, meta, detalhe: aviso });
   } catch (e) {
     // Último recurso: nem o registro da falha pode derrubar o processo.
     console.error(`Não foi possível registrar a falha da auditoria do edital ${editalId}:`, e);

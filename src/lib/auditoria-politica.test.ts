@@ -29,8 +29,20 @@ describe("decidirAposFalha — o que fazer quando uma auditoria falha", () => {
     expect(ESPERAS_RETENTATIVA_MS[1]).toBeGreaterThan(ESPERAS_RETENTATIVA_MS[0]);
   });
 
+  it("esperas crescentes de 1 min, 5 min, 15 min e 1 hora, no máximo 4 tentativas", () => {
+    expect(ESPERAS_RETENTATIVA_MS).toEqual([60_000, 300_000, 900_000, 3_600_000]);
+    expect(MAX_TENTATIVAS_AUTOMATICAS).toBe(4);
+    expect(decidirAposFalha("CONEXAO", 3)).toEqual({ acao: "tentar_de_novo", esperaMs: 3_600_000 });
+    expect(decidirAposFalha("CONEXAO", 4)).toEqual({ acao: "definitivo" });
+  });
+
+  it("erro desconhecido tenta só mais uma vez (pode ser defeito que se repete)", () => {
+    expect(decidirAposFalha("DESCONHECIDO", 0)).toEqual({ acao: "tentar_de_novo", esperaMs: 60_000 });
+    expect(decidirAposFalha("DESCONHECIDO", 1)).toEqual({ acao: "definitivo" });
+  });
+
   it("erro que repetir não resolve: vai direto para o erro final", () => {
-    for (const tipo of ["SEM_DOCUMENTO", "EDITAL_GRANDE", "SEM_EXIGENCIAS", "DESCONHECIDO"] as const) {
+    for (const tipo of ["SEM_DOCUMENTO", "EDITAL_GRANDE", "SEM_EXIGENCIAS"] as const) {
       expect(decidirAposFalha(tipo, 0)).toEqual({ acao: "definitivo" });
     }
   });
@@ -39,7 +51,7 @@ describe("decidirAposFalha — o que fazer quando uma auditoria falha", () => {
 describe("limites da fila e da cadeia", () => {
   it("valores iniciais combinados (fáceis de mudar em auditoria-politica.ts)", () => {
     expect(LIMITE_AUDITORIAS_SIMULTANEAS).toBe(3);
-    expect(MAX_TENTATIVAS_AUTOMATICAS).toBe(2);
+    expect(MAX_TENTATIVAS_AUTOMATICAS).toBe(4);
     // A Vercel recusa cadeias com mais de 4 saltos entre funções: 1 execução + 3 continuações.
     expect(MAX_CONTINUACOES_NA_CADEIA).toBe(3);
   });
