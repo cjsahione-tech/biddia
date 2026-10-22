@@ -4,6 +4,7 @@ import { dispararAuditoriaHabilitacao } from "@/lib/agents/auditoria-dispatch";
 import { LISTA_ETAPAS_QUE_AUDITAM } from "@/lib/habilitacao";
 import { mensagemAmigavelDoTipo, mensagemDefinitivaDoTipo } from "@/lib/ia-erros";
 import { verificarArmazenamento } from "@/lib/storage";
+import { reaproveitarProgresso } from "@/lib/agents/auditoria-pedacos";
 import {
   BATIMENTO_VIVO_MS,
   decidirAposFalha,
@@ -46,8 +47,11 @@ export async function haVaga(excetoEditalId?: string): Promise<boolean> {
   return (await contarAuditoriasVivas(excetoEditalId)) < LIMITE_AUDITORIAS_SIMULTANEAS;
 }
 
-/** Campos de uma auditoria NOVA na fila: zera o que sobrou de uma anterior (progresso, consumo, tentativas). */
-export function dadosAuditoriaNova(agora: Date) {
+/**
+ * Campos de uma auditoria NOVA na fila: zera consumo e tentativas. O progresso anterior só mantém o que já foi LIDO do
+ * edital (pedaços, leitura por imagem) — isso não depende da situação do momento e custa dinheiro refazer; o resto recomeça.
+ */
+export function dadosAuditoriaNova(agora: Date, progressoAnterior: string | null = null) {
   return {
     estado: "NA_FILA" as const,
     solicitadaEm: agora,
@@ -55,7 +59,7 @@ export function dadosAuditoriaNova(agora: Date) {
     erroTipo: null,
     detalheTecnico: null,
     proximaTentativaEm: null,
-    progresso: null,
+    progresso: reaproveitarProgresso(progressoAnterior),
     tentativasAutomaticas: 0,
     haikuEntrada: 0,
     haikuSaida: 0,

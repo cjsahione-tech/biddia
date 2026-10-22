@@ -138,9 +138,9 @@ export function explicarArquivo(nome: string, motivo?: string, detalhe?: string)
 function textoAndamento(progressoJson: string | null): string | null {
   if (!progressoJson) return null;
   try {
-    const p = JSON.parse(progressoJson) as { chunksTotal?: number; feitos?: unknown[]; lotes?: Record<string, unknown> };
+    const p = JSON.parse(progressoJson) as { chunksTotal?: number; chunksFeitos?: number; feitos?: unknown[]; lotes?: Record<string, unknown> };
     const total = p.chunksTotal ?? 0;
-    const feitos = p.feitos?.length ?? 0;
+    const feitos = p.chunksFeitos ?? p.feitos?.length ?? 0;
     if (total > 0 && feitos >= total) {
       return Object.keys(p.lotes ?? {}).length > 0 ? "Conferindo as exigências com a documentação da empresa…" : "Leitura concluída; conferindo com a documentação da empresa…";
     }

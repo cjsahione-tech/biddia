@@ -88,7 +88,8 @@ export async function solicitarAuditoriaHabilitacao(
     // livre mostra "Auditando…" na hora; sem vaga, "Na fila". O worker assume (RODANDO) em seguida;
     // se o disparo se perder, o vigia retoma o que ficou na fila.
     const comVaga = await haVaga(editalId);
-    const novo = dadosAuditoriaNova(new Date(agora));
+    const anterior = await prisma.auditoriaHabilitacao.findUnique({ where: { editalId }, select: { progresso: true } });
+    const novo = dadosAuditoriaNova(new Date(agora), anterior?.progresso ?? null);
     await prisma.auditoriaHabilitacao.upsert({ where: { editalId }, create: { editalId, ...novo }, update: novo });
     await prisma.edital.update({ where: { id: editalId }, data: { habilitacaoStatus: comVaga ? "AUDITANDO" : "NA_FILA" } });
   }

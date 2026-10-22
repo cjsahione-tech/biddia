@@ -131,7 +131,8 @@ export async function recuperarAuditorias(opts: { confirmarQuantidade: number; o
   }
   const agora = new Date();
   for (const item of sim.auditar.itens) {
-    const novo = dadosAuditoriaNova(agora);
+    const anterior = await prisma.auditoriaHabilitacao.findUnique({ where: { editalId: item.id }, select: { progresso: true } });
+    const novo = dadosAuditoriaNova(agora, anterior?.progresso ?? null);
     await prisma.auditoriaHabilitacao.upsert({ where: { editalId: item.id }, create: { editalId: item.id, ...novo }, update: novo });
     await prisma.edital.update({ where: { id: item.id }, data: { habilitacaoStatus: "NA_FILA" } });
     await logAudit(item.id, "Administrador", "Auditoria de habilitação", "OK", "Auditoria de habilitação recuperada: entrou na fila por pedido do administrador.").catch(() => null);

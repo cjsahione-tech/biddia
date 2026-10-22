@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import type { Document as DocumentRow, HabilitacaoStatus, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { askJSON, MODELO_HAIKU, MODELO_SONNET, verificarIADisponivel, type UsoTokens } from "@/lib/anthropic";
-import { classificarErro, ErroTipado, mensagemDeRetentativaDoTipo, mensagemDefinitivaDoTipo } from "@/lib/ia-erros";
+import { classificarErro, ErroTipado, mensagemDeRetentativaDoTipo, mensagemDefinitivaDoTipo, tipoDoErro } from "@/lib/ia-erros";
 import { ehErroDeArmazenamentoIndisponivel } from "@/lib/armazenamento-estado";
 import { PAUSA_MS } from "@/lib/controle-ia";
 import { statusHabilitacaoDefinitivaDoErro, statusHabilitacaoDoErro } from "@/lib/habilitacao";
@@ -10,7 +10,15 @@ import { mapComLimite } from "@/lib/concorrencia";
 import { logAudit } from "@/lib/agents/run-tracker";
 import { baixarEPersistirDocumento } from "@/lib/agents/document-download";
 import { colocarNaFila, haVaga, iniciarProximasDaFila } from "@/lib/agents/auditoria-fila";
-import { densidadeDeHabilitacao, selecionarTrechosDeHabilitacao } from "@/lib/habilitacao-trechos";
+import {
+  CHAVE_LEGADO,
+  FALHAS_ATE_DIVIDIR_PEDACO,
+  falhaDoPedacoPedeDivisao,
+  migrarProgressoLegado,
+  planejarPedacos,
+  TAMANHO_MINIMO_PARA_DIVIDIR,
+  type PedacoPlano,
+} from "@/lib/agents/auditoria-pedacos";
 import { BATIMENTO_VIVO_MS, decidirAposFalha, ESPERA_ARMAZENAMENTO_MS, MAX_CONTINUACOES_NA_CADEIA, MAX_PASSOS_LEITURA, MAX_PASSOS_SEM_AVANCO } from "@/lib/auditoria-politica";
 import { obterTextoBrutoDocumento } from "@/lib/agents/pdf-extract";
 import { ehOcrEmAndamento, type ContextoOcr, type EstadoOcr } from "@/lib/agents/leitura-documentos";
@@ -33,7 +41,6 @@ import {
   calcularResultado,
   custoEstimadoUsd,
   dataReferenciaDoEdital,
-  dividirEmPedacos,
   inferirNaturezaPelaRazaoSocial,
   epochNoNome,
   fingerprintDocumentos,
@@ -101,6 +108,18 @@ type Progresso = {
   ocr?: Record<string, EstadoOcr>;
   /** O analista liberou a leitura completa (sem o teto de 60 páginas por imagem). */
   leituraCompletaLiberada?: boolean;
+  /** Tamanho dos pedaços de leitura, fixado no início: mudar a constante depois não faz uma leitura em andamento recomeçar. */
+  tamanhoPedaco?: number;
+  /** Pedaços já lidos (chave = conteúdo do pedaço) e as exigências que cada um rendeu. */
+  feitosChaves?: string[];
+  brutasPorChave?: Record<string, Bruta[]>;
+  /** Quantas vezes cada pedaço falhou (resposta fora do formato, tempo): na 2ª ele é dividido ao meio. */
+  falhasPedaco?: Record<string, number>;
+  divididos?: string[];
+  /** Quantos pedaços do plano atual já foram lidos (para o texto de andamento). */
+  chunksFeitos?: number;
+  /** Impressão digital dos lotes de conferência: se as exigências mudarem, os lotes guardados não valem mais. */
+  lotesPlano?: string;
 };
 
 type Pedaco = { docNome: string; indice: number; total: number; texto: string; densidade: number };
@@ -861,8 +880,14 @@ async function rodar(
   let docsLidos: DocumentoLido[] | null = null;
   let leituraCompleta = true;
 
-  const salvar = () =>
-    prisma.auditoriaHabilitacao.update({
+  let pedacosAtuais: PedacoPlano[] | null = null;
+  const salvar = () => {
+    if (pedacosAtuais) {
+      const feitos = new Set(progresso.feitosChaves);
+      progresso.chunksTotal = pedacosAtuais.length;
+      progresso.chunksFeitos = pedacosAtuais.filter((p) => feitos.has(p.chave)).length;
+    }
+    return prisma.auditoriaHabilitacao.update({
       where: { editalId },
       data: {
         progresso: JSON.stringify(progresso),
@@ -873,6 +898,7 @@ async function rodar(
         sonnetSaida: uso.sonnet.saida,
       },
     });
+  };
 
   /** Não deu tempo de terminar: salva e passa o bastão (próxima execução, ou a fila numa cadeia nova). */
   const passarAdiante = async (): Promise<ResultadoExecucao> => {
@@ -957,51 +983,58 @@ async function rodar(
       : new ErroTipado("ARQUIVO_ILEGIVEL", "Nenhum documento deste edital pôde ser baixado ou lido.");
   }
 
-  // 2. Só os trechos de habilitação vão para a IA; os mais relevantes são lidos primeiro.
-  const pedacos: Pedaco[] = lidos
+  // 2. Só os trechos de habilitação vão para a IA; os mais relevantes são lidos primeiro. Cada pedaço tem uma chave que
+  //    vem do seu conteúdo: se o conjunto de documentos mudar (um arquivo que faltava foi lido), só o que é novo é lido.
+  const docsComTexto = lidos
     .filter((d) => textos.has(d.id) && !textoSoIlegivel(textos.get(d.id)!))
-    .flatMap((d) => {
-      const selecionado = selecionarTrechosDeHabilitacao(textos.get(d.id)!);
-      const partes = dividirEmPedacos(selecionado.texto, TAMANHO_PEDACO);
-      return partes.map((p, i) => ({ docNome: d.nome, indice: i, total: partes.length, texto: p, densidade: densidadeDeHabilitacao(p) }));
-    })
-    .sort((a, b) => b.densidade - a.densidade);
-
-  const plano = createHash("sha1").update(pedacos.map((p) => `${p.docNome}:${p.indice}:${p.texto.length}`).join("|")).digest("hex");
-  if (progresso.plano !== plano) {
-    // O conjunto de pedaços mudou (ex.: um arquivo que faltava foi lido): recomeça a leitura.
-    progresso.plano = plano;
-    progresso.feitos = [];
-    progresso.brutas = [];
-    progresso.lotes = {};
-  }
-  progresso.chunksTotal = pedacos.length;
+    .map((d) => ({ nome: d.nome, texto: textos.get(d.id)! }));
+  // O tamanho do pedaço fica gravado: mudar a constante no futuro não faz uma leitura em andamento recomeçar.
+  const tamanho = migrarProgressoLegado(progresso, docsComTexto, TAMANHO_PEDACO);
+  progresso.tamanhoPedaco = tamanho;
+  progresso.feitosChaves ??= [];
+  progresso.brutasPorChave ??= {};
+  progresso.falhasPedaco ??= {};
+  progresso.divididos ??= [];
+  const planejar = () => planejarPedacos(docsComTexto, { tamanho, divididos: new Set(progresso.divididos) });
+  let pedacos = planejar();
+  pedacosAtuais = pedacos;
+  const pendentesDoPlano = () => pedacos.filter((p) => !progresso.feitosChaves!.includes(p.chave));
   if (pedacos.length > LIMITE_PEDACOS_GRANDE) {
     await prisma.edital.update({ where: { id: editalId }, data: { habilitacaoStatus: "EDITAL_GRANDE" } });
   }
 
   // 3. Levantar as exigências, pedaço por pedaço (salvando a cada um).
-  const faltam = pedacos.map((_, i) => i).filter((i) => !progresso.feitos.includes(i));
+  const faltam = pendentesDoPlano();
   if (faltam.length > 0) {
     try {
-      await rodarComPrazo(faltam, PEDACOS_EM_PARALELO, () => restante() > FOLGA_NOVO_PEDACO_MS, async (i) => {
+      await rodarComPrazo(faltam, PEDACOS_EM_PARALELO, () => restante() > FOLGA_NOVO_PEDACO_MS, async (p) => {
         try {
-          const brutas = await extrairDoPedaco(pedacos[i], uso.haiku, sinal);
-          progresso.feitos.push(i);
-          progresso.brutas.push(...brutas);
+          const brutas = await extrairDoPedaco(p, uso.haiku, sinal);
+          progresso.feitosChaves!.push(p.chave);
+          progresso.brutasPorChave![p.chave] = brutas;
           avancos++;
           await salvar();
         } catch (e) {
           if (sinal.aborted) return; // prazo: o pedaço fica para a próxima execução
-          throw e;
+          if (!falhaDoPedacoPedeDivisao(tipoDoErro(e))) throw e;
+          // Resposta fora do formato / tempo / tamanho: na 2ª vez o pedaço é dividido ao meio em vez de travar a auditoria.
+          const n = (progresso.falhasPedaco![p.chave] ?? 0) + 1;
+          progresso.falhasPedaco![p.chave] = n;
+          if (n >= FALHAS_ATE_DIVIDIR_PEDACO) {
+            if (p.texto.length <= TAMANHO_MINIMO_PARA_DIVIDIR) throw e; // pequeno demais para dividir: segue o caminho normal de nova tentativa
+            progresso.divididos!.push(p.chave);
+            avancos++;
+          }
+          await salvar();
         }
       });
     } finally {
       await salvar().catch(() => null);
     }
   }
-  const faltamAinda = pedacos.map((_, i) => i).filter((i) => !progresso.feitos.includes(i));
-  if (faltamAinda.length > 0) {
+  pedacos = planejar(); // pedaços divididos neste passo já entram no plano
+  pedacosAtuais = pedacos;
+  if (pendentesDoPlano().length > 0) {
     if ((progresso.passos ?? 0) < MAX_PASSOS_LEITURA) return passarAdiante();
     // Edital gigante: depois de muitos passos, fecha com o que já foi lido (nunca recusa) — o
     // resultado fica com ressalva e o aviso de leitura incompleta.
@@ -1009,7 +1042,12 @@ async function rodar(
   }
 
   // 4. Conferência com a documentação da empresa, lote a lote (salvando a cada um).
-  const brutas = removerDuplicadas(progresso.brutas);
+  const chavesDoPlano = new Set(pedacos.map((p) => p.chave));
+  const brutas = removerDuplicadas(
+    Object.entries(progresso.brutasPorChave)
+      .filter(([chave]) => chave === CHAVE_LEGADO || chavesDoPlano.has(chave))
+      .flatMap(([, b]) => b)
+  );
   if (brutas.length === 0) {
     throw new ErroTipado(
       "SEM_EXIGENCIAS",
@@ -1020,6 +1058,10 @@ async function rodar(
   const empresa = await carregarFatosDaEmpresa(edital.companyId);
   const ctx = contextoDeConferencia(docs, empresa);
   const lotes = montarLotes(brutas);
+  // Os lotes são numerados: se o conjunto de exigências mudou desde a última execução, os resultados guardados não valem mais.
+  const lotesPlano = createHash("sha1").update(JSON.stringify(lotes)).digest("hex");
+  if (progresso.lotesPlano !== undefined && progresso.lotesPlano !== lotesPlano) progresso.lotes = {};
+  progresso.lotesPlano = lotesPlano;
   const lotesFaltam = lotes.map((_, i) => i).filter((i) => !progresso.lotes![String(i)]);
   if (lotesFaltam.length > 0) {
     try {
