@@ -6,7 +6,7 @@ vi.mock("@/lib/agents/agente1-comercial", () => ({ baixarDocumentosPendentes: as
 vi.mock("@/lib/agents/pdf-extract", () => ({ obterTextoBrutoDocumento: async () => null }));
 vi.mock("@/lib/notifications", () => ({ notificarPrazosVencendo: async () => {} }));
 
-import { avaliarTodas, selecionarDocumentos } from "@/lib/agents/auditoria-habilitacao";
+import { avaliarTodas, montarDocumentosLidos, selecionarDocumentos } from "@/lib/agents/auditoria-habilitacao";
 
 const val = (s: string) => new Date(`${s}T00:00:00Z`);
 const sessao = new Date("2026-10-20T10:00:00-03:00");
@@ -103,5 +103,47 @@ describe("avaliarTodas", () => {
       sessao
     );
     expect(r.map((x) => x.situacao)).toEqual(["NAO_SE_APLICA", "VERIFICAR", "ATENDIDA"]);
+  });
+});
+
+describe("montarDocumentosLidos — o que foi lido por inteiro e o que decide o resultado", () => {
+  const MARCA = "[[ARQUIVO ILEGÍVEL:";
+  const lidos = [
+    { id: "ed", nome: "Edital.pdf" },
+    { id: "tr", nome: "TR.pdf" },
+    { id: "ap", nome: "Declaração.pdf" },
+  ];
+  const papeis = new Map<string, "principal" | "apoio">([["ed", "principal"], ["tr", "principal"], ["ap", "apoio"]]);
+
+  it("tudo lido: leitura completa", () => {
+    const textos = new Map([["ed", "texto do edital"], ["tr", "texto do tr"], ["ap", "texto"]]);
+    const r = montarDocumentosLidos(lidos, textos, papeis, () => undefined);
+    expect(r.every((d) => d.ok)).toBe(true);
+    expect(r.filter((d) => d.principal).every((d) => d.ok)).toBe(true);
+  });
+
+  it("principal com páginas sem leitura: não é ok e diz quais páginas", () => {
+    const textos = new Map([
+      ["ed", `texto\n${MARCA} páginas 61-100 não lidas (acima do limite de leitura por imagem)]]`],
+      ["tr", "ok"],
+      ["ap", "ok"],
+    ]);
+    const r = montarDocumentosLidos(lidos, textos, papeis, () => undefined);
+    expect(r[0]).toMatchObject({ ok: false, principal: true, motivo: "parcial", detalhe: "páginas 61-100 não lidas (acima do limite de leitura por imagem)" });
+  });
+
+  it("apoio que falhou não derruba a leitura dos principais", () => {
+    const textos = new Map([["ed", "ok"], ["tr", "ok"]]);
+    const r = montarDocumentosLidos(lidos, textos, papeis, (id) => (id === "ap" ? "formato" : undefined));
+    expect(r[2]).toMatchObject({ ok: false, principal: false, motivo: "formato" });
+    expect(r.filter((d) => d.principal).every((d) => d.ok)).toBe(true);
+  });
+
+  it("principal que não foi lido: motivo da falha (ou 'download' se nada foi registrado)", () => {
+    const textos = new Map([["tr", "ok"], ["ap", "ok"]]);
+    const r = montarDocumentosLidos(lidos, textos, papeis, (id) => (id === "ed" ? "demorou" : undefined));
+    expect(r[0]).toMatchObject({ ok: false, principal: true, motivo: "demorou", caracteres: 0 });
+    const r2 = montarDocumentosLidos(lidos, textos, papeis, () => undefined);
+    expect(r2[0].motivo).toBe("download");
   });
 });

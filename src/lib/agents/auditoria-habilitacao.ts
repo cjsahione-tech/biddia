@@ -14,7 +14,8 @@ import { densidadeDeHabilitacao, selecionarTrechosDeHabilitacao } from "@/lib/ha
 import { BATIMENTO_VIVO_MS, decidirAposFalha, ESPERA_ARMAZENAMENTO_MS, MAX_CONTINUACOES_NA_CADEIA, MAX_PASSOS_LEITURA, MAX_PASSOS_SEM_AVANCO } from "@/lib/auditoria-politica";
 import { obterTextoBrutoDocumento } from "@/lib/agents/pdf-extract";
 import { ehOcrEmAndamento, type ContextoOcr, type EstadoOcr } from "@/lib/agents/leitura-documentos";
-import { MARCA_ILEGIVEL, textoSoIlegivel } from "@/lib/agents/arquivos-compactados";
+import { descreverNaoLido, papeisDosDocumentos, type PapelDocumento } from "@/lib/leitura-papel";
+import { textoSoIlegivel } from "@/lib/agents/arquivos-compactados";
 import { dispararAuditoriaHabilitacao } from "@/lib/agents/auditoria-dispatch";
 import { notificarPrazosVencendo } from "@/lib/notifications";
 import { escolherMelhorDocumento } from "@/lib/documentos-empresa";
@@ -80,7 +81,7 @@ type Bruta = {
   aplicavelSe: string | null;
 };
 
-type MotivoArquivo = "download" | "demorou" | "formato" | "removido" | "armazenamento" | "ocr";
+export type MotivoArquivo = "download" | "demorou" | "formato" | "removido" | "armazenamento" | "ocr" | "parcial";
 
 // Progresso salvo no banco: cada execução retoma de onde a anterior parou. Campos novos são
 // opcionais para continuar lendo registros gravados antes desta versão.
@@ -534,7 +535,7 @@ async function gravarResultado(opts: {
   linhas: LinhaAvaliada[];
   dataReferencia: Date;
   leituraCompleta: boolean;
-  docsLidos?: { nome: string; caracteres: number; ok: boolean }[];
+  docsLidos?: DocumentoLido[];
   docsEmpresa: DocEmpresa[];
   mensagem?: string | null;
   /** Só na leitura completa: impressão digital do edital lido (ver fingerprintEdital). */
@@ -857,7 +858,7 @@ async function rodar(
   progresso.falhas ??= {};
   progresso.lotes ??= {};
   let avancos = 0; // quanta coisa avançou neste passo (documentos, pedaços, lotes)
-  let docsLidos: { nome: string; caracteres: number; ok: boolean; motivo?: MotivoArquivo }[] | null = null;
+  let docsLidos: DocumentoLido[] | null = null;
   let leituraCompleta = true;
 
   const salvar = () =>
@@ -937,22 +938,18 @@ async function rodar(
     throw new ErroTipado("ARMAZENAMENTO_INDISPONIVEL", "O armazenamento de arquivos está bloqueado.");
   }
 
-  docsLidos = lidos.map((d) => {
-    const texto = textos.get(d.id);
-    return {
-      nome: d.nome,
-      caracteres: texto?.length ?? 0,
-      ok: !!texto && !texto.includes(MARCA_ILEGIVEL),
-      ...(texto ? {} : { motivo: emLeituraPorImagem.has(d.id) ? ("ocr" as MotivoArquivo) : (progresso.falhas![d.id]?.motivo ?? ("download" as MotivoArquivo)) }),
-    };
-  });
-  leituraCompleta = docsLidos.every((d) => d.ok);
+  const papeis = papeisDosDocumentos(lidos);
+  docsLidos = montarDocumentosLidos(lidos, textos, papeis, (id) => (emLeituraPorImagem.has(id) ? "ocr" : progresso.falhas![id]?.motivo));
+  // Só os documentos PRINCIPAIS decidem se a leitura foi completa; os de apoio viram aviso.
+  leituraCompleta = docsLidos.filter((d) => d.principal).every((d) => d.ok);
 
   const aindaPendentes = lidos.filter((d) => !textos.has(d.id) && (progresso.falhas![d.id]?.n ?? 0) < FALHAS_ATE_DESISTIR_DO_ARQUIVO);
   if (aindaPendentes.length > 0) return passarAdiante();
 
-  // Texto que é só o aviso "arquivo ilegível" (ZIP corrompido etc.) não conta como leitura.
-  const comConteudo = [...textos.values()].filter((t) => !textoSoIlegivel(t)).length;
+  // Texto que é só o aviso "arquivo ilegível" (ZIP corrompido etc.) não conta como leitura. E um processo cujos documentos
+  // principais (edital, TR, preços) não foram lidos NÃO é auditado só com anexos de apoio: seria um resultado sem base.
+  const temConteudo = (d: DocumentRow) => textos.has(d.id) && !textoSoIlegivel(textos.get(d.id)!);
+  const comConteudo = lidos.filter((d) => temConteudo(d) && papeis.get(d.id) === "principal").length;
   if (comConteudo === 0) {
     await salvar();
     throw lidos.length === 0
@@ -1058,7 +1055,13 @@ async function rodar(
   });
   await avisarVencimentosProximos(editalId, dataReferencia);
 
-  const aviso = leituraCompleta ? "" : " Atenção: algum documento do processo não pôde ser lido por inteiro — o resultado nunca fica como \"Habilitada\" sem ressalva.";
+  const principaisIncompletos = docsLidos.filter((d) => d.principal && !d.ok).map((d) => d.nome);
+  const apoioIncompleto = docsLidos.filter((d) => !d.principal && !d.ok).length;
+  const aviso = leituraCompleta
+    ? apoioIncompleto > 0
+      ? ` Obs.: ${apoioIncompleto} anexo(s) de apoio não puderam ser lidos por inteiro (não alteram o resultado).`
+      : ""
+    : ` Atenção: documento(s) principal(is) não lido(s) por inteiro (${principaisIncompletos.join("; ")}) — o resultado nunca fica como "Habilitada" sem ressalva.`;
   await logAudit(
     editalId,
     NOME_AGENTE,
@@ -1069,6 +1072,28 @@ async function rodar(
     }.${aviso}`
   );
   return "concluida";
+}
+
+export type DocumentoLido = { nome: string; caracteres: number; ok: boolean; principal: boolean; motivo?: MotivoArquivo; detalhe?: string };
+
+/**
+ * Situação de leitura de cada documento do processo: papel (principal/apoio), se foi lido por inteiro e, se não,
+ * por quê — e QUAIS partes ficaram de fora (páginas, arquivos dentro de pacotes).
+ */
+export function montarDocumentosLidos(
+  lidos: { id: string; nome: string }[],
+  textos: Map<string, string>,
+  papeis: Map<string, PapelDocumento>,
+  motivoDaFalha: (id: string) => MotivoArquivo | undefined
+): DocumentoLido[] {
+  return lidos.map((d) => {
+    const texto = textos.get(d.id);
+    const principal = papeis.get(d.id) !== "apoio";
+    if (!texto) return { nome: d.nome, caracteres: 0, ok: false, principal, motivo: motivoDaFalha(d.id) ?? "download" };
+    const naoLido = descreverNaoLido(texto);
+    if (naoLido.length === 0) return { nome: d.nome, caracteres: texto.length, ok: true, principal };
+    return { nome: d.nome, caracteres: texto.length, ok: false, principal, motivo: "parcial", detalhe: naoLido.join("; ") };
+  });
 }
 
 /**

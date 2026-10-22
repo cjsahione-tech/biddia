@@ -31,7 +31,10 @@ export type ItemRelatorio = {
   venceAntesDaSessao: boolean;
 };
 
-export type ArquivoComProblema = { nome: string; problema: string; oQueFazer: string };
+/** `principal`: edital, termo de referência, preços/planilhas — se não foi lido por inteiro, o resultado fica com ressalva. Os de apoio só avisam. */
+export type ArquivoComProblema = { nome: string; problema: string; oQueFazer: string; principal: boolean };
+
+export type DocumentoLidoRelatorio = { nome: string; caracteres: number; ok: boolean; motivo?: string; principal?: boolean; detalhe?: string };
 
 export type GrupoRelatorio = { categoria: string; titulo: string; itens: ItemRelatorio[] };
 
@@ -52,7 +55,7 @@ export type RelatorioHabilitacao = {
     concluidaEm: string | null;
     dataReferencia: string | null;
     leituraCompleta: boolean;
-    documentosLidos: { nome: string; caracteres: number; ok: boolean; motivo?: string }[];
+    documentosLidos: DocumentoLidoRelatorio[];
     /** Arquivos que não puderam ser lidos: qual, por quê e o que fazer (linguagem simples). */
     arquivosComProblema: ArquivoComProblema[];
     /** Texto do andamento enquanto roda (ex.: "Lendo o edital: 3 de 7 partes"). */
@@ -70,9 +73,23 @@ export type RelatorioHabilitacao = {
 const TITULO_CATEGORIA = new Map<string, string>([...CATEGORIAS_CATALOGO.map((c) => [c.id, c.titulo] as [string, string]), ["outros", "Outros documentos"]]);
 const ORDEM_CATEGORIA = [...CATEGORIAS_CATALOGO.map((c) => c.id as string), "outros"];
 
+/** Arquivos com problema, os principais primeiro. Registros antigos (sem o campo `principal`) contam como principais. */
+export function arquivosComProblemaDe(docs: DocumentoLidoRelatorio[]): ArquivoComProblema[] {
+  return docs
+    .filter((d) => !d.ok)
+    .map((d) => ({ ...explicarArquivo(d.nome, d.motivo, d.detalhe), principal: d.principal !== false }))
+    .sort((a, b) => Number(b.principal) - Number(a.principal));
+}
+
 /** Explica, em linguagem simples, por que um arquivo não foi lido e o que o analista pode fazer. */
-export function explicarArquivo(nome: string, motivo?: string): ArquivoComProblema {
+export function explicarArquivo(nome: string, motivo?: string, detalhe?: string): Omit<ArquivoComProblema, "principal"> {
   switch (motivo) {
+    case "parcial":
+      return {
+        nome,
+        problema: `Parte deste arquivo ficou sem leitura${detalhe ? `: ${detalhe}` : ""}.`,
+        oQueFazer: "Confira essas partes manualmente: pode haver exigências que não apareceram aqui.",
+      };
     case "download":
       return {
         nome,
@@ -218,7 +235,7 @@ export async function montarRelatorioHabilitacao(
 
   const r = calcularResultado({ situacoes: itens.map((i) => i.situacao), leituraCompleta: edital.auditoriaHabilitacao?.leituraCompleta ?? true });
   const aud = edital.auditoriaHabilitacao;
-  let docsLidos: { nome: string; caracteres: number; ok: boolean; motivo?: string }[] = [];
+  let docsLidos: DocumentoLidoRelatorio[] = [];
   try {
     docsLidos = aud?.documentosLidos ? JSON.parse(aud.documentosLidos) : [];
   } catch {
@@ -252,7 +269,7 @@ export async function montarRelatorioHabilitacao(
           dataReferencia: (aud.dataReferencia ?? dataReferenciaDoEdital(edital)).toISOString(),
           leituraCompleta: aud.leituraCompleta,
           documentosLidos: docsLidos,
-          arquivosComProblema: docsLidos.filter((d) => !d.ok).map((d) => explicarArquivo(d.nome, d.motivo)),
+          arquivosComProblema: arquivosComProblemaDe(docsLidos),
           andamento: ["RODANDO", "NA_FILA"].includes(aud.estado) ? textoAndamento(aud.progresso) : null,
           retentativaAgendada: aud.estado === "ERRO" && !!aud.proximaTentativaEm,
         }

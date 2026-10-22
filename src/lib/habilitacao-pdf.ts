@@ -34,15 +34,15 @@ export async function gerarPdfPendenciasHabilitacao(company: Company, r: Relator
   });
 
   if (r.auditoria && !r.auditoria.leituraCompleta) {
-    const ilegiveis = r.auditoria.documentosLidos.filter((d) => !d.ok).map((d) => d.nome);
+    const ilegiveis = r.auditoria.arquivosComProblema.filter((a) => a.principal).map((a) => `${a.nome} — ${a.problema}`);
     secoes.push({
       tipo: "texto",
       titulo: "Atenção: leitura incompleta",
-      texto: `Nem todos os documentos do processo puderam ser lidos por inteiro${ilegiveis.length ? ` (${ilegiveis.join("; ")})` : ""}. Confira manualmente se há exigências nesses arquivos. O resultado nunca fica como "Habilitada" sem ressalva nesses casos.`,
+      texto: `Nem todos os documentos principais do processo puderam ser lidos por inteiro${ilegiveis.length ? ` (${ilegiveis.join("; ")})` : ""}. Confira manualmente se há exigências nesses arquivos. O resultado nunca fica como "Habilitada" sem ressalva nesses casos.`,
     });
   }
 
-  if (r.resumo.pendentes === 0) {
+  if (r.resumo.pendentes === 0 && (!r.auditoria || r.auditoria.leituraCompleta)) {
     secoes.push({
       tipo: "texto",
       titulo: "Pendências",

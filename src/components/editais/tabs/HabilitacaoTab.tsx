@@ -322,13 +322,13 @@ export function HabilitacaoTab({ editalId, etapa, onMudou }: { editalId: string;
         </div>
       )}
 
-      {concluida && auditoria && !auditoria.leituraCompleta && (
+      {concluida && auditoria && !auditoria.leituraCompleta && auditoria.arquivosComProblema.some((a) => a.principal) && (
         <div className="flex items-start gap-3 rounded-xl border border-warning/30 bg-warning/5 p-4 text-sm text-warning">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
           <div className="min-w-0">
-            <p>Nem todos os documentos do processo puderam ser lidos por inteiro. Confira manualmente se há mais exigências neles:</p>
+            <p>Nem todos os documentos principais do processo (edital, termo de referência, preços) puderam ser lidos por inteiro, então este resultado não é definitivo. Confira manualmente se há mais exigências neles:</p>
             <ul className="mt-1 list-disc space-y-1 pl-5 text-xs">
-              {auditoria.arquivosComProblema.map((a) => (
+              {auditoria.arquivosComProblema.filter((a) => a.principal).map((a) => (
                 <li key={a.nome}>
                   <span className="font-medium">{a.nome}</span> — {a.problema} {a.oQueFazer}
                 </li>
@@ -338,7 +338,20 @@ export function HabilitacaoTab({ editalId, etapa, onMudou }: { editalId: string;
         </div>
       )}
 
-      {concluida && resumo.pendentes === 0 && (
+      {concluida && auditoria && auditoria.arquivosComProblema.some((a) => !a.principal) && (
+        <div className="rounded-xl border border-border bg-surface p-3 text-xs text-muted">
+          <p className="font-medium text-foreground">Anexos de apoio que não puderam ser lidos por inteiro (não alteram o resultado):</p>
+          <ul className="mt-1 list-disc space-y-0.5 pl-5">
+            {auditoria.arquivosComProblema.filter((a) => !a.principal).map((a) => (
+              <li key={a.nome}>
+                <span className="font-medium">{a.nome}</span> — {a.problema}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {concluida && resumo.pendentes === 0 && (!auditoria || auditoria.leituraCompleta) && (
         <div className="flex items-start gap-3 rounded-xl border border-accent/30 bg-accent/5 p-4 text-sm text-accent">
           <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
           <p>Sem pendências: todos os documentos exigidos estão enviados e válidos na data da sessão.</p>
