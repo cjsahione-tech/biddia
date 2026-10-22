@@ -23,6 +23,9 @@ const NOME_DE_DOCUMENTO_PRINCIPAL =
 
 export function papelDoDocumento(d: Omit<DocParaPapel, "id">): PapelDocumento {
   if (d.categoria && CATEGORIAS_PRINCIPAIS.has(d.categoria)) return "principal";
+  // Anexo mandado pelo analista no chat para corrigir o agente costuma ser a planilha de quantitativo, o TR ou a retificação:
+  // se o NOME diz isso, é principal. (Documentos do dossiê da empresa — checklist — são sempre de apoio.)
+  if (d.categoria === "CORRECAO_AGENTE" && NOME_DE_DOCUMENTO_PRINCIPAL.test(semAcento(d.nome))) return "principal";
   if (d.categoria && CATEGORIAS_DE_APOIO.has(d.categoria)) return "apoio";
   return NOME_DE_DOCUMENTO_PRINCIPAL.test(semAcento(d.nome)) ? "principal" : "apoio";
 }

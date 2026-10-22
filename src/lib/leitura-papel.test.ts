@@ -71,3 +71,13 @@ describe("arquivo do portal trocado pelo analista", () => {
     expect(m.get("portal")).toBe("principal");
   });
 });
+
+describe("anexo enviado pelo chat (correção do agente)", () => {
+  it("planilha de quantitativo ou termo de referência mandados pelo analista são principais; o resto continua de apoio", () => {
+    const p = (nome: string, categoria: string) => papelDoDocumento({ nome, tipo: "DOCUMENTO_USUARIO", categoria });
+    expect(p("Quantitativo_Exames_Cacapava.xlsx", "CORRECAO_AGENTE")).toBe("principal");
+    expect(p("Termo de referência corrigido.pdf", "CORRECAO_AGENTE")).toBe("principal");
+    expect(p("print da conversa.png", "CORRECAO_AGENTE")).toBe("apoio");
+    expect(p("Proposta de preços.pdf", "CHECKLIST")).toBe("apoio"); // dossiê da empresa nunca é principal
+  });
+});

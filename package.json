@@ -8,7 +8,8 @@
     "postinstall": "prisma generate",
     "start": "next start",
     "lint": "eslint",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:regressao": "vitest run src/lib/agents/regressao"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.123.0",

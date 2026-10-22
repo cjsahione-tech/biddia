@@ -1,0 +1,23 @@
+# Roda a verificação completa (tipos, lint e todos os testes — incluindo a REGRESSÃO FIXA da auditoria de habilitação)
+# a cada envio de código. Não usa segredos nem banco: os testes não tocam em nada real.
+name: Testes
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npx eslint src
+      - name: Testes (a tabela da regressão da auditoria aparece no final)
+        run: npm test

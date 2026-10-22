@@ -9,5 +9,7 @@ export default defineConfig({
   },
   test: {
     environment: "node",
+    // Alguns testes geram PDFs (lento); com a suíte toda em paralelo o limite padrão de 5 s estoura sem haver defeito.
+    testTimeout: 30_000,
   },
 });

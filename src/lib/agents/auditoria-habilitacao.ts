@@ -5,7 +5,7 @@ import { askJSON, MODELO_HAIKU, MODELO_SONNET, verificarIADisponivel, type UsoTo
 import { classificarErro, ErroTipado, mensagemDeRetentativaDoTipo, mensagemDefinitivaDoTipo, tipoDoErro } from "@/lib/ia-erros";
 import { ehErroDeArmazenamentoIndisponivel } from "@/lib/armazenamento-estado";
 import { avisoDeAnexosExternos, detectarAnexosExternos, detectarContradicoes } from "@/lib/habilitacao-sinais";
-import { erroQuandoNenhumPrincipalFoiLido, MOTIVOS_SEM_REMEDIO_AUTOMATICO } from "@/lib/auditoria-acao-humana";
+import { erroQuandoNaoHaExigencias, erroQuandoNenhumPrincipalFoiLido, MOTIVOS_SEM_REMEDIO_AUTOMATICO } from "@/lib/auditoria-acao-humana";
 import type { DiagnosticoArquivo } from "@/lib/agents/leitura-documentos";
 import { novaMeta, registrarTentativa, type MetaExecucao, type ResultadoTentativa } from "@/lib/agents/auditoria-tentativas";
 import { PAUSA_MS } from "@/lib/controle-ia";
@@ -1126,8 +1126,10 @@ async function rodar(
       .flatMap(([, b]) => b)
   );
   if (brutas.length === 0) {
+    // Se um documento principal não abriu (ex.: só a capa do edital foi lida), o motivo é esse, não "sem exigências".
+    const principaisNaoLidos = lidos.filter((d) => papeis.get(d.id) === "principal" && !temConteudo(d)).map((d) => progresso.falhas![d.id]?.motivo);
     throw new ErroTipado(
-      "SEM_EXIGENCIAS",
+      erroQuandoNaoHaExigencias(principaisNaoLidos),
       "Nenhuma exigência de documento de habilitação foi encontrada nos documentos lidos. Se o edital as exige, confira se o arquivo do edital está completo."
     );
   }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { erroQuandoNenhumPrincipalFoiLido, MOTIVOS_SEM_REMEDIO_AUTOMATICO } from "@/lib/auditoria-acao-humana";
+import { erroQuandoNaoHaExigencias, erroQuandoNenhumPrincipalFoiLido, MOTIVOS_SEM_REMEDIO_AUTOMATICO } from "@/lib/auditoria-acao-humana";
 import { acoesHumanasDoTipo, mensagemAmigavelDoTipo, pedeAcaoHumana } from "@/lib/ia-erros";
 import { decidirAposFalha } from "@/lib/auditoria-politica";
 import { statusHabilitacaoDefinitivaDoErro, statusHabilitacaoDoErro } from "@/lib/habilitacao";
@@ -61,5 +61,16 @@ describe("tipos que pedem ação humana", () => {
     expect(acoesHumanasDoTipo("CUSTO_EXCEDIDO")).toContain("liberar_leitura");
     expect(acoesHumanasDoTipo("PDF_PROTEGIDO")).toEqual(["enviar_arquivo", "tentar_de_novo"]);
     expect(acoesHumanasDoTipo("CONEXAO")).toEqual([]);
+  });
+});
+
+describe("erroQuandoNaoHaExigencias — só diz 'sem exigências' quando todos os principais foram lidos", () => {
+  it("todos os principais lidos e nenhuma exigência: SEM_EXIGENCIAS", () => {
+    expect(erroQuandoNaoHaExigencias([])).toBe("SEM_EXIGENCIAS");
+  });
+  it("só a capa abriu e o edital de verdade não: o motivo é o arquivo, não 'sem exigências'", () => {
+    expect(erroQuandoNaoHaExigencias(["protegido"])).toBe("PDF_PROTEGIDO");
+    expect(erroQuandoNaoHaExigencias(["formato"])).toBe("ARQUIVO_ILEGIVEL");
+    expect(erroQuandoNaoHaExigencias([undefined])).toBe("ARQUIVO_ILEGIVEL");
   });
 });

@@ -1,0 +1,2234 @@
+{
+ "geradoEm": "2026-10-22",
+ "casos": [
+  {
+   "chave": "E01",
+   "editalId": "cmu7993r00013ku04qti26n8m",
+   "titulo": "PREGÃO ELETRÔNICO nº 005",
+   "statusGravado": "NAO_HABILITADA",
+   "percentualGravado": 35,
+   "leituraCompleta": true,
+   "documentos": [
+    {
+     "nome": "201816_editais_1789648098.zip",
+     "caracteres": 192492,
+     "ok": true,
+     "motivo": null
+    },
+    {
+     "nome": "Prova de regularidade com a Fazenda Pública Municipal.pdf",
+     "caracteres": 1455,
+     "ok": true,
+     "motivo": null
+    },
+    {
+     "nome": "CNPJ.pdf",
+     "caracteres": 1146,
+     "ok": true,
+     "motivo": null
+    },
+    {
+     "nome": "Prova de regularidade fiscal perante a Fazenda Nacional.pdf",
+     "caracteres": 2179,
+     "ok": true,
+     "motivo": null
+    },
+    {
+     "nome": "Prova de regularidade com a Fazenda Estadual.pdf",
+     "caracteres": 1317,
+     "ok": true,
+     "motivo": null
+    },
+    {
+     "nome": "BALANÇO PATRIMONIAL2024.pdf",
+     "caracteres": 1843,
+     "ok": true,
+     "motivo": null
+    },
+    {
+     "nome": "TERMO REFERÊNCIA .pdf",
+     "caracteres": 19521,
+     "ok": true,
+     "motivo": null
+    }
+   ],
+   "exigencias": [
+    {
+     "categoria": "economica",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "equipe",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "fiscal",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "fiscal",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "fiscal",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "fiscal",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "fiscal",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "fiscal",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "fiscal",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "tecnica_empresa",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "tecnica_empresa",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "tecnica_empresa",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "tecnica_empresa",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "trabalhista",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "trabalhista",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "trabalhista",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "trabalhista",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "trabalhista",
+     "situacao": "VENCIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "NAO_SE_APLICA",
+     "certeza": true
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "NAO_SE_APLICA",
+     "certeza": true
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "NAO_SE_APLICA",
+     "certeza": true
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "NAO_SE_APLICA",
+     "certeza": true
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "NAO_SE_APLICA",
+     "certeza": true
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "NAO_SE_APLICA",
+     "certeza": true
+    }
+   ]
+  },
+  {
+   "chave": "E02",
+   "editalId": "cmuh19n85001rla04004xjdi2",
+   "titulo": "Edital de Chamamento Público nº (3522) | 3-0/2026",
+   "statusGravado": "HABILITADA_RESSALVAS",
+   "percentualGravado": 70,
+   "leituraCompleta": true,
+   "documentos": [
+    {
+     "nome": "AGM EDITAL",
+     "caracteres": 1059,
+     "ok": true,
+     "motivo": null
+    },
+    {
+     "nome": "TERMO+DE+REFERENCIA+LABORATÓRIO MODELO WORD  1.docx",
+     "caracteres": 33759,
+     "ok": true,
+     "motivo": null
+    },
+    {
+     "nome": "Prova de regularidade com a Fazenda Pública Municipal.pdf",
+     "caracteres": 1455,
+     "ok": true,
+     "motivo": null
+    },
+    {
+     "nome": "CNPJ.pdf",
+     "caracteres": 1146,
+     "ok": true,
+     "motivo": null
+    },
+    {
+     "nome": "Prova de regularidade fiscal perante a Fazenda Nacional.pdf",
+     "caracteres": 2179,
+     "ok": true,
+     "motivo": null
+    },
+    {
+     "nome": "Prova de regularidade com a Fazenda Estadual.pdf",
+     "caracteres": 1317,
+     "ok": true,
+     "motivo": null
+    },
+    {
+     "nome": "Prova de regularidade com o Fundo de Garantia por Tempo de Serviço – FGTS.pdf",
+     "caracteres": 946,
+     "ok": true,
+     "motivo": null
+    },
+    {
+     "nome": "BALANÇO PATRIMONIAL2024.pdf",
+     "caracteres": 1843,
+     "ok": true,
+     "motivo": null
+    }
+   ],
+   "exigencias": [
+    {
+     "categoria": "equipe",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "fiscal",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "fiscal",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "fiscal",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "tecnica_empresa",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "tecnica_empresa",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "tecnica_empresa",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "tecnica_empresa",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "trabalhista",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    }
+   ]
+  },
+  {
+   "chave": "E03",
+   "editalId": "cmuvio8790001jp04dgqjtlac",
+   "titulo": "Pregão Eletrônico nº 169/2026 R1 — Prestação de Serviço de A",
+   "statusGravado": "NAO_HABILITADA",
+   "percentualGravado": 27,
+   "leituraCompleta": true,
+   "documentos": [
+    {
+     "nome": "Hospital Pedro Ernesto.pdf",
+     "caracteres": 161336,
+     "ok": true,
+     "motivo": null
+    },
+    {
+     "nome": "BALANÇO PATRIMONIAL2024.pdf",
+     "caracteres": 1843,
+     "ok": true,
+     "motivo": null
+    },
+    {
+     "nome": "CNPJ.pdf",
+     "caracteres": 1146,
+     "ok": true,
+     "motivo": null
+    },
+    {
+     "nome": "Prova de regularidade com a Fazenda Estadual.pdf",
+     "caracteres": 1317,
+     "ok": true,
+     "motivo": null
+    },
+    {
+     "nome": "Prova de regularidade fiscal perante a Fazenda Nacional.pdf",
+     "caracteres": 2179,
+     "ok": true,
+     "motivo": null
+    },
+    {
+     "nome": "Prova de regularidade com o Fundo de Garantia por Tempo de Serviço – FGTS.pdf",
+     "caracteres": 946,
+     "ok": true,
+     "motivo": null
+    },
+    {
+     "nome": "Prova de regularidade com a Fazenda Pública Municipal.pdf",
+     "caracteres": 1455,
+     "ok": true,
+     "motivo": null
+    }
+   ],
+   "exigencias": [
+    {
+     "categoria": "atestados",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "certificados",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "certificados",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "economica",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "economica",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "equipe",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "equipe",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "fiscal",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "fiscal",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "fiscal",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "fiscal",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "fiscal",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "fiscal",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "fiscal",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "fiscal",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "fiscal",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "NAO_SE_APLICA",
+     "certeza": true
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "outros",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "outros",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "outros",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "outros",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "outros",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "outros",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "outros",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "outros",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "tecnica_empresa",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "tecnica_empresa",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "tecnica_empresa",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "tecnica_empresa",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "trabalhista",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "trabalhista",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "trabalhista",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "trabalhista",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "economica",
+     "situacao": "NAO_SE_APLICA",
+     "certeza": true
+    },
+    {
+     "categoria": "fiscal",
+     "situacao": "NAO_SE_APLICA",
+     "certeza": true
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "NAO_SE_APLICA",
+     "certeza": true
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "NAO_SE_APLICA",
+     "certeza": true
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "NAO_SE_APLICA",
+     "certeza": true
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "NAO_SE_APLICA",
+     "certeza": true
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "NAO_SE_APLICA",
+     "certeza": true
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "NAO_SE_APLICA",
+     "certeza": true
+    }
+   ]
+  },
+  {
+   "chave": "E04",
+   "editalId": "cmuviy8s0002pjs04t8ryf3zs",
+   "titulo": "Edital de Chamamento Público nº 40/2026",
+   "statusGravado": "NAO_HABILITADA",
+   "percentualGravado": 41.4,
+   "leituraCompleta": true,
+   "documentos": [
+    {
+     "nome": "Edital_Credenciamento_Laboratorio.pdf.pdf",
+     "caracteres": 94101,
+     "ok": true,
+     "motivo": null
+    },
+    {
+     "nome": "BALANÇO PATRIMONIAL2024.pdf",
+     "caracteres": 1843,
+     "ok": true,
+     "motivo": null
+    },
+    {
+     "nome": "CNPJ.pdf",
+     "caracteres": 1146,
+     "ok": true,
+     "motivo": null
+    },
+    {
+     "nome": "Prova de regularidade com a Fazenda Estadual.pdf",
+     "caracteres": 1317,
+     "ok": true,
+     "motivo": null
+    },
+    {
+     "nome": "Prova de regularidade fiscal perante a Fazenda Nacional.pdf",
+     "caracteres": 2179,
+     "ok": true,
+     "motivo": null
+    },
+    {
+     "nome": "Prova de regularidade com a Fazenda Pública Municipal.pdf",
+     "caracteres": 1455,
+     "ok": true,
+     "motivo": null
+    }
+   ],
+   "exigencias": [
+    {
+     "categoria": "atestados",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "atestados",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "atestados",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "economica",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "equipe",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "equipe",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "equipe",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "equipe",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "fiscal",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "fiscal",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "fiscal",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "fiscal",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "fiscal",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "tecnica_empresa",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "tecnica_empresa",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "tecnica_empresa",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "tecnica_empresa",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "tecnica_empresa",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "tecnica_empresa",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "tecnica_empresa",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "trabalhista",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "trabalhista",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "trabalhista",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "trabalhista",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "trabalhista",
+     "situacao": "VENCIDA",
+     "certeza": true
+    }
+   ]
+  },
+  {
+   "chave": "E05",
+   "editalId": "cmubq9mu00001ii04k5kn1rdz",
+   "titulo": "Pregão Eletrônico nº 031/2026 — Contratação de empresa espec",
+   "statusGravado": "NAO_HABILITADA",
+   "percentualGravado": 25,
+   "leituraCompleta": false,
+   "documentos": [
+    {
+     "nome": "Prefeitura de CAçapava.pdf",
+     "caracteres": 200857,
+     "ok": true,
+     "motivo": null
+    },
+    {
+     "nome": "Prova de regularidade com a Fazenda Pública Municipal.pdf",
+     "caracteres": 1455,
+     "ok": true,
+     "motivo": null
+    },
+    {
+     "nome": "CNPJ.pdf",
+     "caracteres": 1146,
+     "ok": true,
+     "motivo": null
+    },
+    {
+     "nome": "Prova de regularidade fiscal perante a Fazenda Nacional.pdf",
+     "caracteres": 2179,
+     "ok": true,
+     "motivo": null
+    },
+    {
+     "nome": "Prova de regularidade com a Fazenda Estadual.pdf",
+     "caracteres": 1317,
+     "ok": true,
+     "motivo": null
+    },
+    {
+     "nome": "BALANÇO PATRIMONIAL2024.pdf",
+     "caracteres": 1843,
+     "ok": true,
+     "motivo": null
+    },
+    {
+     "nome": "Quantitativo_Exames_Cacapava.xlsx",
+     "caracteres": 0,
+     "ok": false,
+     "motivo": "formato"
+    },
+    {
+     "nome": "ATESTADO - HERCRUZ - SÃO JOSÉ.pdf",
+     "caracteres": 0,
+     "ok": false,
+     "motivo": "formato"
+    }
+   ],
+   "exigencias": [
+    {
+     "categoria": "atestados",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "atestados",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "certificados",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "certificados",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "certificados",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "economica",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "economica",
+     "situacao": "NAO_SE_APLICA",
+     "certeza": true
+    },
+    {
+     "categoria": "economica",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "equipe",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "equipe",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "fiscal",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "fiscal",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "fiscal",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "fiscal",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "fiscal",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "fiscal",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "fiscal",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "fiscal",
+     "situacao": "NAO_SE_APLICA",
+     "certeza": true
+    },
+    {
+     "categoria": "fiscal",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "fiscal",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "NAO_SE_APLICA",
+     "certeza": true
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "NAO_SE_APLICA",
+     "certeza": true
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "NAO_SE_APLICA",
+     "certeza": true
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "NAO_SE_APLICA",
+     "certeza": true
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "NAO_SE_APLICA",
+     "certeza": true
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "NAO_SE_APLICA",
+     "certeza": true
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "NAO_SE_APLICA",
+     "certeza": true
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "NAO_SE_APLICA",
+     "certeza": true
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "tecnica_empresa",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "trabalhista",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "trabalhista",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "trabalhista",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "trabalhista",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "trabalhista",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "trabalhista",
+     "situacao": "VENCIDA",
+     "certeza": true
+    }
+   ]
+  },
+  {
+   "chave": "E06",
+   "editalId": "cmuviy9ir003njs048sdil3wx",
+   "titulo": "Edital de Chamamento Público nº 007/2026",
+   "statusGravado": "NAO_HABILITADA",
+   "percentualGravado": 40,
+   "leituraCompleta": true,
+   "documentos": [
+    {
+     "nome": "203718_editais_1790969272.zip",
+     "caracteres": 103469,
+     "ok": true,
+     "motivo": null
+    },
+    {
+     "nome": "BALANÇO PATRIMONIAL2024.pdf",
+     "caracteres": 1834,
+     "ok": true,
+     "motivo": null
+    },
+    {
+     "nome": "CNPJ.pdf",
+     "caracteres": 1137,
+     "ok": true,
+     "motivo": null
+    },
+    {
+     "nome": "Prova de regularidade com a Fazenda Estadual.pdf",
+     "caracteres": 1308,
+     "ok": true,
+     "motivo": null
+    },
+    {
+     "nome": "Prova de regularidade fiscal perante a Fazenda Nacional.pdf",
+     "caracteres": 2170,
+     "ok": true,
+     "motivo": null
+    },
+    {
+     "nome": "Prova de regularidade com a Fazenda Pública Municipal.pdf",
+     "caracteres": 1446,
+     "ok": true,
+     "motivo": null
+    }
+   ],
+   "exigencias": [
+    {
+     "categoria": "atestados",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "certificados",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "economica",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "equipe",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "equipe",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "equipe",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "fiscal",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "fiscal",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "fiscal",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "fiscal",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "fiscal",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "tecnica_empresa",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "tecnica_empresa",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "trabalhista",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "trabalhista",
+     "situacao": "VENCIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "trabalhista",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "trabalhista",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "trabalhista",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "trabalhista",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "NAO_SE_APLICA",
+     "certeza": true
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "NAO_SE_APLICA",
+     "certeza": true
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "NAO_SE_APLICA",
+     "certeza": true
+    }
+   ]
+  },
+  {
+   "chave": "E07",
+   "editalId": "cmuljxaue0013jm042sje600h",
+   "titulo": "Edital nº 038/2026",
+   "statusGravado": "NAO_HABILITADA",
+   "percentualGravado": 26.4,
+   "leituraCompleta": true,
+   "documentos": [
+    {
+     "nome": "EDITAL_PE_038.pdf",
+     "caracteres": 218666,
+     "ok": true,
+     "motivo": null
+    },
+    {
+     "nome": "Prova de regularidade com a Fazenda Pública Municipal.pdf",
+     "caracteres": 1446,
+     "ok": true,
+     "motivo": null
+    },
+    {
+     "nome": "CNPJ.pdf",
+     "caracteres": 1137,
+     "ok": true,
+     "motivo": null
+    },
+    {
+     "nome": "Prova de regularidade fiscal perante a Fazenda Nacional.pdf",
+     "caracteres": 2170,
+     "ok": true,
+     "motivo": null
+    },
+    {
+     "nome": "Prova de regularidade com a Fazenda Estadual.pdf",
+     "caracteres": 1308,
+     "ok": true,
+     "motivo": null
+    },
+    {
+     "nome": "BALANÇO PATRIMONIAL2024.pdf",
+     "caracteres": 1834,
+     "ok": true,
+     "motivo": null
+    },
+    {
+     "nome": "EDITAL_PE_038.pdf",
+     "caracteres": 219624,
+     "ok": true,
+     "motivo": null
+    },
+    {
+     "nome": "PE exames.pdf",
+     "caracteres": 50532,
+     "ok": true,
+     "motivo": null
+    }
+   ],
+   "exigencias": [
+    {
+     "categoria": "atestados",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "certificados",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "certificados",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "economica",
+     "situacao": "NAO_SE_APLICA",
+     "certeza": true
+    },
+    {
+     "categoria": "economica",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "economica",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "economica",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "economica",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "economica",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "economica",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "economica",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "economica",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "economica",
+     "situacao": "NAO_SE_APLICA",
+     "certeza": true
+    },
+    {
+     "categoria": "economica",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "economica",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "economica",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "equipe",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "equipe",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "equipe",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "fiscal",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "fiscal",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "fiscal",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "fiscal",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "fiscal",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "fiscal",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "fiscal",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "NAO_SE_APLICA",
+     "certeza": true
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "NAO_SE_APLICA",
+     "certeza": true
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "NAO_SE_APLICA",
+     "certeza": true
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "tecnica_empresa",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "tecnica_empresa",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "tecnica_empresa",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "tecnica_empresa",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "tecnica_empresa",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "tecnica_empresa",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "tecnica_empresa",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "tecnica_empresa",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "tecnica_empresa",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "tecnica_empresa",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "tecnica_empresa",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "tecnica_empresa",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "tecnica_empresa",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "tecnica_empresa",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "tecnica_empresa",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "tecnica_empresa",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "trabalhista",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "trabalhista",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "trabalhista",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "trabalhista",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "trabalhista",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "trabalhista",
+     "situacao": "NAO_SE_APLICA",
+     "certeza": true
+    },
+    {
+     "categoria": "trabalhista",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "trabalhista",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    }
+   ]
+  },
+  {
+   "chave": "E08",
+   "editalId": "cmv6vpyx9000pl506rg2avvew",
+   "titulo": "Edital de Chamamento Público nº 5/2026",
+   "statusGravado": "HABILITADA_RESSALVAS",
+   "percentualGravado": 100,
+   "leituraCompleta": false,
+   "documentos": [
+    {
+     "nome": "EDITAL-DE-CREDENCIAMENTO_ATUALIZADO.pdf.pdf",
+     "caracteres": 0,
+     "ok": false,
+     "motivo": "download"
+    },
+    {
+     "nome": "BALANÇO PATRIMONIAL2025.pdf",
+     "caracteres": 1955,
+     "ok": true,
+     "motivo": null
+    },
+    {
+     "nome": "CNPJ.pdf",
+     "caracteres": 1146,
+     "ok": true,
+     "motivo": null
+    },
+    {
+     "nome": "Prova de regularidade fiscal perante a Fazenda Nacional.pdf",
+     "caracteres": 2179,
+     "ok": true,
+     "motivo": null
+    },
+    {
+     "nome": "Prova de regularidade com a Fazenda Pública Municipal.pdf",
+     "caracteres": 1455,
+     "ok": true,
+     "motivo": null
+    },
+    {
+     "nome": "Prova de inexistência de débitos inadimplidos perante a Justiça do Trabalho.pdf",
+     "caracteres": 1871,
+     "ok": true,
+     "motivo": null
+    },
+    {
+     "nome": "contrato social são josé ULTIMA ALTERAÇÃO.pdf",
+     "caracteres": 0,
+     "ok": false,
+     "motivo": "demorou"
+    }
+   ],
+   "exigencias": [
+    {
+     "categoria": "fiscal",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "fiscal",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "trabalhista",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    }
+   ]
+  },
+  {
+   "chave": "E09",
+   "editalId": "cmvhgrhwz000ugz08q9m82g8c",
+   "titulo": "Edital de Chamamento Público nº (102409) | 2-0/2026",
+   "statusGravado": "NAO_HABILITADA",
+   "percentualGravado": 35.3,
+   "leituraCompleta": true,
+   "documentos": [
+    {
+     "nome": "Certidão de Publicação 102409",
+     "caracteres": 998,
+     "ok": true,
+     "motivo": null
+    },
+    {
+     "nome": "EDITAL  CREDENCIAMENTO 02 - 2026",
+     "caracteres": 80918,
+     "ok": true,
+     "motivo": null
+    }
+   ],
+   "exigencias": [
+    {
+     "categoria": "fiscal",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "fiscal",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "fiscal",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "NAO_SE_APLICA",
+     "certeza": true
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "trabalhista",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "trabalhista",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "trabalhista",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "trabalhista",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    }
+   ]
+  },
+  {
+   "chave": "E10",
+   "editalId": "cmvijy0bm001ujn08qkefkc69",
+   "titulo": "Edital de Chamamento Público nº 001/2026",
+   "statusGravado": "NAO_HABILITADA",
+   "percentualGravado": 23.7,
+   "leituraCompleta": true,
+   "documentos": [
+    {
+     "nome": "Edital_n._22.2026-IL_n._9.2026-Credenciamento_de_Servi_os_M_dicos_a..pdf",
+     "caracteres": 300631,
+     "ok": true,
+     "motivo": null
+    }
+   ],
+   "exigencias": [
+    {
+     "categoria": "atestados",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "economica",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "economica",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "equipe",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "equipe",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "equipe",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "equipe",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "equipe",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "equipe",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "equipe",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "equipe",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "fiscal",
+     "situacao": "VENCIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "fiscal",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "fiscal",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "fiscal",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "fiscal",
+     "situacao": "VENCIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "fiscal",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "fiscal",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "outros",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "tecnica_empresa",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "tecnica_empresa",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "tecnica_empresa",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "tecnica_empresa",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "tecnica_empresa",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "tecnica_empresa",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "tecnica_empresa",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "tecnica_empresa",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "tecnica_empresa",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "trabalhista",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "trabalhista",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "trabalhista",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "trabalhista",
+     "situacao": "VENCIDA",
+     "certeza": true
+    }
+   ]
+  },
+  {
+   "chave": "E11",
+   "editalId": "cmvhgrhxw000ygz08wp9jbut1",
+   "titulo": "Edital nº 32/2026",
+   "statusGravado": "NAO_HABILITADA",
+   "percentualGravado": 30.8,
+   "leituraCompleta": false,
+   "documentos": [
+    {
+     "nome": "Prego_Eletrnico_322026_Proc_562026__PE",
+     "caracteres": 438134,
+     "ok": true,
+     "motivo": null
+    },
+    {
+     "nome": "BALANÇO PATRIMONIAL2025.pdf",
+     "caracteres": 1955,
+     "ok": true,
+     "motivo": null
+    },
+    {
+     "nome": "CNPJ.pdf",
+     "caracteres": 1146,
+     "ok": true,
+     "motivo": null
+    },
+    {
+     "nome": "Prova de regularidade fiscal perante a Fazenda Nacional.pdf",
+     "caracteres": 2179,
+     "ok": true,
+     "motivo": null
+    },
+    {
+     "nome": "Prova de regularidade com a Fazenda Pública Municipal.pdf",
+     "caracteres": 1455,
+     "ok": true,
+     "motivo": null
+    },
+    {
+     "nome": "Prova de inexistência de débitos inadimplidos perante a Justiça do Trabalho.pdf",
+     "caracteres": 1871,
+     "ok": true,
+     "motivo": null
+    },
+    {
+     "nome": "contrato social são josé ULTIMA ALTERAÇÃO.pdf",
+     "caracteres": 0,
+     "ok": false,
+     "motivo": "formato"
+    }
+   ],
+   "exigencias": [
+    {
+     "categoria": "certificados",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "certificados",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "economica",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "equipe",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "equipe",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "equipe",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "equipe",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "equipe",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "fiscal",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "fiscal",
+     "situacao": "VENCIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "fiscal",
+     "situacao": "VENCIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "fiscal",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "fiscal",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "fiscal",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "fiscal",
+     "situacao": "NAO_SE_APLICA",
+     "certeza": true
+    },
+    {
+     "categoria": "fiscal",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "fiscal",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "fiscal",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "fiscal",
+     "situacao": "VENCIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "fiscal",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "NAO_SE_APLICA",
+     "certeza": true
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "NAO_SE_APLICA",
+     "certeza": true
+    },
+    {
+     "categoria": "juridica",
+     "situacao": "NAO_SE_APLICA",
+     "certeza": true
+    },
+    {
+     "categoria": "tecnica_empresa",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "tecnica_empresa",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "tecnica_empresa",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "tecnica_empresa",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "tecnica_empresa",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "tecnica_empresa",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "tecnica_empresa",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    },
+    {
+     "categoria": "trabalhista",
+     "situacao": "ATENDIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "trabalhista",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "trabalhista",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "trabalhista",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "trabalhista",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "trabalhista",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "trabalhista",
+     "situacao": "NAO_ENVIADA",
+     "certeza": true
+    },
+    {
+     "categoria": "trabalhista",
+     "situacao": "VENCIDA",
+     "certeza": true
+    },
+    {
+     "categoria": "trabalhista",
+     "situacao": "VERIFICAR",
+     "certeza": false
+    }
+   ]
+  }
+ ]
+}

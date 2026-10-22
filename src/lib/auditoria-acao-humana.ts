@@ -29,3 +29,11 @@ export function erroQuandoNenhumPrincipalFoiLido(motivos: (string | undefined)[]
   const achados = new Set(tipos as TipoErroIA[]);
   return PRIORIDADE.find((t) => achados.has(t)) ?? "ARQUIVO_ILEGIVEL";
 }
+
+/**
+ * Nenhuma exigência foi encontrada. Se algum documento PRINCIPAL não pôde ser lido (ex.: só a capa do edital abriu), a causa
+ * é essa — não que o edital não tenha exigências. Só diz "sem exigências" quando todos os principais foram lidos.
+ */
+export function erroQuandoNaoHaExigencias(motivosDosPrincipaisNaoLidos: (string | undefined)[]): TipoErroIA {
+  return motivosDosPrincipaisNaoLidos.length === 0 ? "SEM_EXIGENCIAS" : erroQuandoNenhumPrincipalFoiLido(motivosDosPrincipaisNaoLidos);
+}
