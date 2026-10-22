@@ -35,6 +35,28 @@ export type ItemRelatorio = {
 /** `principal`: edital, termo de referência, preços/planilhas — se não foi lido por inteiro, o resultado fica com ressalva. Os de apoio só avisam. */
 export type ArquivoComProblema = { nome: string; problema: string; oQueFazer: string; principal: boolean };
 
+/** Como cada documento foi lido: por inteiro, em parte, ainda lendo, esperando o armazenamento, ou não lido. */
+export type SeloDocumento = "LIDO" | "PARCIAL" | "LENDO" | "AGUARDANDO" | "NAO_LIDO";
+
+export type LinhaDocumento = {
+  nome: string;
+  papel: "principal" | "apoio";
+  selo: SeloDocumento;
+  rotulo: string;
+  /** O que ficou sem leitura / por quê (vazio quando foi lido por inteiro). */
+  problema: string | null;
+  oQueFazer: string | null;
+};
+
+export type ResumoLeitura = {
+  total: number;
+  lidos: number;
+  principais: number;
+  principaisLidos: number;
+  /** Frase pronta: "5 de 7 documento(s) lido(s) por inteiro (principais: 3 de 4)". */
+  texto: string;
+};
+
 export type DocumentoLidoRelatorio = { nome: string; caracteres: number; ok: boolean; motivo?: string; principal?: boolean; detalhe?: string };
 
 export type GrupoRelatorio = { categoria: string; titulo: string; itens: ItemRelatorio[] };
@@ -59,6 +81,9 @@ export type RelatorioHabilitacao = {
     /** Por que o resultado pede revisão manual (vazio = não pede). */
     motivosRevisao: string[];
     documentosLidos: DocumentoLidoRelatorio[];
+    /** Todos os documentos do processo com o selo de leitura de cada um (principais primeiro). */
+    documentos: LinhaDocumento[];
+    resumoLeitura: ResumoLeitura;
     /** Arquivos que não puderam ser lidos: qual, por quê e o que fazer (linguagem simples). */
     arquivosComProblema: ArquivoComProblema[];
     /** Texto do andamento enquanto roda (ex.: "Lendo o edital: 3 de 7 partes"). */
@@ -75,6 +100,51 @@ export type RelatorioHabilitacao = {
 
 const TITULO_CATEGORIA = new Map<string, string>([...CATEGORIAS_CATALOGO.map((c) => [c.id, c.titulo] as [string, string]), ["outros", "Outros documentos"]]);
 const ORDEM_CATEGORIA = [...CATEGORIAS_CATALOGO.map((c) => c.id as string), "outros"];
+
+const ROTULO_SELO_DOCUMENTO: Record<SeloDocumento, string> = {
+  LIDO: "Lido por inteiro",
+  PARCIAL: "Lido em parte",
+  LENDO: "Lendo (escaneado)",
+  AGUARDANDO: "Aguardando armazenamento",
+  NAO_LIDO: "Não lido",
+};
+
+export function seloDoDocumento(d: Pick<DocumentoLidoRelatorio, "ok" | "motivo">): SeloDocumento {
+  if (d.ok) return "LIDO";
+  if (d.motivo === "parcial") return "PARCIAL";
+  if (d.motivo === "ocr") return "LENDO";
+  if (d.motivo === "armazenamento") return "AGUARDANDO";
+  return "NAO_LIDO";
+}
+
+/** Todos os documentos do processo (lidos ou não): os principais primeiro e, dentro de cada grupo, os com problema primeiro. */
+export function linhasDeDocumentos(docs: DocumentoLidoRelatorio[]): LinhaDocumento[] {
+  return docs
+    .map((d) => {
+      const selo = seloDoDocumento(d);
+      const ex = d.ok ? null : explicarArquivo(d.nome, d.motivo, d.detalhe);
+      return {
+        nome: d.nome,
+        papel: d.principal === false ? ("apoio" as const) : ("principal" as const),
+        selo,
+        rotulo: ROTULO_SELO_DOCUMENTO[selo],
+        problema: ex?.problema ?? null,
+        oQueFazer: ex?.oQueFazer ?? null,
+      };
+    })
+    .sort((a, b) => Number(b.papel === "principal") - Number(a.papel === "principal") || Number(a.selo === "LIDO") - Number(b.selo === "LIDO"));
+}
+
+export function resumoDeLeitura(linhas: LinhaDocumento[]): ResumoLeitura {
+  const principais = linhas.filter((l) => l.papel === "principal");
+  const lidos = linhas.filter((l) => l.selo === "LIDO").length;
+  const principaisLidos = principais.filter((l) => l.selo === "LIDO").length;
+  const texto =
+    linhas.length === 0
+      ? "Nenhum documento registrado nesta auditoria."
+      : `${lidos} de ${linhas.length} documento(s) lido(s) por inteiro (principais: ${principaisLidos} de ${principais.length})`;
+  return { total: linhas.length, lidos, principais: principais.length, principaisLidos, texto };
+}
 
 /** Arquivos com problema, os principais primeiro. Registros antigos (sem o campo `principal`) contam como principais. */
 export function arquivosComProblemaDe(docs: DocumentoLidoRelatorio[]): ArquivoComProblema[] {
@@ -273,6 +343,8 @@ export async function montarRelatorioHabilitacao(
           leituraCompleta: aud.leituraCompleta,
           motivosRevisao: lerMotivosDeRevisao(aud.motivosRevisao),
           documentosLidos: docsLidos,
+          documentos: linhasDeDocumentos(docsLidos),
+          resumoLeitura: resumoDeLeitura(linhasDeDocumentos(docsLidos)),
           arquivosComProblema: arquivosComProblemaDe(docsLidos),
           andamento: ["RODANDO", "NA_FILA"].includes(aud.estado) ? textoAndamento(aud.progresso) : null,
           retentativaAgendada: aud.estado === "ERRO" && !!aud.proximaTentativaEm,

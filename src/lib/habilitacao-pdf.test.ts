@@ -33,7 +33,7 @@ const base = (pendentes: ItemRelatorio[]): RelatorioHabilitacao => ({
   empresa: { razaoSocial: "Empresa Teste LTDA", cnpj: "00000000000191" },
   status: pendentes.length ? "NAO_HABILITADA" : "HABILITADA",
   percentual: pendentes.length ? 40 : 100,
-  auditoria: { estado: "CONCLUIDA", mensagem: null, erroTipo: null, solicitadaEm: null, avisoAdmin: null, arquivosComProblema: [], andamento: null, retentativaAgendada: false, concluidaEm: "2026-10-09T18:00:00Z", dataReferencia: "2026-10-20T13:00:00Z", leituraCompleta: true, motivosRevisao: [], documentosLidos: [] },
+  auditoria: { estado: "CONCLUIDA", mensagem: null, erroTipo: null, solicitadaEm: null, avisoAdmin: null, arquivosComProblema: [], andamento: null, retentativaAgendada: false, concluidaEm: "2026-10-09T18:00:00Z", dataReferencia: "2026-10-20T13:00:00Z", leituraCompleta: true, motivosRevisao: [], documentosLidos: [], documentos: [], resumoLeitura: { total: 0, lidos: 0, principais: 0, principaisLidos: 0, texto: "" } },
   resumo: { exigidas: 10, atendidas: 4, pendentes: pendentes.length, naoSeAplicam: 1 },
   pendencias: pendentes.length ? [{ categoria: "fiscal", titulo: "Regularidade Fiscal", itens: pendentes }] : [],
   atendidas: [item(99, { situacao: "ATENDIDA", situacaoTexto: "Atendida" })],

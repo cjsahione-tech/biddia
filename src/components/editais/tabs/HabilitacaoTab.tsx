@@ -23,6 +23,57 @@ const dataHoraBr = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", dateStyle: "short", timeStyle: "short" }) : "—";
 const dataBr = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" }) : "—");
 
+const ESTILO_SELO_DOCUMENTO: Record<string, string> = {
+  LIDO: "bg-accent/10 text-accent",
+  PARCIAL: "bg-warning/10 text-warning",
+  LENDO: "bg-brand-light text-brand",
+  AGUARDANDO: "bg-warning/10 text-warning",
+  NAO_LIDO: "bg-danger/10 text-danger",
+};
+
+type AuditoriaRelatorio = NonNullable<RelatorioHabilitacao["auditoria"]>;
+
+/** Quadro único: todos os documentos do processo, o selo de leitura de cada um e o que fazer quando algum não foi lido por inteiro. */
+function DocumentosAnalisados({ auditoria, concluida }: { auditoria: AuditoriaRelatorio; concluida: boolean }) {
+  if (auditoria.documentos.length === 0) return null;
+  const comProblema = auditoria.documentos.some((d) => d.selo !== "LIDO");
+  // Sem resultado ainda e nada com problema: o andamento já é mostrado em outro aviso.
+  if (!concluida && !comProblema) return null;
+  return (
+    <details open={comProblema} className="rounded-xl border border-border bg-background text-sm">
+      <summary className="cursor-pointer select-none px-4 py-3 font-medium text-foreground">
+        Documentos analisados <span className="font-normal text-muted">— {auditoria.resumoLeitura.texto}</span>
+      </summary>
+      <ul className="divide-y divide-border border-t border-border">
+        {auditoria.documentos.map((d) => (
+          <li key={d.nome} className="px-4 py-2.5">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <FileText className="h-3.5 w-3.5 shrink-0 text-muted" />
+              <span className="min-w-0 flex-1 break-words text-xs font-medium text-foreground">{d.nome}</span>
+              <span
+                className="rounded-full bg-surface px-2 py-0.5 text-[10px] font-medium text-muted"
+                title={
+                  d.papel === "principal"
+                    ? "Edital, termo de referência, preços e planilhas: se não forem lidos por inteiro, o resultado fica com ressalva."
+                    : "Anexo de apoio: se não for lido por inteiro, só avisamos; o resultado não muda."
+                }
+              >
+                {d.papel === "principal" ? "Principal" : "Apoio"}
+              </span>
+              <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${ESTILO_SELO_DOCUMENTO[d.selo]}`}>{d.rotulo}</span>
+            </div>
+            {d.problema && (
+              <p className="mt-1 pl-5 text-xs text-muted">
+                {d.problema} <span className="text-foreground/80">{d.oQueFazer}</span>
+              </p>
+            )}
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+}
+
 function CartaoPendencia({ item, onAnexado }: { item: ItemRelatorio; onAnexado: () => void }) {
   const precisaEnviar = item.situacao === "NAO_ENVIADA" || item.situacao === "VENCIDA";
   const [anexando, setAnexando] = useState(false);
@@ -295,18 +346,7 @@ export function HabilitacaoTab({ editalId, etapa, onMudou }: { editalId: string;
         </div>
       )}
 
-      {!concluida && auditoria && auditoria.arquivosComProblema.length > 0 && (
-        <div className="rounded-xl border border-border bg-background p-4 text-sm">
-          <p className="font-medium text-foreground">Arquivos que não consegui ler</p>
-          <ul className="mt-2 space-y-2">
-            {auditoria.arquivosComProblema.map((a) => (
-              <li key={a.nome} className="text-xs text-muted">
-                <span className="font-medium text-foreground">{a.nome}</span> — {a.problema} <span className="text-foreground/80">{a.oQueFazer}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      {!concluida && auditoria && <DocumentosAnalisados auditoria={auditoria} concluida={false} />}
 
       {comErro && (
         <div className="flex items-start gap-3 rounded-xl border border-danger/30 bg-danger/5 p-4 text-sm text-danger">
@@ -341,30 +381,12 @@ export function HabilitacaoTab({ editalId, etapa, onMudou }: { editalId: string;
         <div className="flex items-start gap-3 rounded-xl border border-warning/30 bg-warning/5 p-4 text-sm text-warning">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
           <div className="min-w-0">
-            <p>Nem todos os documentos principais do processo (edital, termo de referência, preços) puderam ser lidos por inteiro, então este resultado não é definitivo. Confira manualmente se há mais exigências neles:</p>
-            <ul className="mt-1 list-disc space-y-1 pl-5 text-xs">
-              {auditoria.arquivosComProblema.filter((a) => a.principal).map((a) => (
-                <li key={a.nome}>
-                  <span className="font-medium">{a.nome}</span> — {a.problema} {a.oQueFazer}
-                </li>
-              ))}
-            </ul>
+            <p>Nem todos os documentos principais do processo (edital, termo de referência, preços) puderam ser lidos por inteiro, então este resultado não é definitivo. Veja abaixo quais ficaram sem leitura e confira-os manualmente: pode haver mais exigências neles.</p>
           </div>
         </div>
       )}
 
-      {concluida && auditoria && auditoria.arquivosComProblema.some((a) => !a.principal) && (
-        <div className="rounded-xl border border-border bg-surface p-3 text-xs text-muted">
-          <p className="font-medium text-foreground">Anexos de apoio que não puderam ser lidos por inteiro (não alteram o resultado):</p>
-          <ul className="mt-1 list-disc space-y-0.5 pl-5">
-            {auditoria.arquivosComProblema.filter((a) => !a.principal).map((a) => (
-              <li key={a.nome}>
-                <span className="font-medium">{a.nome}</span> — {a.problema}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      {concluida && auditoria && <DocumentosAnalisados auditoria={auditoria} concluida />}
 
       {concluida && resumo.pendentes === 0 && (!auditoria || (auditoria.leituraCompleta && auditoria.motivosRevisao.length === 0)) && (
         <div className="flex items-start gap-3 rounded-xl border border-accent/30 bg-accent/5 p-4 text-sm text-accent">

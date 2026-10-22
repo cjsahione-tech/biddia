@@ -50,6 +50,21 @@ export async function gerarPdfPendenciasHabilitacao(company: Company, r: Relator
     });
   }
 
+  if (r.auditoria && r.auditoria.documentos.length > 0) {
+    secoes.push({
+      tipo: "tabela",
+      titulo: `Documentos analisados — ${r.auditoria.resumoLeitura.texto}`,
+      quebrarLinhas: true,
+      colunas: [
+        { label: "Documento", largura: 190 },
+        { label: "Tipo", largura: 55 },
+        { label: "Leitura", largura: 90 },
+        { label: "Observação", largura: 148 },
+      ],
+      linhas: r.auditoria.documentos.map((d) => [d.nome, d.papel === "principal" ? "Principal" : "Apoio", d.rotulo, d.problema ?? ""]),
+    });
+  }
+
   if (r.resumo.pendentes === 0 && (!r.auditoria || (r.auditoria.leituraCompleta && r.auditoria.motivosRevisao.length === 0))) {
     secoes.push({
       tipo: "texto",
