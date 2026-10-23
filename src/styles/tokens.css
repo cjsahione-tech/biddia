@@ -1,0 +1,82 @@
+/* Bidd.IA — identidade visual (tokens). Fonte única das cores, espaços e formas do sistema.
+   Cópia de identidade-bidd/tokens.css com TRÊS ajustes para convivência com o Tailwind (valores iguais ao guia):
+   1. --radius-sm/md/lg/pill e --shadow-card/nav viraram --r-chip/tile/card/pill e --sh-card/nav: os nomes originais
+      colidiam com a escala do Tailwind e deformariam todos os "rounded-lg" do sistema. No Tailwind: rounded-chip,
+      rounded-tile, rounded-card, rounded-pill, shadow-card e shadow-nav (ligados em globals.css).
+   2. --font-display/--font-sans saíram daqui: as fontes (Rubik e DM Sans) vêm do next/font em layout.tsx e são
+      ligadas ao Tailwind em globals.css.
+   3. O tema escuro fica PRONTO mas DESLIGADO: só vale com data-theme="dark" no <html>. (O bloco que o ativava
+      sozinho conforme o aparelho foi removido; para ligar no futuro, ver CLAUDE.md → Identidade visual.) */
+:root {
+  --page: #F1F2FB;
+  --surface: #FFFFFF;
+  --ink: #1E1B4B;
+  --ink-muted: #4B4A7A;
+  --border: #D5D8F5;
+  --brand-900: #312E81;
+  --brand-600: #4338CA;
+  --on-brand: #FFFFFF;
+  --accent: #FBBF24;
+  --on-accent: #1E1B4B;
+  --tint: #E0E7FF;
+  --tint-ink: #312E81;
+  --neutral-bg: #E8E9F3;
+  --success-bg: #DDF3E7;
+  --success-ink: #14532D;
+  --warning-bg: #FEF3C7;
+  --warning-ink: #92400E;
+  --danger-bg: #FDE4E4;
+  --danger-ink: #7F1D1D;
+  --focus-ring: #4338CA;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 18px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --r-chip: 10px;
+  --r-tile: 16px;
+  --r-card: 20px;
+  --r-pill: 999px;
+  --sh-card: 0 1px 2px rgba(49,46,129,0.08);
+  --sh-nav: 0 4px 14px rgba(49,46,129,0.10);
+  /* Responsivo: um só sistema para celular, tablet e computador */
+  --gutter: 18px;
+  --content-max: 1200px;
+  --sidebar-w: 248px;
+  --touch-min: 44px;
+  color-scheme: light;
+}
+
+/* Pontos de quebra: celular até 767px, tablet 768px a 1099px, computador a partir de 1100px */
+@media (min-width: 768px) { :root { --gutter: 24px; } }
+@media (min-width: 1100px) { :root { --gutter: 32px; } }
+
+/* Tema escuro (DESLIGADO por padrão): ative com data-theme="dark" no <html>. */
+[data-theme="dark"] {
+  --page: #0E0D2B;
+  --surface: #1B1950;
+  --ink: #F4F5FF;
+  --ink-muted: #B9BBE8;
+  --border: #34327E;
+  --brand-900: #3D3A92;
+  --brand-600: #5B52E8;
+  --on-brand: #FFFFFF;
+  --accent: #FBBF24;
+  --on-accent: #1E1B4B;
+  --tint: #2A2870;
+  --tint-ink: #E0E7FF;
+  --neutral-bg: #26255E;
+  --success-bg: #123B27;
+  --success-ink: #BDEBD0;
+  --warning-bg: #3F2F08;
+  --warning-ink: #FDE68A;
+  --danger-bg: #4A1616;
+  --danger-ink: #FECACA;
+  --focus-ring: #A5B4FC;
+  color-scheme: dark;
+}
+
+/* Foco de teclado */
+:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }

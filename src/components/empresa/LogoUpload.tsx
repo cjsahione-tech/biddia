@@ -42,7 +42,7 @@ export function LogoUpload({ value, onChange }: { value: string | null; onChange
       <div>
         <p className="text-sm font-medium text-foreground">Logo da empresa</p>
         <p className="text-xs text-muted">Usada no timbrado dos documentos gerados.</p>
-        {erro && <p className="mt-1 text-xs text-danger">{erro}</p>}
+        {erro && <p className="mt-1 text-xs text-danger-ink">{erro}</p>}
       </div>
       <input ref={inputRef} type="file" accept="image/png,image/jpeg" className="hidden" onChange={aoEscolher} />
     </div>

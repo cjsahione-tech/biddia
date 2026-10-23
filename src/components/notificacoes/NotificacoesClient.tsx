@@ -58,10 +58,10 @@ export function NotificacoesClient() {
           <Link
             key={a.editalId}
             href={`/editais/${a.editalId}?tab=habilitacao`}
-            className="block rounded-2xl border border-warning/40 bg-warning/10 p-4 transition hover:shadow-sm"
+            className="block rounded-2xl border border-warning-ink/40 bg-warning-bg p-4 transition hover:shadow-sm"
           >
             <div className="flex items-start gap-3">
-              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning-ink" />
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium text-foreground">A auditoria de habilitação precisa da sua ajuda</p>
                 <p className="mt-0.5 truncate text-xs text-muted">
@@ -84,21 +84,21 @@ export function NotificacoesClient() {
             key={n.id}
             href={`/editais/${n.editalId}?tab=checklist`}
             className={`block rounded-2xl border p-4 transition hover:shadow-sm ${
-              n.vencido ? "border-danger/30 bg-danger/5" : "border-warning/30 bg-warning/5"
+              n.vencido ? "border-danger-ink/30 bg-danger-bg" : "border-warning-ink/30 bg-warning-bg"
             }`}
           >
             <div className="flex items-start gap-3">
               {n.vencido ? (
-                <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-danger" />
+                <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-danger-ink" />
               ) : (
-                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning-ink" />
               )}
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium text-foreground">{n.documentoNome}</p>
                 <p className="mt-0.5 truncate text-xs text-muted">
                   {n.editalTitulo} — {n.orgaoNome}
                 </p>
-                <p className={`mt-1.5 text-xs font-medium ${n.vencido ? "text-danger" : "text-warning"}`}>
+                <p className={`mt-1.5 text-xs font-medium ${n.vencido ? "text-danger-ink" : "text-warning-ink"}`}>
                   {rotuloPrazo(n.diasRestantes)} · validade {formatDate(n.validade)}
                 </p>
               </div>

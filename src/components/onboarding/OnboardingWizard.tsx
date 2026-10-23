@@ -300,7 +300,7 @@ export function OnboardingWizard() {
             />
           </Field>
 
-          {error && <p className="text-sm text-danger">{error}</p>}
+          {error && <p className="text-sm text-danger-ink">{error}</p>}
 
           <Button type="submit" className="w-full">
             Continuar
@@ -480,7 +480,7 @@ export function OnboardingWizard() {
             </Field>
           </div>
 
-          {error && <p className="text-sm text-danger">{error}</p>}
+          {error && <p className="text-sm text-danger-ink">{error}</p>}
 
           <div className="flex gap-3">
             <Button type="button" variant="secondary" onClick={() => setStep(1)}>

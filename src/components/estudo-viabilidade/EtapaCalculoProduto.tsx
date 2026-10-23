@@ -9,15 +9,15 @@ import type { ResultadoCalculoViabilidade, IndicadorViabilidade } from "@/lib/ca
 import type { EstudoViabilidadeDetail } from "@/lib/types";
 
 const INDICADOR_CONFIG: Record<IndicadorViabilidade, { label: string; icon: typeof CheckCircle2; className: string }> = {
-  VIAVEL: { label: "Viável", icon: CheckCircle2, className: "text-accent bg-accent/10" },
-  MARGINAL: { label: "Marginal", icon: AlertTriangle, className: "text-warning bg-warning/10" },
-  INVIAVEL: { label: "Inviável", icon: XCircle, className: "text-danger bg-danger/10" },
+  VIAVEL: { label: "Viável", icon: CheckCircle2, className: "text-success-ink bg-success-bg" },
+  MARGINAL: { label: "Marginal", icon: AlertTriangle, className: "text-warning-ink bg-warning-bg" },
+  INVIAVEL: { label: "Inviável", icon: XCircle, className: "text-danger-ink bg-danger-bg" },
 };
 
 const DECISAO_CONFIG: Record<ResultadoCalculoViabilidade["recomendacao"]["decisao"], { label: string; className: string }> = {
-  PARTICIPAR: { label: "Participar", className: "text-accent" },
-  PARTICIPAR_COM_RESSALVAS: { label: "Participar com ressalvas", className: "text-warning" },
-  NAO_PARTICIPAR: { label: "Não participar", className: "text-danger" },
+  PARTICIPAR: { label: "Participar", className: "text-success-ink" },
+  PARTICIPAR_COM_RESSALVAS: { label: "Participar com ressalvas", className: "text-warning-ink" },
+  NAO_PARTICIPAR: { label: "Não participar", className: "text-danger-ink" },
 };
 
 function Badge({ indicador }: { indicador: IndicadorViabilidade }) {
@@ -92,7 +92,7 @@ export function EtapaCalculoProduto({
 
   if (!resultado || recalculando) {
     return (
-      <div className="rounded-2xl border border-border bg-surface/50 p-5">
+      <div className="rounded-card bg-surface shadow-card p-5">
         <Field
           label="Margem mínima aceitável (%)"
           htmlFor="margemMinima"
@@ -108,7 +108,7 @@ export function EtapaCalculoProduto({
             onChange={(e) => setMargem(e.target.value)}
           />
         </Field>
-        {erro && <p className="mt-2 text-xs text-danger">{erro}</p>}
+        {erro && <p className="mt-2 text-xs text-danger-ink">{erro}</p>}
         <div className="mt-4 flex justify-end">
           <Button onClick={calcular} loading={calculando}>
             Calcular viabilidade
@@ -123,7 +123,7 @@ export function EtapaCalculoProduto({
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between gap-3 rounded-xl bg-accent/10 px-4 py-2.5 text-sm text-accent">
+      <div className="flex items-center justify-between gap-3 rounded-xl bg-success-bg px-4 py-2.5 text-sm text-success-ink">
         <span className="inline-flex items-center gap-1.5 font-medium">
           <CheckCircle2 className="h-4 w-4" /> Viabilidade calculada
         </span>
@@ -135,7 +135,7 @@ export function EtapaCalculoProduto({
         </button>
       </div>
 
-      <div className="rounded-2xl border border-border bg-surface/50 p-5">
+      <div className="rounded-card bg-surface shadow-card p-5">
         <div className="flex items-center justify-between gap-3">
           <h4 className="text-sm font-semibold text-foreground">Resultado consolidado</h4>
           <Badge indicador={consolidado.indicador} />
@@ -170,14 +170,14 @@ export function EtapaCalculoProduto({
         </p>
       </div>
 
-      <div className="rounded-2xl border border-border bg-surface/50 p-5">
+      <div className="rounded-card bg-surface shadow-card p-5">
         <p className={`text-sm font-semibold ${decisaoCfg.className}`}>Recomendação: {decisaoCfg.label}</p>
         <p className="mt-2 text-sm text-foreground/80">{recomendacao.motivo}</p>
       </div>
 
       <div>
         <h4 className="text-sm font-semibold text-foreground">Detalhamento por item</h4>
-        <div className="mt-2 max-h-[28rem] overflow-auto rounded-2xl border border-border">
+        <div className="mt-2 max-h-[28rem] overflow-auto rounded-card bg-surface shadow-card">
           <table className="w-full text-sm">
             <thead className="bg-surface text-left text-xs font-medium uppercase tracking-wide text-muted">
               <tr>

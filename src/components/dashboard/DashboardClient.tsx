@@ -292,7 +292,7 @@ export function DashboardClient() {
       </p>
 
       {(limite?.editaisAtivos.excedido || limite?.analisesNoMes.excedido) && (
-        <p className="mt-4 flex items-start gap-2 rounded-lg border border-warning/30 bg-warning/5 px-4 py-2.5 text-sm text-warning">
+        <p className="mt-4 flex items-start gap-2 rounded-lg border border-warning-ink/30 bg-warning-bg px-4 py-2.5 text-sm text-warning-ink">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
           <span>
             {limite.editaisAtivos.excedido &&
@@ -324,7 +324,7 @@ export function DashboardClient() {
       )}
 
       {uploadError && (
-        <p className="mt-4 rounded-lg border border-danger/30 bg-danger/5 px-4 py-2.5 text-sm text-danger">
+        <p className="mt-4 rounded-lg border border-danger-ink/30 bg-danger-bg px-4 py-2.5 text-sm text-danger-ink">
           {uploadError}
         </p>
       )}

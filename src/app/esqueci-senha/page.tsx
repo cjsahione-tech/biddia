@@ -133,7 +133,7 @@ export default function EsqueciSenhaPage() {
               />
             </Field>
 
-            {error && <p className="text-sm text-danger">{error}</p>}
+            {error && <p className="text-sm text-danger-ink">{error}</p>}
 
             <Button type="submit" loading={loading} className="w-full">
               Redefinir senha

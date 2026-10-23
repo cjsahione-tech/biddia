@@ -66,7 +66,7 @@ export function EtapaRequisitos({
           Vamos ler o texto do edital e identificar objeto, critério de julgamento, exigências técnicas, prazos,
           local de entrega, forma de pagamento e garantias.
         </p>
-        {erro && <p className="mt-2 text-xs text-danger">{erro}</p>}
+        {erro && <p className="mt-2 text-xs text-danger-ink">{erro}</p>}
         <Button onClick={extrair} loading={extraindo} className="mt-4">
           {!extraindo && <Sparkles className="h-4 w-4" />}
           Extrair requisitos com IA
@@ -113,7 +113,7 @@ function ResumoRequisitos({
 }) {
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3 rounded-xl bg-accent/10 px-4 py-2.5 text-sm text-accent">
+      <div className="flex items-center justify-between gap-3 rounded-xl bg-success-bg px-4 py-2.5 text-sm text-success-ink">
         <span className="inline-flex items-center gap-1.5 font-medium">
           <CheckCircle2 className="h-4 w-4" /> Requisitos revisados e confirmados
         </span>
@@ -122,7 +122,7 @@ function ResumoRequisitos({
         </button>
       </div>
 
-      <div className="rounded-2xl border border-border bg-surface/50 p-5">
+      <div className="rounded-card bg-surface shadow-card p-5">
         <div className="flex items-center justify-between gap-3">
           <h4 className="text-sm font-semibold text-foreground">Objeto</h4>
           <FonteBadge baseadoEmTextoCompleto={requisitos.baseadoEmTextoCompleto} />
@@ -235,7 +235,7 @@ function FormularioRequisitos({
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between gap-3 rounded-xl bg-warning/10 px-4 py-2.5 text-sm text-warning">
+      <div className="flex items-center justify-between gap-3 rounded-xl bg-warning-bg px-4 py-2.5 text-sm text-warning-ink">
         <span className="font-medium">Revise os dados extraídos pela IA antes de confirmar.</span>
         <button
           onClick={onReextrair}
@@ -322,7 +322,7 @@ function FormularioRequisitos({
         </div>
       )}
 
-      {erro && <p className="text-xs text-danger">{erro}</p>}
+      {erro && <p className="text-xs text-danger-ink">{erro}</p>}
 
       <div className="flex justify-end">
         <Button onClick={confirmar} loading={salvando}>

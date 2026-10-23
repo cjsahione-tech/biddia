@@ -55,7 +55,7 @@ export function ViabilidadeTab({ editalId }: { editalId: string }) {
     };
   }, [editalId]);
 
-  if (erro) return <p className="text-sm text-danger">Não foi possível carregar o estudo de viabilidade.</p>;
+  if (erro) return <p className="text-sm text-danger-ink">Não foi possível carregar o estudo de viabilidade.</p>;
   if (!estudos) {
     return (
       <div className="flex justify-center py-10 text-muted">

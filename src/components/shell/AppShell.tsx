@@ -98,7 +98,7 @@ export function AppShell({
               <item.icon className="h-4 w-4" />
               {item.label}
               {item.href === "/notificacoes" && totalNotificacoes > 0 && (
-                <span className="ml-auto rounded-full bg-danger px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                <span className="ml-auto rounded-full bg-danger-ink px-1.5 py-0.5 text-[10px] font-semibold text-white">
                   {totalNotificacoes}
                 </span>
               )}
@@ -112,7 +112,7 @@ export function AppShell({
         <p className="truncate text-xs text-muted">{userName}</p>
         <button
           onClick={handleLogout}
-          className="mt-3 flex items-center gap-2 text-xs font-medium text-muted hover:text-danger"
+          className="mt-3 flex items-center gap-2 text-xs font-medium text-muted hover:text-danger-ink"
         >
           <LogOut className="h-3.5 w-3.5" />
           Sair
@@ -143,7 +143,7 @@ export function AppShell({
         </div>
       )}
       {avisoIA && (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 bg-warning px-4 py-2 text-sm font-medium text-white sm:px-6" role="alert">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 bg-warning-ink px-4 py-2 text-sm font-medium text-white sm:px-6" role="alert">
           <AlertTriangle className="h-4 w-4 shrink-0" />
           <span>{avisoIA.aviso}</span>
           {avisoIA.auditoriasGuardadas > 0 && (

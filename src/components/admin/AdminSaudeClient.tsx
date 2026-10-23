@@ -67,7 +67,7 @@ export function AdminSaudeClient() {
         ))}
       </div>
 
-      {erro && <p className="mt-4 text-sm text-danger">{erro}</p>}
+      {erro && <p className="mt-4 text-sm text-danger-ink">{erro}</p>}
       {!dados && !erro && (
         <div className="flex justify-center py-16 text-muted">
           <Loader2 className="h-5 w-5 animate-spin" />
@@ -78,7 +78,7 @@ export function AdminSaudeClient() {
         <>
           <div
             className={`mt-5 rounded-2xl border p-4 ${
-              dentroDaMeta === null ? "border-border" : dentroDaMeta ? "border-accent/40 bg-accent/5" : "border-danger/40 bg-danger/5"
+              dentroDaMeta === null ? "border-border" : dentroDaMeta ? "border-success-ink/40 bg-success-bg" : "border-danger-ink/40 bg-danger-bg"
             }`}
           >
             <p className="text-sm text-muted">Taxa de erro geral (agentes do pipeline)</p>
@@ -90,7 +90,7 @@ export function AdminSaudeClient() {
           </div>
 
           <h2 className="mt-6 text-sm font-semibold text-foreground">Erros por agente</h2>
-          <div className="mt-2 overflow-x-auto rounded-2xl border border-border">
+          <div className="mt-2 overflow-x-auto rounded-card bg-surface shadow-card">
             <table className="w-full text-left text-sm">
               <thead className="bg-surface/60 text-xs text-muted">
                 <tr>
@@ -106,7 +106,7 @@ export function AdminSaudeClient() {
                     <td className="px-3 py-2 text-foreground">{nome(a.agentKey)}</td>
                     <td className="px-3 py-2 text-muted">{a.execucoes}</td>
                     <td className="px-3 py-2 text-muted">{a.falhas}</td>
-                    <td className={`px-3 py-2 font-medium ${a.taxaErro !== null && a.taxaErro > dados.meta ? "text-danger" : "text-foreground"}`}>
+                    <td className={`px-3 py-2 font-medium ${a.taxaErro !== null && a.taxaErro > dados.meta ? "text-danger-ink" : "text-foreground"}`}>
                       {pct(a.taxaErro)}
                     </td>
                   </tr>
@@ -126,7 +126,7 @@ export function AdminSaudeClient() {
           <p className="mt-0.5 text-xs text-muted">
             Custo estimado a preço de lista da Anthropic (US$), só das chamadas registradas a partir do início desta medição.
           </p>
-          <div className="mt-2 overflow-x-auto rounded-2xl border border-border">
+          <div className="mt-2 overflow-x-auto rounded-card bg-surface shadow-card">
             <table className="w-full text-left text-sm">
               <thead className="bg-surface/60 text-xs text-muted">
                 <tr>

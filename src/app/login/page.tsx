@@ -66,7 +66,7 @@ export default function LoginPage() {
             />
           </Field>
 
-          {error && <p className="text-sm text-danger">{error}</p>}
+          {error && <p className="text-sm text-danger-ink">{error}</p>}
 
           <div className="text-right">
             <Link href="/esqueci-senha" className="text-xs font-medium text-brand hover:underline">

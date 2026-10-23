@@ -266,7 +266,7 @@ export function CarteiraClient() {
       </div>
 
       {cobranca && (
-        <div className="mt-4 rounded-xl border border-border bg-surface/50 p-4 text-sm">
+        <div className="mt-4 rounded-card bg-surface shadow-card p-4 text-sm">
           <p className="font-medium text-foreground">Planos mensais dos clientes</p>
           {cobranca.totalMensalCheio > 0 ? (
             <>
@@ -289,7 +289,7 @@ export function CarteiraClient() {
       )}
 
       {aviso && (
-        <p className="mt-4 flex items-start gap-2 rounded-lg border border-accent/30 bg-accent/5 px-4 py-2.5 text-sm text-accent">
+        <p className="mt-4 flex items-start gap-2 rounded-lg border border-success-ink/30 bg-success-bg px-4 py-2.5 text-sm text-success-ink">
           <Info className="mt-0.5 h-4 w-4 shrink-0" /> {aviso}
         </p>
       )}
@@ -418,7 +418,7 @@ export function CarteiraClient() {
                 </div>
               </div>
 
-              {erro && <p className="mt-4 text-sm text-danger">{erro}</p>}
+              {erro && <p className="mt-4 text-sm text-danger-ink">{erro}</p>}
 
               <div className="mt-5 flex flex-wrap items-center gap-2">
                 <Button type="submit" loading={salvando}>
@@ -434,7 +434,7 @@ export function CarteiraClient() {
           {ativos.map((c) => (
             <div
               key={c.id}
-              className="flex flex-col gap-3 rounded-xl border border-border bg-surface/50 p-4 sm:flex-row sm:items-center sm:justify-between"
+              className="flex flex-col gap-3 rounded-card bg-surface shadow-card p-4 sm:flex-row sm:items-center sm:justify-between"
             >
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-foreground">{c.company.razaoSocial}</p>
@@ -471,11 +471,11 @@ export function CarteiraClient() {
                   )}
                 </div>
                 {c.pendencias.length > 0 ? (
-                  <p className="mt-2 text-xs text-warning">
+                  <p className="mt-2 text-xs text-warning-ink">
                     <span className="font-medium">Pendente:</span> {c.pendencias.join(" · ")}
                   </p>
                 ) : (
-                  <p className="mt-2 text-xs text-accent">Cadastro completo</p>
+                  <p className="mt-2 text-xs text-success-ink">Cadastro completo</p>
                 )}
               </div>
               <div className="flex shrink-0 items-center gap-2">

@@ -84,7 +84,7 @@ export function EstudoViabilidadeClient() {
               key={r.key}
               onClick={() => criarEstudo(r.key)}
               disabled={criando !== null}
-              className="flex flex-col items-start gap-3 rounded-2xl border border-border bg-surface/50 p-6 text-left transition hover:border-brand hover:bg-brand-light/30 disabled:cursor-not-allowed disabled:opacity-60"
+              className="flex flex-col items-start gap-3 rounded-card bg-surface shadow-card p-6 text-left transition hover:border-brand hover:bg-brand-light/30 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-light text-brand">
                 {criando === r.key ? <Loader2 className="h-5 w-5 animate-spin" /> : <Icone className="h-5 w-5" />}
@@ -112,7 +112,7 @@ export function EstudoViabilidadeClient() {
         )}
 
         {!loading && estudos.length > 0 && (
-          <div className="mt-3 divide-y divide-border rounded-2xl border border-border">
+          <div className="mt-3 divide-y divide-border rounded-card bg-surface shadow-card">
             {estudos.map((e) => {
               const editando = editandoId === e.id;
               return (
@@ -134,7 +134,7 @@ export function EstudoViabilidadeClient() {
                       <button
                         onClick={() => salvarNome(e.id)}
                         disabled={salvandoId === e.id}
-                        className="text-accent hover:text-accent/80 disabled:opacity-60"
+                        className="text-success-ink hover:text-success-ink/80 disabled:opacity-60"
                         title="Salvar"
                       >
                         {salvandoId === e.id ? (

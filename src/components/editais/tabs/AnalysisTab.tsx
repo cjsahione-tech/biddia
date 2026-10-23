@@ -12,7 +12,7 @@ const parsePrazos = lerPrazos;
 
 function SectionPrazos({ prazos, analiseAntiga }: { prazos: PrazoEdital[]; analiseAntiga: boolean }) {
   return (
-    <div className="rounded-2xl border border-border bg-surface/50 p-5">
+    <div className="rounded-card bg-surface shadow-card p-5">
       <h4 className="text-sm font-semibold text-foreground">Prazos do edital</h4>
       {prazos.length === 0 ? (
         <p className="mt-2 text-sm text-muted">
@@ -91,7 +91,7 @@ export function AnalysisTab({ edital, onUpdate }: { edital: EditalDetail; onUpda
 
   return (
     <div className="space-y-8">
-      <div className="rounded-2xl border border-border bg-surface/50 p-5">
+      <div className="rounded-card bg-surface shadow-card p-5">
         <h4 className="text-sm font-semibold text-foreground">Objeto (conforme publicado no PNCP)</h4>
         <p className="mt-2 text-sm text-foreground/80">{edital.descricao}</p>
       </div>
@@ -123,7 +123,7 @@ export function AnalysisTab({ edital, onUpdate }: { edital: EditalDetail; onUpda
 
           <Section title="Riscos e pontos de atenção" items={parseList(analysis.riscos)} />
 
-          <div className="rounded-2xl border border-border bg-surface/50 p-5">
+          <div className="rounded-card bg-surface shadow-card p-5">
             <h4 className="text-sm font-semibold text-foreground">Parecer do Agente Analista</h4>
             <p className="mt-2 text-sm text-foreground/80">{analysis.parecer}</p>
           </div>

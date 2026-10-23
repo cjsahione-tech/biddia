@@ -61,13 +61,13 @@ export function AdminAuditoriasClient() {
         </button>
       </div>
 
-      {erro && <p className="text-sm text-danger">{erro}</p>}
+      {erro && <p className="text-sm text-danger-ink">{erro}</p>}
       {msg && <p className="rounded-lg border border-border bg-surface/50 p-3 text-sm text-foreground">{msg}</p>}
       {!sim && !erro && <Loader2 className="h-5 w-5 animate-spin text-muted" />}
 
       {sim && (
         <>
-          <section className="rounded-2xl border border-border p-5">
+          <section className="rounded-card bg-surface shadow-card p-5">
             <h2 className="text-sm font-semibold text-foreground">Fase A — limpar selos de erro (sem custo)</h2>
             <p className="mt-1 text-sm text-muted">
               <strong className="text-foreground">{sim.limpar.total}</strong> edital(is) ainda antes de Qualificação mostram erro ou “auditando” de tentativas antigas. A limpeza só volta o selo para “será auditado ao qualificar”. Não usa IA e mantém o histórico
@@ -85,7 +85,7 @@ export function AdminAuditoriasClient() {
             </button>
           </section>
 
-          <section className="rounded-2xl border border-border p-5">
+          <section className="rounded-card bg-surface shadow-card p-5">
             <h2 className="text-sm font-semibold text-foreground">Fase B — auditar editais já em Qualificação ou depois (gasta IA)</h2>
             <p className="mt-1 text-sm text-muted">
               <strong className="text-foreground">{sim.auditar.total}</strong> edital(is) em Qualificação ou depois não têm auditoria válida (nunca auditados, com erro ou travados). Já concluídas (não serão refeitas): {sim.jaConcluidas}. Sem

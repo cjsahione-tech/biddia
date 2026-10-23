@@ -75,7 +75,7 @@ export function AssistenteClient() {
         </div>
       </div>
 
-      <div ref={listRef} className="mt-4 flex-1 space-y-4 overflow-y-auto rounded-2xl border border-border bg-surface/30 p-4 max-md:border-0 max-md:bg-transparent max-md:p-0">
+      <div ref={listRef} className="mt-4 flex-1 space-y-4 overflow-y-auto rounded-card bg-surface shadow-card p-4 max-md:border-0 max-md:bg-transparent max-md:p-0">
         {mensagens.length === 0 && (
           <div className="flex h-full flex-col items-center justify-center gap-4 text-center">
             <p className="text-sm text-muted">
@@ -140,7 +140,7 @@ export function AssistenteClient() {
       </div>
 
       <div className="mt-3">
-        {erro && <p className="mb-2 text-xs text-danger">{erro}</p>}
+        {erro && <p className="mb-2 text-xs text-danger-ink">{erro}</p>}
         <div className="flex items-end gap-2">
           <textarea
             value={texto}

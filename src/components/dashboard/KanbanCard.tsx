@@ -63,7 +63,7 @@ export function KanbanCard({
       onClick={onClick}
       className={`relative cursor-pointer rounded-lg border border-l-4 p-3 shadow-sm transition hover:shadow-md ${faixaCorCard(edital.corCard)} ${
         naoVisualizado ? "bg-brand-light/50" : "bg-background"
-      } ${selecionado ? "border-brand ring-2 ring-brand/40" : foraDoPerfil ? "border-warning/40" : "border-border"}`}
+      } ${selecionado ? "border-brand ring-2 ring-brand/40" : foraDoPerfil ? "border-warning-ink/40" : "border-border"}`}
     >
       {dragOverPos === "before" && (
         <div className="absolute -top-1.5 left-0 right-0 h-1 rounded-full bg-brand" />
@@ -103,7 +103,7 @@ export function KanbanCard({
         )}
         {estadoInatividade === "quase_expirando" && (
           <span
-            className="inline-flex items-center gap-0.5 rounded-full bg-warning/10 px-1.5 py-0.5 text-[10px] font-medium text-warning"
+            className="inline-flex items-center gap-0.5 rounded-full bg-warning-bg px-1.5 py-0.5 text-[10px] font-medium text-warning-ink"
             title="Sem atividade há mais de 36h — expira para Rascunho em 48h se ninguém mexer"
           >
             <Clock className="h-2.5 w-2.5" /> Quase expirando
@@ -111,7 +111,7 @@ export function KanbanCard({
         )}
         {edital.etapaKanban === "RASCUNHO" && (
           <span
-            className="inline-flex items-center gap-0.5 rounded-full bg-danger/10 px-1.5 py-0.5 text-[10px] font-medium text-danger"
+            className="inline-flex items-center gap-0.5 rounded-full bg-danger-bg px-1.5 py-0.5 text-[10px] font-medium text-danger-ink"
             title="Rascunhos são apagados 7 dias depois de entrar aqui. Arraste o card para outra coluna para guardá-lo."
           >
             <Trash2 className="h-2.5 w-2.5" />{" "}
@@ -149,7 +149,7 @@ export function KanbanCard({
         )}
         <SeloHabilitacao status={edital.habilitacaoStatus} percentual={edital.habilitacaoPercentual} etapa={edital.etapaKanban} />
         {foraDoPerfil && (
-          <span className="inline-flex items-center gap-0.5 rounded-full bg-warning/10 px-1.5 py-0.5 text-[10px] font-medium text-warning">
+          <span className="inline-flex items-center gap-0.5 rounded-full bg-warning-bg px-1.5 py-0.5 text-[10px] font-medium text-warning-ink">
             <AlertTriangle className="h-2.5 w-2.5" /> Fora do perfil
           </span>
         )}
@@ -165,7 +165,7 @@ export function KanbanCard({
           {valor.texto}
         </p>
         {edital.dataEncerramentoProposta && (
-          <p className={`text-[11px] ${prazoUrgente ? "font-medium text-danger" : "text-muted"}`}>
+          <p className={`text-[11px] ${prazoUrgente ? "font-medium text-danger-ink" : "text-muted"}`}>
             {dias !== null && dias >= 0 ? `${dias}d` : "encerrado"} · {formatDate(edital.dataEncerramentoProposta)}
           </p>
         )}

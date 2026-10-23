@@ -204,7 +204,7 @@ export function FormularioEnvioDocumento({
         </Field>
       </div>
 
-      {erro && <p className="mt-3 text-xs text-danger">{erro}</p>}
+      {erro && <p className="mt-3 text-xs text-danger-ink">{erro}</p>}
 
       <div className="mt-4 flex justify-end gap-2">
         <Button type="button" variant="secondary" onClick={onCancelar}>

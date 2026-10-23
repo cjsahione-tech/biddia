@@ -99,7 +99,7 @@ export function MaisClient() {
               <span className="block text-sm font-bold text-foreground">{a.titulo}</span>
               <span className="block truncate text-xs text-muted">{a.descricao}</span>
             </span>
-            {!!a.selo && <span className="rounded-full bg-danger px-1.5 py-0.5 text-[10px] font-bold text-white">{a.selo}</span>}
+            {!!a.selo && <span className="rounded-full bg-danger-ink px-1.5 py-0.5 text-[10px] font-bold text-white">{a.selo}</span>}
             <ChevronRight className="h-4 w-4 flex-none text-[#8f8fb5]" />
           </Link>
         ))}
@@ -108,7 +108,7 @@ export function MaisClient() {
       <button
         onClick={sair}
         disabled={saindo}
-        className="mt-2.5 flex w-full items-center justify-center gap-2 rounded-[22px] bg-white py-3.5 text-sm font-bold text-danger"
+        className="mt-2.5 flex w-full items-center justify-center gap-2 rounded-[22px] bg-white py-3.5 text-sm font-bold text-danger-ink"
       >
         {saindo ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogOut className="h-4 w-4" />}
         Sair

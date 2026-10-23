@@ -29,11 +29,11 @@ function BarraLimite({ titulo, l }: { titulo: string; l: Limite }) {
     <div>
       <div className="flex items-baseline justify-between text-sm">
         <span className="font-bold text-foreground">{titulo}</span>
-        <span className={l.excedido ? "font-bold text-danger" : "text-muted"}>{l.limite != null ? `${l.atual} de ${l.limite}` : `${l.atual} · sem limite`}</span>
+        <span className={l.excedido ? "font-bold text-danger-ink" : "text-muted"}>{l.limite != null ? `${l.atual} de ${l.limite}` : `${l.atual} · sem limite`}</span>
       </div>
       {l.limite != null && (
         <div className="mt-1.5 h-1.5 rounded-full bg-[#e3e6ff]">
-          <div className={`h-1.5 rounded-full ${l.excedido ? "bg-danger" : "bg-[#fbbf24]"}`} style={{ width: `${pct}%` }} />
+          <div className={`h-1.5 rounded-full ${l.excedido ? "bg-danger-ink" : "bg-[#fbbf24]"}`} style={{ width: `${pct}%` }} />
         </div>
       )}
     </div>
@@ -66,7 +66,7 @@ export function PlanoClient() {
     <div className="px-4 pt-5 md:px-8 md:pt-8">
       <CabecalhoMobile titulo="Plano e consumo" subtitulo={dados ? `Assinatura: ${ROTULO_STATUS[dados.status].toLowerCase()}` : "Carregando…"} />
       <h1 className="hidden text-2xl font-semibold text-foreground md:block">Plano e consumo</h1>
-      {erro && <p className="mt-4 text-sm text-danger">Não foi possível carregar os dados do plano.</p>}
+      {erro && <p className="mt-4 text-sm text-danger-ink">Não foi possível carregar os dados do plano.</p>}
       {!dados && !erro && (
         <div className="flex justify-center py-16 text-muted">
           <Loader2 className="h-5 w-5 animate-spin" />

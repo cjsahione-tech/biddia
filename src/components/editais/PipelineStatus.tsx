@@ -18,19 +18,19 @@ function statusOf(agentKey: string, runs: AgentRunItem[]) {
 
 export function PipelineStatus({ runs }: { runs: AgentRunItem[] }) {
   return (
-    <div className="flex items-center gap-1 overflow-x-auto rounded-2xl border border-border bg-surface/60 px-4 py-3">
+    <div className="flex items-center gap-1 overflow-x-auto rounded-card bg-surface shadow-card px-4 py-3">
       {ETAPAS.map((etapa, i) => {
         const status = statusOf(etapa.key, runs);
         return (
           <div key={etapa.key} className="flex items-center gap-1">
             <div className="flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium">
               {status === "RUNNING" && <Loader2 className="h-3.5 w-3.5 animate-spin text-brand" />}
-              {status === "DONE" && <CheckCircle2 className="h-3.5 w-3.5 text-accent" />}
-              {status === "ERROR" && <XCircle className="h-3.5 w-3.5 text-danger" />}
+              {status === "DONE" && <CheckCircle2 className="h-3.5 w-3.5 text-success-ink" />}
+              {status === "ERROR" && <XCircle className="h-3.5 w-3.5 text-danger-ink" />}
               {status === "PENDENTE" && <Circle className="h-3.5 w-3.5 text-muted/50" />}
               <span
                 className={
-                  status === "PENDENTE" ? "text-muted" : status === "ERROR" ? "text-danger" : "text-foreground"
+                  status === "PENDENTE" ? "text-muted" : status === "ERROR" ? "text-danger-ink" : "text-foreground"
                 }
               >
                 {etapa.label}

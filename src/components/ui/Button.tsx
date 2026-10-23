@@ -10,7 +10,7 @@ const variants: Record<string, string> = {
   primary: "bg-brand text-white hover:bg-brand/90 shadow-sm",
   secondary: "bg-surface text-foreground border border-border hover:bg-border/40",
   ghost: "text-muted hover:text-foreground hover:bg-surface",
-  danger: "bg-danger text-white hover:bg-danger/90 shadow-sm",
+  danger: "bg-danger-ink text-white hover:bg-danger-ink/90 shadow-sm",
 };
 
 export function Button({ variant = "primary", loading, disabled, className, children, ...rest }: Props) {

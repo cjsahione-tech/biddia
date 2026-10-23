@@ -30,7 +30,7 @@ function TruncatedTick({ x, y, payload }: { x?: number; y?: number; payload?: { 
   const texto = payload?.value ?? "";
   const curto = texto.length > 22 ? `${texto.slice(0, 21)}…` : texto;
   return (
-    <text x={x} y={y} dy={4} textAnchor="end" fontSize={11} fill="var(--muted)">
+    <text x={x} y={y} dy={4} textAnchor="end" fontSize={11} fill="var(--ink-muted)">
       {curto}
     </text>
   );
@@ -56,7 +56,7 @@ export function BarraHorizontal({
     <ResponsiveContainer width="100%" height={altura}>
       <BarChart data={itens} layout="vertical" margin={{ top: 4, right: 24, bottom: 4, left: 4 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
-        <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: "var(--muted)" }} axisLine={false} tickLine={false} />
+        <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: "var(--ink-muted)" }} axisLine={false} tickLine={false} />
         <YAxis
           type="category"
           dataKey="label"
@@ -96,7 +96,7 @@ export function DonutPortal({ itens }: { itens: ContagemComValor[] }) {
         <PieChart>
           <Pie data={itens} dataKey="quantidade" nameKey="label" innerRadius={55} outerRadius={82} paddingAngle={2}>
             {itens.map((item, i) => (
-              <Cell key={item.chave} fill={PALETA_CATEGORIAS[i % PALETA_CATEGORIAS.length]} stroke="var(--background)" strokeWidth={2} />
+              <Cell key={item.chave} fill={PALETA_CATEGORIAS[i % PALETA_CATEGORIAS.length]} stroke="var(--surface)" strokeWidth={2} />
             ))}
           </Pie>
           <Tooltip
@@ -138,11 +138,11 @@ export function EvolucaoMensalChart({ pontos }: { pontos: PontoEvolucaoMensal[] 
     <ResponsiveContainer width="100%" height={260}>
       <ComposedChart data={pontos} margin={{ top: 8, right: 12, bottom: 0, left: -20 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-        <XAxis dataKey="label" tick={{ fontSize: 11, fill: "var(--muted)" }} axisLine={false} tickLine={false} />
-        <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: "var(--muted)" }} axisLine={false} tickLine={false} />
+        <XAxis dataKey="label" tick={{ fontSize: 11, fill: "var(--ink-muted)" }} axisLine={false} tickLine={false} />
+        <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: "var(--ink-muted)" }} axisLine={false} tickLine={false} />
         <Tooltip contentStyle={TOOLTIP_STYLE} />
         <Legend wrapperStyle={{ fontSize: 12 }} formatter={(v) => LEGENDA[v] ?? v} />
-        <Bar dataKey="captados" name="captados" fill="var(--brand-light)" radius={[4, 4, 0, 0]} maxBarSize={28} />
+        <Bar dataKey="captados" name="captados" fill="var(--tint)" radius={[4, 4, 0, 0]} maxBarSize={28} />
         <Line type="monotone" dataKey="ganhos" name="ganhos" stroke={COR_GANHO} strokeWidth={2.5} dot={{ r: 3 }} />
         <Line type="monotone" dataKey="perdidos" name="perdidos" stroke={COR_PERDA} strokeWidth={2.5} dot={{ r: 3 }} />
       </ComposedChart>

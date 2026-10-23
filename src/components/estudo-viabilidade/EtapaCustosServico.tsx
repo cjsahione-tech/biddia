@@ -160,7 +160,7 @@ export function EtapaCustosServico({
 
   return (
     <div className="space-y-6">
-      <div className="rounded-2xl border border-border bg-surface/50 p-5">
+      <div className="rounded-card bg-surface shadow-card p-5">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <div>
             <p className="text-xs text-muted">Valor de referência do lote (teto)</p>
@@ -207,7 +207,7 @@ export function EtapaCustosServico({
           sugestão vem com 1 — ajuste conforme sua experiência. Adicione, edite ou remova livremente.
         </p>
 
-        <div className="mt-3 overflow-x-auto rounded-2xl border border-border">
+        <div className="mt-3 overflow-x-auto rounded-card bg-surface shadow-card">
           <table className="w-full text-sm">
             <thead className="bg-surface text-left text-xs font-medium uppercase tracking-wide text-muted">
               <tr>
@@ -278,7 +278,7 @@ export function EtapaCustosServico({
                   <td className="px-2 py-2 text-center">
                     <button
                       onClick={() => setCargos((prev) => prev.filter((_, idx) => idx !== i))}
-                      className="text-muted hover:text-danger"
+                      className="text-muted hover:text-danger-ink"
                       title="Remover cargo"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
@@ -311,7 +311,7 @@ export function EtapaCustosServico({
           (ex: insumos por exame), ou digite o valor mensal direto.
         </p>
 
-        <div className="mt-3 overflow-x-auto rounded-2xl border border-border">
+        <div className="mt-3 overflow-x-auto rounded-card bg-surface shadow-card">
           <table className="w-full text-sm">
             <thead className="bg-surface text-left text-xs font-medium uppercase tracking-wide text-muted">
               <tr>
@@ -368,7 +368,7 @@ export function EtapaCustosServico({
                   <td className="px-2 py-2 text-center">
                     <button
                       onClick={() => setCustosOperacionais((prev) => prev.filter((_, idx) => idx !== i))}
-                      className="text-muted hover:text-danger"
+                      className="text-muted hover:text-danger-ink"
                       title="Remover linha"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
@@ -394,7 +394,7 @@ export function EtapaCustosServico({
         </button>
       </div>
 
-      {erro && <p className="text-xs text-danger">{erro}</p>}
+      {erro && <p className="text-xs text-danger-ink">{erro}</p>}
 
       <div className="flex justify-end gap-2">
         <Button variant="secondary" onClick={() => salvar(false)} loading={salvando === "rascunho"}>
@@ -419,7 +419,7 @@ function ResumoCustosServico({
 }) {
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3 rounded-xl bg-accent/10 px-4 py-2.5 text-sm text-accent">
+      <div className="flex items-center justify-between gap-3 rounded-xl bg-success-bg px-4 py-2.5 text-sm text-success-ink">
         <span className="inline-flex items-center gap-1.5 font-medium">
           <CheckCircle2 className="h-4 w-4" /> Custos confirmados
         </span>
@@ -428,7 +428,7 @@ function ResumoCustosServico({
         </button>
       </div>
 
-      <div className="rounded-2xl border border-border bg-surface/50 p-5">
+      <div className="rounded-card bg-surface shadow-card p-5">
         <p className="text-sm text-foreground">
           {qtdCargos} cargo(s) e {qtdCustos} linha(s) de custo operacional informados.
         </p>

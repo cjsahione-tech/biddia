@@ -165,7 +165,7 @@ export function EmpresaClient() {
       </p>
 
       {pendencias.length > 0 && (
-        <div className="mt-4 flex items-start gap-2 rounded-lg border border-warning/30 bg-warning/5 px-4 py-3 text-sm text-warning">
+        <div className="mt-4 flex items-start gap-2 rounded-lg border border-warning-ink/30 bg-warning-bg px-4 py-3 text-sm text-warning-ink">
           <Info className="mt-0.5 h-4 w-4 shrink-0" />
           <span>
             Informações ainda pendentes: <strong>{pendencias.join(", ")}</strong>. Preencha quando puder — os
@@ -174,7 +174,7 @@ export function EmpresaClient() {
         </div>
       )}
 
-      <section className="mt-8 rounded-2xl border border-border p-6">
+      <section className="mt-8 rounded-card bg-surface shadow-card p-6">
         <h2 className="text-sm font-semibold text-foreground">Palavras-chave de pesquisa</h2>
         <p className="mt-1 text-xs text-muted">
           Usadas pelo Agente Comercial para buscar editais no PNCP.
@@ -215,7 +215,7 @@ export function EmpresaClient() {
         </div>
       </section>
 
-      <form onSubmit={handleSave} className="mt-6 space-y-6 rounded-2xl border border-border p-6">
+      <form onSubmit={handleSave} className="mt-6 space-y-6 rounded-card bg-surface shadow-card p-6">
         <LogoUpload value={company.logoUrl} onChange={(dataUrl) => set("logoUrl", dataUrl)} />
 
         <Field label="Objeto da empresa" htmlFor="objetoSocial">
@@ -396,14 +396,14 @@ export function EmpresaClient() {
           )}
         </div>
 
-        {error && <p className="text-sm text-danger">{error}</p>}
+        {error && <p className="text-sm text-danger-ink">{error}</p>}
 
         <div className="flex items-center gap-3">
           <Button type="submit" loading={saving}>
             Salvar alterações
           </Button>
           {saved && (
-            <span className="inline-flex items-center gap-1.5 text-sm text-accent">
+            <span className="inline-flex items-center gap-1.5 text-sm text-success-ink">
               <Check className="h-4 w-4" /> Salvo
             </span>
           )}

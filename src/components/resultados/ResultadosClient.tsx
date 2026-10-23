@@ -38,7 +38,7 @@ function KpiCard({
   cor: string;
 }) {
   return (
-    <div className="min-w-0 rounded-xl border border-border bg-surface/50 p-4">
+    <div className="min-w-0 rounded-card bg-surface shadow-card p-4">
       <div className="flex items-center gap-2">
         <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg" style={{ backgroundColor: `${cor}1a`, color: cor }}>
           <Icon className="h-3.5 w-3.5" />
@@ -55,7 +55,7 @@ function KpiCard({
 
 function ChartCard({ title, className, children }: { title: string; className?: string; children: React.ReactNode }) {
   return (
-    <div className={`rounded-xl border border-border bg-surface/30 p-5 ${className ?? ""}`}>
+    <div className={`rounded-card bg-surface shadow-card p-5 ${className ?? ""}`}>
       <h3 className="text-sm font-semibold text-foreground">{title}</h3>
       <div className="mt-4">{children}</div>
     </div>
@@ -125,7 +125,7 @@ export function ResultadosClient() {
       )}
 
       {erro && (
-        <p className="mt-4 rounded-lg border border-danger/30 bg-danger/5 px-4 py-2.5 text-sm text-danger">{erro}</p>
+        <p className="mt-4 rounded-lg border border-danger-ink/30 bg-danger-bg px-4 py-2.5 text-sm text-danger-ink">{erro}</p>
       )}
 
       {loading && !resultados ? (

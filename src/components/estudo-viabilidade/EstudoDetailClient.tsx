@@ -82,7 +82,7 @@ export function EstudoDetailClient({ estudoId }: { estudoId: string }) {
             maxLength={120}
             className="flex-1 rounded-lg border border-border bg-background px-3 py-1.5 text-2xl font-semibold text-foreground focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
           />
-          <button onClick={salvarNome} disabled={salvandoNome} className="text-accent hover:text-accent/80 disabled:opacity-60" title="Salvar">
+          <button onClick={salvarNome} disabled={salvandoNome} className="text-success-ink hover:text-success-ink/80 disabled:opacity-60" title="Salvar">
             {salvandoNome ? <Loader2 className="h-5 w-5 animate-spin" /> : <Check className="h-5 w-5" />}
           </button>
           <button onClick={() => setEditandoNome(false)} className="text-muted hover:text-foreground" title="Cancelar">

@@ -1,49 +1,163 @@
 @import "tailwindcss";
+@import "../styles/tokens.css";
 
-:root {
-  --background: #ffffff;
-  --surface: #f8fafc;
-  --foreground: #0f172a;
-  --muted: #64748b;
-  --border: #e2e8f0;
-  --brand: #4338ca;
-  --brand-light: #eef2ff;
-  --accent: #0d9488;
-  --danger: #dc2626;
-  --warning: #d97706;
-}
+/* Identidade visual Bidd.IA — UMA só para celular, tablet e computador.
+   Os valores (cores, espaços, cantos, sombras) moram em src/styles/tokens.css; aqui eles viram classes do Tailwind.
+   Regras completas: docs/identidade-visual/IDENTIDADE-VISUAL.md e a seção "Identidade visual" do CLAUDE.md. */
 
 @theme inline {
-  --color-background: var(--background);
+  /* Cores da identidade (bg-page, text-ink, bg-brand-600, bg-success-bg, text-danger-ink, ...) */
+  --color-page: var(--page);
   --color-surface: var(--surface);
-  --color-foreground: var(--foreground);
-  --color-muted: var(--muted);
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
   --color-border: var(--border);
-  --color-brand: var(--brand);
-  --color-brand-light: var(--brand-light);
+  --color-brand-900: var(--brand-900);
+  --color-brand-600: var(--brand-600);
+  --color-on-brand: var(--on-brand);
   --color-accent: var(--accent);
-  --color-danger: var(--danger);
-  --color-warning: var(--warning);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-on-accent: var(--on-accent);
+  --color-tint: var(--tint);
+  --color-tint-ink: var(--tint-ink);
+  --color-neutral-bg: var(--neutral-bg);
+  --color-success-bg: var(--success-bg);
+  --color-success-ink: var(--success-ink);
+  --color-warning-bg: var(--warning-bg);
+  --color-warning-ink: var(--warning-ink);
+  --color-danger-bg: var(--danger-bg);
+  --color-danger-ink: var(--danger-ink);
+  --color-focus-ring: var(--focus-ring);
+
+  /* Nomes antigos, ainda válidos nas telas que não foram renomeadas */
+  --color-background: var(--page);
+  --color-foreground: var(--ink);
+  --color-muted: var(--ink-muted);
+  --color-brand: var(--brand-600);
+  --color-brand-light: var(--tint);
+
+  /* Cantos e sombras: rounded-chip (10), rounded-tile (16), rounded-card (20), rounded-pill; shadow-card, shadow-nav */
+  --radius-chip: var(--r-chip);
+  --radius-tile: var(--r-tile);
+  --radius-card: var(--r-card);
+  --radius-pill: var(--r-pill);
+  --shadow-card: var(--sh-card);
+  --shadow-nav: var(--sh-nav);
+
+  /* Fontes: Rubik nos títulos (font-display), DM Sans no texto (font-sans) — carregadas em layout.tsx */
+  --font-sans: var(--font-dmsans), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-rubik), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
-html {
-  color-scheme: light;
+/* Pontos de quebra: celular até 767px, tablet 768–1099px, computador a partir de 1100px (md = 768px, lg = 1100px). */
+@theme {
+  --breakpoint-lg: 1100px;
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
+/* Estilos de texto do guia (tipografia). Títulos em Rubik, texto em DM Sans. */
+@utility tipo-titulo-1 {
+  font-family: var(--font-display);
+  font-size: 32px;
+  line-height: 38px;
+  font-weight: 600;
+}
+@utility tipo-titulo-2 {
+  font-family: var(--font-display);
+  font-size: 24px;
+  line-height: 30px;
+  font-weight: 600;
+}
+@utility tipo-titulo-3 {
+  font-family: var(--font-display);
+  font-size: 18px;
+  line-height: 24px;
+  font-weight: 600;
+}
+/* Título de página: titulo-2 no celular, titulo-1 a partir de 768px */
+@utility tipo-titulo-pagina {
+  font-family: var(--font-display);
+  font-size: 24px;
+  line-height: 30px;
+  font-weight: 600;
+  @media (min-width: 768px) {
+    font-size: 32px;
+    line-height: 38px;
+  }
+}
+@utility tipo-numero {
+  font-family: var(--font-display);
+  font-size: 30px;
+  line-height: 32px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+@utility tipo-corpo {
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 400;
+}
+@utility tipo-corpo-forte {
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 700;
+}
+@utility tipo-pequeno {
+  font-size: 12.5px;
+  line-height: 18px;
+  font-weight: 400;
+}
+@utility tipo-legenda {
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
 }
 
-* {
-  border-color: var(--border);
-}
+@layer base {
+  html {
+    background: var(--page);
+  }
 
-::selection {
-  background: var(--brand-light);
-  color: var(--brand);
+  body {
+    background: var(--page);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    font-size: 15px;
+    line-height: 22px;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-display);
+  }
+
+  /* Tudo que tem borda usa a cor de borda da identidade, a não ser que a tela peça outra (border-danger-ink/30 etc.). */
+  *,
+  ::before,
+  ::after {
+    border-color: var(--border);
+  }
+
+  ::selection {
+    background: var(--tint);
+    color: var(--tint-ink);
+  }
+
+  /* Números em coluna (valores em reais, prazos) ficam alinhados. */
+  .tabular,
+  table {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Campo de texto sem estilo próprio herda a fonte do sistema. */
+  button,
+  input,
+  select,
+  textarea {
+    font-family: inherit;
+  }
 }
 
 /* Crossfade em loop entre duas capturas reais, usado no preview dos cards de agente na
@@ -57,45 +171,6 @@ body {
   0%, 40% { opacity: 0; }
   50%, 90% { opacity: 1; }
   100% { opacity: 0; }
-}
-
-/* ── Visual de celular (até 768px) ─────────────────────────────────────────
-   Só troca as cores e as fontes nomeadas acima: como as telas usam esses nomes (fundo, texto, destaque),
-   tudo ganha o visual do design mobile sem mexer no computador (acima de 768px nada muda). */
-@media (max-width: 767.98px) {
-  :root {
-    --background: #f1f2fb;
-    --surface: #ffffff;
-    --foreground: #1e1b4b;
-    --muted: #4b4a7a;
-    --border: #e3e6ff;
-    --brand: #4338ca;
-    --brand-light: #e0e7ff;
-    --accent: #14532d;
-    --danger: #b91c1c;
-    --warning: #92400e;
-    --roxo-escuro: #312e81;
-    --ambar: #fbbf24;
-  }
-  body,
-  button,
-  input,
-  select,
-  textarea {
-    font-family: var(--font-dmsans), Arial, sans-serif;
-  }
-  h1,
-  h2,
-  h3 {
-    font-family: var(--font-rubik), Arial, sans-serif;
-  }
-  /* Cartões que são só "borda + cantos arredondados" (sem fundo próprio) ficam brancos e sem borda, como no design. */
-  main :is(.rounded-2xl, .rounded-xl).border:not([class*="bg-"]),
-  main :is(.rounded-2xl, .rounded-xl).border[class*="bg-surface"] {
-    background-color: #ffffff;
-    border-color: transparent;
-    border-radius: 20px;
-  }
 }
 
 /* Linhas que rolam para o lado (chips de etapa, abas) sem mostrar a barra de rolagem. */

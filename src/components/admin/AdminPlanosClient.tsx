@@ -361,7 +361,7 @@ export function AdminPlanosClient() {
                 </div>
               </div>
 
-              {erro && <p className="mt-4 text-sm text-danger">{erro}</p>}
+              {erro && <p className="mt-4 text-sm text-danger-ink">{erro}</p>}
 
               <div className="mt-5 flex items-center gap-2">
                 <Button onClick={salvar} loading={salvando}>
@@ -375,7 +375,7 @@ export function AdminPlanosClient() {
           )}
 
           {planos.map((p) => (
-            <div key={p.id} className="flex items-center justify-between rounded-xl border border-border bg-surface/50 p-4">
+            <div key={p.id} className="flex items-center justify-between rounded-card bg-surface shadow-card p-4">
               <div>
                 <div className="flex items-center gap-2">
                   <p className="text-sm font-semibold text-foreground">{p.nome}</p>
@@ -383,7 +383,7 @@ export function AdminPlanosClient() {
                     {ROTULO_PUBLICO[p.publicoAlvo]}
                   </span>
                   {!p.ativo && (
-                    <span className="rounded-full bg-warning/10 px-1.5 py-0.5 text-[10px] font-medium text-warning">Inativo</span>
+                    <span className="rounded-full bg-warning-bg px-1.5 py-0.5 text-[10px] font-medium text-warning-ink">Inativo</span>
                   )}
                 </div>
                 <p className="mt-0.5 text-xs text-muted">

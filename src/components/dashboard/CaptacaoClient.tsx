@@ -185,7 +185,7 @@ export function CaptacaoClient() {
             )}
           </div>
 
-          {erro && <p className="text-xs text-danger">{erro}</p>}
+          {erro && <p className="text-xs text-danger-ink">{erro}</p>}
           <button
             onClick={captarAgora}
             disabled={iniciando || rodando}

@@ -21,7 +21,7 @@ export function CabecalhoMobile({ titulo, subtitulo }: { titulo: string; subtitu
         <Link href="/notificacoes" aria-label="Notificações" className="relative flex h-[38px] w-[38px] items-center justify-center rounded-full bg-white text-muted">
           <Bell className="h-[19px] w-[19px]" />
           {totalNotificacoes > 0 && (
-            <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-danger px-1 text-[9px] font-bold text-white">
+            <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-danger-ink px-1 text-[9px] font-bold text-white">
               {totalNotificacoes > 99 ? "99+" : totalNotificacoes}
             </span>
           )}

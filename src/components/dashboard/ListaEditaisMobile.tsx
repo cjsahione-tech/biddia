@@ -193,7 +193,7 @@ export function ListaEditaisMobile({
               Os agentes vão analisar o edital e a auditoria de habilitação começa em seguida — isso usa IA. É o mesmo que arrastar o
               card para &ldquo;Qualificação&rdquo; no computador.
             </p>
-            {erro && <p className="mt-2 text-xs text-danger">{erro}</p>}
+            {erro && <p className="mt-2 text-xs text-danger-ink">{erro}</p>}
             <div className="mt-4 flex gap-2">
               <button onClick={() => setParaQualificar(null)} disabled={movendo} className="h-11 flex-1 rounded-[22px] bg-[#e8e9f3] text-sm font-bold text-foreground">
                 Cancelar

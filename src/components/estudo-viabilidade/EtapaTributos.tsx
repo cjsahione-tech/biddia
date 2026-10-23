@@ -61,7 +61,7 @@ function ResumoTributos({ estudo, onEditar }: { estudo: EstudoViabilidadeDetail;
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3 rounded-xl bg-accent/10 px-4 py-2.5 text-sm text-accent">
+      <div className="flex items-center justify-between gap-3 rounded-xl bg-success-bg px-4 py-2.5 text-sm text-success-ink">
         <span className="inline-flex items-center gap-1.5 font-medium">
           <CheckCircle2 className="h-4 w-4" /> Regime tributário confirmado
         </span>
@@ -70,7 +70,7 @@ function ResumoTributos({ estudo, onEditar }: { estudo: EstudoViabilidadeDetail;
         </button>
       </div>
 
-      <div className="rounded-2xl border border-border bg-surface/50 p-5">
+      <div className="rounded-card bg-surface shadow-card p-5">
         <p className="text-sm font-semibold text-foreground">{REGIME_LABEL[aliquotas.regime]}</p>
         {aliquotas.regime === "SIMPLES_NACIONAL" && aliquotas.anexoSimples && (
           <p className="mt-1 text-sm text-muted">
@@ -208,7 +208,7 @@ function FormularioTributos({
         </div>
       )}
 
-      {erro && <p className="text-xs text-danger">{erro}</p>}
+      {erro && <p className="text-xs text-danger-ink">{erro}</p>}
 
       <div className="flex justify-end">
         <Button onClick={confirmar} loading={salvando}>

@@ -31,7 +31,7 @@ export function EditaisMobileClient({ etapaInicial }: { etapaInicial?: EtapaKanb
     <>
       <div className="px-4 pt-5 md:hidden">
         <CabecalhoMobile titulo="Editais" subtitulo={editais ? `${editais.filter((e) => e.etapaKanban !== "RASCUNHO").length} no quadro` : "Carregando…"} />
-        {erro && <p className="mt-4 text-sm text-danger">Não foi possível carregar os editais.</p>}
+        {erro && <p className="mt-4 text-sm text-danger-ink">Não foi possível carregar os editais.</p>}
         {!editais && !erro && (
           <div className="flex justify-center py-16 text-muted">
             <Loader2 className="h-5 w-5 animate-spin" />

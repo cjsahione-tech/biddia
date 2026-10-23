@@ -23,9 +23,9 @@ const NOME_RESULTADO: Record<string, string> = {
 const NOME_METODO: Record<string, string> = { texto: "Só texto", "texto+ocr": "Texto + leitura por imagem", reconferencia: "Só reconferência" };
 
 function Cartao({ titulo, valor, dica, tom }: { titulo: string; valor: number | string; dica: string; tom?: "bom" | "atencao" | "ruim" }) {
-  const cor = tom === "bom" ? "text-accent" : tom === "atencao" ? "text-warning" : tom === "ruim" ? "text-danger" : "text-foreground";
+  const cor = tom === "bom" ? "text-success-ink" : tom === "atencao" ? "text-warning-ink" : tom === "ruim" ? "text-danger-ink" : "text-foreground";
   return (
-    <div className="rounded-xl border border-border bg-background p-4" title={dica}>
+    <div className="rounded-card bg-surface shadow-card p-4" title={dica}>
       <p className="text-xs text-muted">{titulo}</p>
       <p className={`mt-1 text-2xl font-semibold ${cor}`}>{valor}</p>
     </div>
@@ -71,7 +71,7 @@ export function AdminSaudeAuditoriasClient() {
         ))}
       </div>
 
-      {erro && <p className="mt-4 text-sm text-danger">{erro}</p>}
+      {erro && <p className="mt-4 text-sm text-danger-ink">{erro}</p>}
       {!dados && !erro && (
         <div className="flex justify-center py-16 text-muted">
           <Loader2 className="h-5 w-5 animate-spin" />
@@ -80,9 +80,9 @@ export function AdminSaudeAuditoriasClient() {
 
       {dados && (
         <>
-          <div className={`mt-5 rounded-2xl border p-4 ${naMeta === null ? "border-border bg-surface/40" : naMeta ? "border-accent/30 bg-accent/5" : "border-danger/30 bg-danger/5"}`}>
+          <div className={`mt-5 rounded-2xl border p-4 ${naMeta === null ? "border-border bg-surface/40" : naMeta ? "border-success-ink/30 bg-success-bg" : "border-danger-ink/30 bg-danger-bg"}`}>
             <p className="text-sm text-muted">Terminaram sozinhas (com resultado ou aviso claro)</p>
-            <p className={`mt-1 text-3xl font-semibold ${naMeta === null ? "text-foreground" : naMeta ? "text-accent" : "text-danger"}`}>{pct(dados.taxaSozinha)}</p>
+            <p className={`mt-1 text-3xl font-semibold ${naMeta === null ? "text-foreground" : naMeta ? "text-success-ink" : "text-danger-ink"}`}>{pct(dados.taxaSozinha)}</p>
             <p className="mt-1 text-xs text-muted">
               {dados.total} auditoria(s) com movimento no período. Erro sem explicação e auditoria travada contam contra a meta; as que ainda estão andando não entram na conta.
             </p>
@@ -99,7 +99,7 @@ export function AdminSaudeAuditoriasClient() {
             <Cartao titulo="Tempo mediano" valor={minutos(dados.tempo.medianaMin)} dica={`Tempo médio: ${minutos(dados.tempo.mediaMin)} (a média sobe quando uma auditoria fica parada por muito tempo).`} />
           </div>
 
-          <section className="mt-6 rounded-2xl border border-border bg-background p-4">
+          <section className="mt-6 rounded-card bg-surface shadow-card p-4">
             <h2 className="text-sm font-semibold text-foreground">Custo da IA nas auditorias</h2>
             <dl className="mt-2 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
               <div>
@@ -116,7 +116,7 @@ export function AdminSaudeAuditoriasClient() {
               </div>
               <div>
                 <dt className="text-xs text-muted">Acima do teto ({usd(dados.tetoCustoUsd)})</dt>
-                <dd className={`font-medium ${dados.custo.acimaDoTeto > 0 ? "text-danger" : "text-foreground"}`}>{dados.custo.acimaDoTeto}</dd>
+                <dd className={`font-medium ${dados.custo.acimaDoTeto > 0 ? "text-danger-ink" : "text-foreground"}`}>{dados.custo.acimaDoTeto}</dd>
               </div>
             </dl>
             <p className="mt-2 text-xs text-muted">
@@ -124,7 +124,7 @@ export function AdminSaudeAuditoriasClient() {
             </p>
           </section>
 
-          <section className="mt-4 rounded-2xl border border-border bg-background p-4">
+          <section className="mt-4 rounded-card bg-surface shadow-card p-4">
             <h2 className="text-sm font-semibold text-foreground">Erros mais comuns</h2>
             {!dados.registroDisponivel && <p className="mt-2 text-xs text-muted">O registro de tentativas ainda não foi ativado no banco; aparece aqui assim que for.</p>}
             {dados.registroDisponivel && dados.errosComuns.length === 0 && <p className="mt-2 text-sm text-muted">Nenhum erro registrado no período.</p>}
@@ -139,7 +139,7 @@ export function AdminSaudeAuditoriasClient() {
           </section>
 
           {dados.registroDisponivel && dados.tentativas.total > 0 && (
-            <section className="mt-4 rounded-2xl border border-border bg-background p-4">
+            <section className="mt-4 rounded-card bg-surface shadow-card p-4">
               <h2 className="text-sm font-semibold text-foreground">Tentativas ({dados.tentativas.total})</h2>
               <div className="mt-2 grid gap-4 sm:grid-cols-2">
                 <ul className="space-y-1 text-sm">

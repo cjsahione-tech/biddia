@@ -46,7 +46,7 @@ export function AgentPreviewCard({
 
         <button
           onClick={() => setExpandido(true)}
-          className="group relative mt-4 block h-40 w-full overflow-hidden rounded-xl border border-border bg-surface"
+          className="group relative mt-4 block h-40 w-full overflow-hidden rounded-card bg-surface shadow-card"
         >
           <Image
             src={imagens[0]}

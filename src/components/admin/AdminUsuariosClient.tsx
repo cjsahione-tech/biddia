@@ -42,9 +42,9 @@ type Totais = {
 type Plano = { id: string; nome: string; precoMensal: number; ativo: boolean };
 
 const COR_STATUS: Record<StatusAssinatura, string> = {
-  ATIVA: "border-accent/40 bg-accent/10 text-accent",
+  ATIVA: "border-success-ink/40 bg-success-bg text-success-ink",
   EM_TESTE: "border-brand/40 bg-brand-light text-brand",
-  PAGAMENTO_PENDENTE: "border-warning/40 bg-warning/10 text-warning",
+  PAGAMENTO_PENDENTE: "border-warning-ink/40 bg-warning-bg text-warning-ink",
   CANCELADA: "border-border bg-muted/10 text-muted",
 };
 
@@ -56,9 +56,9 @@ function dataBr(iso: string | null) {
 
 function CartaoResumo({ titulo, valor, detalhe, destaque }: { titulo: string; valor: string; detalhe?: string; destaque?: "bom" | "ruim" }) {
   return (
-    <div className="rounded-2xl border border-border p-4">
+    <div className="rounded-card bg-surface shadow-card p-4">
       <p className="text-xs text-muted">{titulo}</p>
-      <p className={`mt-1 text-xl font-semibold ${destaque === "ruim" ? "text-danger" : destaque === "bom" ? "text-accent" : "text-foreground"}`}>{valor}</p>
+      <p className={`mt-1 text-xl font-semibold ${destaque === "ruim" ? "text-danger-ink" : destaque === "bom" ? "text-success-ink" : "text-foreground"}`}>{valor}</p>
       {detalhe && <p className="mt-0.5 text-xs text-muted">{detalhe}</p>}
     </div>
   );
@@ -179,15 +179,15 @@ export function AdminUsuariosClient() {
         <span className="text-xs text-muted">{visiveis.length} de {linhas.length}</span>
       </div>
 
-      {erro && <p className="mt-4 text-sm text-danger">{erro}</p>}
-      {aviso && <p className="mt-4 text-sm text-warning">{aviso}</p>}
+      {erro && <p className="mt-4 text-sm text-danger-ink">{erro}</p>}
+      {aviso && <p className="mt-4 text-sm text-warning-ink">{aviso}</p>}
 
       {carregando ? (
         <div className="flex justify-center py-20 text-muted">
           <Loader2 className="h-5 w-5 animate-spin" />
         </div>
       ) : (
-        <div className="mt-4 overflow-x-auto rounded-2xl border border-border">
+        <div className="mt-4 overflow-x-auto rounded-card bg-surface shadow-card">
           <table className="w-full min-w-[980px] text-left text-sm">
             <thead className="bg-surface/60 text-xs text-muted">
               <tr>
@@ -300,7 +300,7 @@ function FragmentoLinha(props: {
           {l.valorPersonalizado != null && <p className="text-xs text-muted">valor combinado</p>}
         </td>
         <td className="px-3 py-3 text-foreground">{formatBRL(l.custoMesBrl)}</td>
-        <td className={`px-3 py-3 font-medium ${l.lucroMes < 0 ? "text-danger" : "text-foreground"}`} title={l.status === "ATIVA" ? undefined : "Só conta ativa gera receita; o custo de IA continua contando."}>
+        <td className={`px-3 py-3 font-medium ${l.lucroMes < 0 ? "text-danger-ink" : "text-foreground"}`} title={l.status === "ATIVA" ? undefined : "Só conta ativa gera receita; o custo de IA continua contando."}>
           {formatBRL(l.lucroMes)}
         </td>
         <td className="px-3 py-3">
@@ -327,7 +327,7 @@ function FragmentoLinha(props: {
               <Pencil className="h-4 w-4" />
             </button>
             {!l.ehAdmin && (
-              <button onClick={props.aoExcluir} className="rounded-md p-1.5 text-muted hover:bg-surface hover:text-danger" title="Excluir conta e todos os dados" aria-label={`Excluir ${l.nome}`}>
+              <button onClick={props.aoExcluir} className="rounded-md p-1.5 text-muted hover:bg-surface hover:text-danger-ink" title="Excluir conta e todos os dados" aria-label={`Excluir ${l.nome}`}>
                 <Trash2 className="h-4 w-4" />
               </button>
             )}
@@ -393,7 +393,7 @@ function ModalExcluir({ alvo, onFechar, onExcluido }: { alvo: Linha; onFechar: (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-label="Excluir conta">
       <div className="w-full max-w-lg rounded-2xl border border-border bg-background p-5 shadow-xl">
         <div className="flex items-start justify-between gap-3">
-          <div className="flex items-center gap-2 text-danger">
+          <div className="flex items-center gap-2 text-danger-ink">
             <AlertTriangle className="h-5 w-5" />
             <h2 className="text-lg font-semibold">Excluir conta e todos os dados</h2>
           </div>
@@ -410,7 +410,7 @@ function ModalExcluir({ alvo, onFechar, onExcluido }: { alvo: Linha; onFechar: (
           <li>{alvo.empresa ? `${alvo.empresa.documentos} documento(s) da base da empresa` : "Base de documentos, se houver"}, estudos de viabilidade e histórico de uso de IA.</li>
           <li>Todos os arquivos guardados no armazenamento.</li>
           {alvo.tipoConta === "ANALISTA" && alvo.clientesNaCarteira > 0 && (
-            <li className="text-warning">
+            <li className="text-warning-ink">
               Os {alvo.clientesNaCarteira} cliente(s) da carteira <strong>não</strong> são apagados (têm login próprio); só deixam de estar ligados a este analista.
             </li>
           )}
@@ -421,10 +421,10 @@ function ModalExcluir({ alvo, onFechar, onExcluido }: { alvo: Linha; onFechar: (
             value={digitado}
             onChange={(e) => setDigitado(e.target.value)}
             autoComplete="off"
-            className="mt-1.5 block w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-danger focus:outline-none focus:ring-2 focus:ring-danger/20"
+            className="mt-1.5 block w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-danger-ink focus:outline-none focus:ring-2 focus:ring-danger-ink/20"
           />
         </label>
-        {erro && <p className="mt-3 text-sm text-danger">{erro}</p>}
+        {erro && <p className="mt-3 text-sm text-danger-ink">{erro}</p>}
         <div className="mt-4 flex justify-end gap-2">
           <Button variant="secondary" onClick={onFechar} disabled={excluindo}>
             Cancelar

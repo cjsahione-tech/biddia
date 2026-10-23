@@ -72,7 +72,7 @@ export function EtapaEdital({
         />
       </div>
 
-      {erro && <p className="mt-2 text-xs text-danger">{erro}</p>}
+      {erro && <p className="mt-2 text-xs text-danger-ink">{erro}</p>}
 
       <div className="mt-4">
         {loading && (
@@ -90,7 +90,7 @@ export function EtapaEdital({
         )}
 
         {!loading && filtrados.length > 0 && (
-          <div className="max-h-[28rem] divide-y divide-border overflow-y-auto rounded-2xl border border-border">
+          <div className="max-h-[28rem] divide-y divide-border overflow-y-auto rounded-card bg-surface shadow-card">
             {filtrados.map((edital) => (
               <button
                 key={edital.id}
@@ -136,7 +136,7 @@ export function ResumoEdital({
 
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl border border-border bg-surface/50 p-5">
+      <div className="rounded-card bg-surface shadow-card p-5">
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-xs text-muted">{edital.modalidade ?? "Modalidade não informada"}</p>
@@ -147,7 +147,7 @@ export function ResumoEdital({
           </div>
           <button
             onClick={onTrocar}
-            className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-muted hover:text-danger"
+            className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-muted hover:text-danger-ink"
           >
             <X className="h-3.5 w-3.5" /> Trocar edital
           </button>
@@ -169,7 +169,7 @@ export function ResumoEdital({
       </div>
 
       {itens.length > 0 && (
-        <details className="rounded-2xl border border-border">
+        <details className="rounded-card bg-surface shadow-card">
           <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-foreground">
             Itens/lotes já identificados ({itens.length})
           </summary>

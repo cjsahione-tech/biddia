@@ -105,7 +105,7 @@ export function EtapaCustosProduto({
 
   return (
     <div className="space-y-5">
-      <div className="rounded-2xl border border-border bg-surface/50 p-4">
+      <div className="rounded-card bg-surface shadow-card p-4">
         <h4 className="text-sm font-semibold text-foreground">Aplicar a todos os itens</h4>
         <p className="mt-1 text-xs text-muted">
           Preenche o mesmo valor em todas as linhas — depois ajuste item por item se precisar.
@@ -132,7 +132,7 @@ export function EtapaCustosProduto({
         </div>
       </div>
 
-      <div className="max-h-[32rem] overflow-auto rounded-2xl border border-border">
+      <div className="max-h-[32rem] overflow-auto rounded-card bg-surface shadow-card">
         <table className="w-full text-sm">
           <thead className="bg-surface text-left text-xs font-medium uppercase tracking-wide text-muted">
             <tr>
@@ -170,7 +170,7 @@ export function EtapaCustosProduto({
         </table>
       </div>
 
-      {erro && <p className="text-xs text-danger">{erro}</p>}
+      {erro && <p className="text-xs text-danger-ink">{erro}</p>}
 
       <div className="flex justify-end gap-2">
         <Button variant="secondary" onClick={() => salvar(false)} loading={salvando === "rascunho"}>
@@ -195,7 +195,7 @@ function ResumoCustos({
 }) {
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3 rounded-xl bg-accent/10 px-4 py-2.5 text-sm text-accent">
+      <div className="flex items-center justify-between gap-3 rounded-xl bg-success-bg px-4 py-2.5 text-sm text-success-ink">
         <span className="inline-flex items-center gap-1.5 font-medium">
           <CheckCircle2 className="h-4 w-4" /> Custos confirmados
         </span>
@@ -204,7 +204,7 @@ function ResumoCustos({
         </button>
       </div>
 
-      <div className="rounded-2xl border border-border bg-surface/50 p-5">
+      <div className="rounded-card bg-surface shadow-card p-5">
         <p className="text-sm text-foreground">
           Custos informados para {loading ? "..." : qtdItens} item(ns)/lote(s).
         </p>

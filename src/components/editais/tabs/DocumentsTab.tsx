@@ -13,11 +13,11 @@ function labelDocumento(doc: DocumentItem) {
 function DocumentRow({ editalId, doc }: { editalId: string; doc: DocumentItem }) {
   const oficial = doc.tipo === "DOCUMENTO_PNCP" || doc.tipo === "DOCUMENTO_LICITANET";
   return (
-    <div className="flex items-center justify-between rounded-xl border border-border p-4">
+    <div className="flex items-center justify-between rounded-card bg-surface shadow-card p-4">
       <div className="flex items-center gap-3 min-w-0">
         <div
           className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${
-            oficial ? "bg-accent/10 text-accent" : "bg-brand-light text-brand"
+            oficial ? "bg-success-bg text-success-ink" : "bg-brand-light text-brand"
           }`}
         >
           {oficial ? <Landmark className="h-5 w-5" /> : <FileText className="h-5 w-5" />}

@@ -6,17 +6,17 @@ import { DICA_STATUS_HABILITACAO, etapaAudita, ROTULO_STATUS_HABILITACAO } from 
 const ESTILO: Record<HabilitacaoStatusTipo, string> = {
   AGUARDANDO: "bg-surface text-muted",
   AUDITANDO: "bg-brand-light text-brand",
-  HABILITADA: "bg-accent/10 text-accent",
-  HABILITADA_RESSALVAS: "bg-warning/10 text-warning",
-  NAO_HABILITADA: "bg-danger/10 text-danger",
+  HABILITADA: "bg-success-bg text-success-ink",
+  HABILITADA_RESSALVAS: "bg-warning-bg text-warning-ink",
+  NAO_HABILITADA: "bg-danger-bg text-danger-ink",
   ERRO: "bg-muted/10 text-muted",
   NA_FILA: "bg-surface text-muted",
-  AGUARDANDO_IA: "bg-warning/10 text-warning",
-  ARQUIVO_ILEGIVEL: "bg-danger/10 text-danger",
-  EDITAL_GRANDE: "bg-warning/10 text-warning",
-  TEMPO_ESGOTADO: "bg-warning/10 text-warning",
-  REVISAR_MANUALMENTE: "bg-warning/10 text-warning",
-  PRECISA_ACAO_HUMANA: "bg-danger/10 text-danger",
+  AGUARDANDO_IA: "bg-warning-bg text-warning-ink",
+  ARQUIVO_ILEGIVEL: "bg-danger-bg text-danger-ink",
+  EDITAL_GRANDE: "bg-warning-bg text-warning-ink",
+  TEMPO_ESGOTADO: "bg-warning-bg text-warning-ink",
+  REVISAR_MANUALMENTE: "bg-warning-bg text-warning-ink",
+  PRECISA_ACAO_HUMANA: "bg-danger-bg text-danger-ink",
 };
 
 const EM_ANDAMENTO = ["AUDITANDO", "AGUARDANDO_IA", "TEMPO_ESGOTADO", "EDITAL_GRANDE"];

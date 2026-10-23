@@ -189,7 +189,7 @@ export function EnvioEmLote({
             const existentes = item ? (jaTem.get(item.chave) ?? 0) : 0;
             const repetidoNoLote = item && (usadosNoLote.get(item.chave) ?? 0) > 1 && !itemAceitaVarios(item.chave);
             return (
-              <li key={l.id} className="rounded-xl border border-border bg-background p-3">
+              <li key={l.id} className="rounded-card bg-surface shadow-card p-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <p className="min-w-0 truncate text-sm font-medium text-foreground">
                     {l.arquivo.name} <span className="font-normal text-muted">· {tamanho(l.arquivo.size)}</span>
@@ -203,7 +203,7 @@ export function EnvioEmLote({
                     {!l.analisando && l.reconhecido && l.status !== "ok" && (
                       <span
                         className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-medium ${
-                          l.reconhecido === "alta" ? "bg-accent/10 text-accent" : "bg-warning/10 text-warning"
+                          l.reconhecido === "alta" ? "bg-success-bg text-success-ink" : "bg-warning-bg text-warning-ink"
                         }`}
                         title={l.reconhecido === "alta" ? "Reconhecido pelo conteúdo do arquivo." : "Reconhecido só pelo nome — confira."}
                       >
@@ -212,7 +212,7 @@ export function EnvioEmLote({
                     )}
                     {l.status === "enviando" && <Loader2 className="h-4 w-4 animate-spin text-brand" />}
                     {l.status === "ok" && (
-                      <span className="inline-flex items-center gap-1 font-medium text-accent">
+                      <span className="inline-flex items-center gap-1 font-medium text-success-ink">
                         <CheckCircle2 className="h-4 w-4" /> Enviado
                       </span>
                     )}
@@ -220,7 +220,7 @@ export function EnvioEmLote({
                       <button
                         type="button"
                         onClick={() => setLinhas((ls) => ls.filter((x) => x.id !== l.id))}
-                        className="text-muted hover:text-danger"
+                        className="text-muted hover:text-danger-ink"
                         aria-label={`Tirar ${l.arquivo.name} da lista`}
                       >
                         <X className="h-4 w-4" />
@@ -303,7 +303,7 @@ export function EnvioEmLote({
                     </div>
 
                     {l.avisoCnpj && (
-                      <p className="mt-2 flex items-start gap-1.5 text-xs text-warning">
+                      <p className="mt-2 flex items-start gap-1.5 text-xs text-warning-ink">
                         <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" /> {l.avisoCnpj}
                       </p>
                     )}
@@ -315,12 +315,12 @@ export function EnvioEmLote({
                       </p>
                     )}
                     {repetidoNoLote && (
-                      <p className="mt-2 flex items-start gap-1.5 text-xs text-warning">
+                      <p className="mt-2 flex items-start gap-1.5 text-xs text-warning-ink">
                         <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" /> Há mais de um arquivo para este mesmo item e ele
                         guarda só um: fica o último da lista.
                       </p>
                     )}
-                    {(msg || l.erro) && <p className="mt-2 text-xs text-danger">{l.erro ?? msg}</p>}
+                    {(msg || l.erro) && <p className="mt-2 text-xs text-danger-ink">{l.erro ?? msg}</p>}
                   </>
                 )}
               </li>

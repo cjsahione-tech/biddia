@@ -50,7 +50,7 @@ export function Filtros({
   const presetAtivo = presetAtivoLabel(filtros);
 
   return (
-    <div className="mt-6 flex flex-wrap items-end gap-x-6 gap-y-3 rounded-xl border border-border bg-surface/50 px-4 py-3.5">
+    <div className="mt-6 flex flex-wrap items-end gap-x-6 gap-y-3 rounded-card bg-surface shadow-card px-4 py-3.5">
       <div className="flex flex-col gap-1.5">
         <span className="text-xs font-medium text-muted">Período</span>
         <div className="flex flex-wrap items-center gap-1.5">
@@ -161,7 +161,7 @@ export function Filtros({
       {(filtros.de || filtros.ate || filtros.situacao !== "TODOS" || filtros.fonte || filtros.uf || filtros.tipoObjeto) && (
         <button
           onClick={() => onChange({ de: null, ate: null, situacao: "TODOS", fonte: null, uf: null, tipoObjeto: null })}
-          className="text-xs font-medium text-muted hover:text-danger"
+          className="text-xs font-medium text-muted hover:text-danger-ink"
         >
           Limpar filtros
         </button>

@@ -93,7 +93,7 @@ export function FinanceTab({ edital, onUpdate }: { edital: EditalDetail; onUpdat
   }
 
   const importarPlanilhaBox = (
-    <div className="rounded-2xl border border-border bg-surface/30 p-5">
+    <div className="rounded-card bg-surface shadow-card p-5">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h4 className="text-sm font-semibold text-foreground">Importar planilha própria</h4>
@@ -120,14 +120,14 @@ export function FinanceTab({ edital, onUpdate }: { edital: EditalDetail; onUpdat
         </div>
       </div>
 
-      {erroImportacao && <p className="mt-3 text-xs text-danger">{erroImportacao}</p>}
+      {erroImportacao && <p className="mt-3 text-xs text-danger-ink">{erroImportacao}</p>}
       {sucessoImportacao && (
-        <p className="mt-3 inline-flex items-center gap-1 text-xs text-accent">
+        <p className="mt-3 inline-flex items-center gap-1 text-xs text-success-ink">
           <Check className="h-3.5 w-3.5" /> {sucessoImportacao}
         </p>
       )}
       {avisosImportacao.length > 0 && (
-        <ul className="mt-2 space-y-0.5 text-xs text-warning">
+        <ul className="mt-2 space-y-0.5 text-xs text-warning-ink">
           {avisosImportacao.map((a, i) => (
             <li key={i}>⚠ {a}</li>
           ))}
@@ -278,7 +278,7 @@ export function FinanceTab({ edital, onUpdate }: { edital: EditalDetail; onUpdat
               <button
                 onClick={() => salvarEdicaoValor(indiceOriginal)}
                 disabled={salvandoIndice === indiceOriginal}
-                className="rounded p-1 text-accent hover:bg-accent/10"
+                className="rounded p-1 text-success-ink hover:bg-success-bg"
                 title="Salvar"
               >
                 <Check className="h-3.5 w-3.5" />
@@ -340,7 +340,7 @@ export function FinanceTab({ edital, onUpdate }: { edital: EditalDetail; onUpdat
     <div className="space-y-6">
       <FonteBadge baseadoEmTextoCompleto={proposal.baseadoEmTextoCompleto} />
 
-      <div className="flex items-center justify-between rounded-2xl border border-border bg-surface/50 p-5">
+      <div className="flex items-center justify-between rounded-card bg-surface shadow-card p-5">
         <div>
           <p className="text-xs text-muted">Valor de referência do edital (PNCP)</p>
           <p className="mt-1 text-xl font-semibold text-foreground">
@@ -380,12 +380,12 @@ export function FinanceTab({ edital, onUpdate }: { edital: EditalDetail; onUpdat
                 Salvar desconto
               </Button>
               {saved && (
-                <span className="inline-flex items-center gap-1 text-sm text-accent">
+                <span className="inline-flex items-center gap-1 text-sm text-success-ink">
                   <Check className="h-4 w-4" /> Salvo
                 </span>
               )}
             </div>
-            {error && <p className="mt-1 text-xs text-danger">{error}</p>}
+            {error && <p className="mt-1 text-xs text-danger-ink">{error}</p>}
           </div>
 
           <div className="text-right">
@@ -413,7 +413,7 @@ export function FinanceTab({ edital, onUpdate }: { edital: EditalDetail; onUpdat
             if (itensDoLote.length === 0) return null;
             const marcado = lotesSelecionados.includes(lote.numero);
             return (
-              <div key={lote.numero} className="overflow-hidden rounded-2xl border border-border">
+              <div key={lote.numero} className="overflow-hidden rounded-card bg-surface shadow-card">
                 <label className="flex cursor-pointer items-center justify-between gap-3 bg-surface px-4 py-3">
                   <span className="flex items-center gap-2.5">
                     <input
@@ -442,7 +442,7 @@ export function FinanceTab({ edital, onUpdate }: { edital: EditalDetail; onUpdat
             const semLote = itensComDesconto.filter(({ item }) => !item.lote);
             if (semLote.length === 0) return null;
             return (
-              <div className="overflow-hidden rounded-2xl border border-border">
+              <div className="overflow-hidden rounded-card bg-surface shadow-card">
                 <div className="bg-surface px-4 py-3 text-sm font-medium text-foreground">Sem lote</div>
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[640px] text-sm">
@@ -455,7 +455,7 @@ export function FinanceTab({ edital, onUpdate }: { edital: EditalDetail; onUpdat
           })()}
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-2xl border border-border">
+        <div className="overflow-x-auto rounded-card bg-surface shadow-card">
           <table className="w-full min-w-[640px] text-sm">
             {tabelaHeader}
             <tbody className="divide-y divide-border">{itensComDesconto.map(renderLinhaItem)}</tbody>
@@ -464,13 +464,13 @@ export function FinanceTab({ edital, onUpdate }: { edital: EditalDetail; onUpdat
       )}
 
       {proposal.observacoes && (
-        <div className="rounded-2xl border border-warning/30 bg-warning/5 p-5">
-          <h4 className="text-sm font-semibold text-warning">Observações do Agente Financeiro</h4>
+        <div className="rounded-2xl border border-warning-ink/30 bg-warning-bg p-5">
+          <h4 className="text-sm font-semibold text-warning-ink">Observações do Agente Financeiro</h4>
           <p className="mt-2 text-sm text-foreground/80">{proposal.observacoes}</p>
         </div>
       )}
 
-      <div className="rounded-2xl border border-border bg-surface/30 p-5">
+      <div className="rounded-card bg-surface shadow-card p-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <h4 className="text-sm font-semibold text-foreground">Anexo final de proposta comercial</h4>
@@ -483,7 +483,7 @@ export function FinanceTab({ edital, onUpdate }: { edital: EditalDetail; onUpdat
             {!gerandoAnexo && <Sparkles className="h-4 w-4" />} Gerar anexo de proposta comercial
           </Button>
         </div>
-        {erroAnexo && <p className="mt-3 text-xs text-danger">{erroAnexo}</p>}
+        {erroAnexo && <p className="mt-3 text-xs text-danger-ink">{erroAnexo}</p>}
         {documentosPropostaComercial.length > 0 && (
           <div className="mt-3 space-y-1.5">
             {documentosPropostaComercial.map((doc) => (

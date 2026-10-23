@@ -115,7 +115,7 @@ export function ParametrosTributariosClient() {
         Alíquotas usadas no Estudo de Viabilidade para calcular o preço mínimo viável. Nada fica fixo no sistema —
         atualize aqui sempre que a legislação mudar ou os valores não corresponderem à realidade da empresa.
       </p>
-      <p className="mt-2 rounded-lg bg-warning/10 px-3 py-2 text-xs text-warning">
+      <p className="mt-2 rounded-lg bg-warning-bg px-3 py-2 text-xs text-warning-ink">
         Valores de partida baseados na LC 123/2006 (Simples Nacional) e em presunções típicas — o ISS varia por
         município, o ICMS por estado, e o IRPJ/CSLL do Lucro Real depende da margem real. Confirme com o contador da
         empresa antes de usar em uma proposta real.
@@ -127,7 +127,7 @@ export function ParametrosTributariosClient() {
         return (
           <div key={anexo.key} className="mt-8">
             <h2 className="text-sm font-semibold text-foreground">{anexo.label}</h2>
-            <div className="mt-2 overflow-x-auto rounded-2xl border border-border">
+            <div className="mt-2 overflow-x-auto rounded-card bg-surface shadow-card">
               <table className="w-full text-sm">
                 <thead className="bg-surface text-left text-xs font-medium uppercase tracking-wide text-muted">
                   <tr>
@@ -177,7 +177,7 @@ export function ParametrosTributariosClient() {
         return (
           <div key={regime} className="mt-8">
             <h2 className="text-sm font-semibold text-foreground">{REGIME_LABEL[regime]}</h2>
-            <div className="mt-2 overflow-x-auto rounded-2xl border border-border">
+            <div className="mt-2 overflow-x-auto rounded-card bg-surface shadow-card">
               <table className="w-full text-sm">
                 <thead className="bg-surface text-left text-xs font-medium uppercase tracking-wide text-muted">
                   <tr>
@@ -262,14 +262,14 @@ export function ParametrosTributariosClient() {
         );
       })}
 
-      {error && <p className="mt-4 text-sm text-danger">{error}</p>}
+      {error && <p className="mt-4 text-sm text-danger-ink">{error}</p>}
 
       <div className="mt-6 flex items-center gap-3">
         <Button onClick={salvar} loading={saving}>
           Salvar alterações
         </Button>
         {saved && (
-          <span className="inline-flex items-center gap-1.5 text-sm text-accent">
+          <span className="inline-flex items-center gap-1.5 text-sm text-success-ink">
             <Check className="h-4 w-4" /> Salvo
           </span>
         )}

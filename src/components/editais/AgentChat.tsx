@@ -95,7 +95,7 @@ export function AgentChat({
   }
 
   return (
-    <div className="rounded-2xl border border-border bg-surface/30">
+    <div className="rounded-card bg-surface shadow-card">
       <div className="border-b border-border px-4 py-3">
         <h4 className="text-sm font-semibold text-foreground">Converse com o {agentLabel}</h4>
         <p className="mt-0.5 text-xs text-muted">
@@ -157,13 +157,13 @@ export function AgentChat({
       </div>
 
       <div className="border-t border-border p-3">
-        {erro && <p className="mb-2 text-xs text-danger">{erro}</p>}
+        {erro && <p className="mb-2 text-xs text-danger-ink">{erro}</p>}
         {arquivo && (
           <div className="mb-2 flex items-center justify-between rounded-lg bg-surface px-2.5 py-1.5 text-xs text-foreground">
             <span className="inline-flex min-w-0 items-center gap-1 truncate">
               <Paperclip className="h-3 w-3 shrink-0" /> {arquivo.name}
             </span>
-            <button onClick={() => setArquivo(null)} className="shrink-0 text-muted hover:text-danger">
+            <button onClick={() => setArquivo(null)} className="shrink-0 text-muted hover:text-danger-ink">
               Remover
             </button>
           </div>

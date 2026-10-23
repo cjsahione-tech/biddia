@@ -15,10 +15,10 @@ const STATUS_CONFIG: Record<
   ChecklistItem["status"],
   { label: string; icon: typeof CheckCircle2; className: string }
 > = {
-  OK: { label: "OK", icon: CheckCircle2, className: "text-accent bg-accent/10" },
+  OK: { label: "OK", icon: CheckCircle2, className: "text-success-ink bg-success-bg" },
   ENVIADO: { label: "Enviado", icon: Clock, className: "text-brand bg-brand-light" },
-  VENCIDO: { label: "Vencido", icon: XCircle, className: "text-danger bg-danger/10" },
-  FALTANTE: { label: "Faltante", icon: AlertTriangle, className: "text-warning bg-warning/10" },
+  VENCIDO: { label: "Vencido", icon: XCircle, className: "text-danger-ink bg-danger-bg" },
+  FALTANTE: { label: "Faltante", icon: AlertTriangle, className: "text-warning-ink bg-warning-bg" },
 };
 
 type PatchChecklistItem = Partial<{
@@ -170,7 +170,7 @@ function ChecklistRow({
               </a>
               <button
                 onClick={() => updateItem({ removerAnexo: true })}
-                className="shrink-0 text-muted hover:text-danger"
+                className="shrink-0 text-muted hover:text-danger-ink"
                 title="Remover anexo"
               >
                 <X className="h-3.5 w-3.5" />
@@ -189,7 +189,7 @@ function ChecklistRow({
           <input ref={fileInputRef} type="file" className="hidden" onChange={handleFile} />
         </div>
       </div>
-      {erro && <p className="mt-1 text-xs text-danger">{erro}</p>}
+      {erro && <p className="mt-1 text-xs text-danger-ink">{erro}</p>}
     </div>
   );
 }
@@ -249,7 +249,7 @@ export function ChecklistTab({
       {grupos.map((grupo) => (
         <div key={grupo.label}>
           <h4 className="text-sm font-semibold text-foreground">{grupo.label}</h4>
-          <div className="mt-2 rounded-2xl border border-border px-4">
+          <div className="mt-2 rounded-card bg-surface shadow-card px-4">
             {grupo.itens.map((item) => (
               <ChecklistRow key={item.id} editalId={editalId} item={item} onUpdate={onUpdate} />
             ))}

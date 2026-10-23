@@ -218,7 +218,7 @@ export default async function LandingPage() {
 
             <div className="mt-12 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
               {planos.map((plano) => (
-                <div key={plano.id} className="flex flex-col rounded-xl border border-border bg-background p-6">
+                <div key={plano.id} className="flex flex-col rounded-card bg-surface shadow-card p-6">
                   <p className="text-sm font-semibold text-foreground">{plano.nome}</p>
                   <p className="mt-2 text-3xl font-semibold text-foreground">
                     {formatBRL(plano.precoMensal)}

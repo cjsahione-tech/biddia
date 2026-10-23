@@ -4,9 +4,9 @@ import { AgentChat } from "@/components/editais/AgentChat";
 import type { AuditLogItem } from "@/lib/types";
 
 const SEVERITY_CONFIG = {
-  OK: { icon: CheckCircle2, className: "text-accent" },
-  ALERTA: { icon: AlertTriangle, className: "text-warning" },
-  ERRO: { icon: XCircle, className: "text-danger" },
+  OK: { icon: CheckCircle2, className: "text-success-ink" },
+  ALERTA: { icon: AlertTriangle, className: "text-warning-ink" },
+  ERRO: { icon: XCircle, className: "text-danger-ink" },
 };
 
 export function AuditTab({
@@ -34,7 +34,7 @@ export function AuditTab({
       {logs.map((log) => {
         const cfg = SEVERITY_CONFIG[log.severidade];
         return (
-          <div key={log.id} className="rounded-xl border border-border p-4">
+          <div key={log.id} className="rounded-card bg-surface shadow-card p-4">
             <div className="flex items-start gap-3">
               <cfg.icon className={`mt-0.5 h-4 w-4 shrink-0 ${cfg.className}`} />
               <div className="min-w-0 flex-1">

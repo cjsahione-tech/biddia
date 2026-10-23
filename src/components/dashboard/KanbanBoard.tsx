@@ -343,7 +343,7 @@ export function KanbanBoard({
               </>
             ) : (
               <>
-                <span className="inline-flex items-center gap-1.5 text-sm font-medium text-danger">
+                <span className="inline-flex items-center gap-1.5 text-sm font-medium text-danger-ink">
                   <AlertTriangle className="h-4 w-4" /> Mover {selecionados.size} card(s) pra Rascunho?
                 </span>
                 <Button variant="secondary" onClick={() => setConfirmandoExclusaoLote(false)}>
@@ -395,7 +395,7 @@ export function KanbanBoard({
                           <div className="mt-1.5 flex items-center justify-between px-0.5 first:mt-0">
                             <h4
                               className={`text-[10px] font-semibold uppercase tracking-wide ${
-                                chave === "HABILITADAS" ? "text-accent" : chave === "NAO_HABILITADAS" ? "text-danger" : "text-muted"
+                                chave === "HABILITADAS" ? "text-success-ink" : chave === "NAO_HABILITADAS" ? "text-danger-ink" : "text-muted"
                               }`}
                             >
                               {titulo}

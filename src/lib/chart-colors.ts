@@ -1,6 +1,7 @@
-// Paleta usada nos gráficos do Dashboard de Resultados — os hex espelham exatamente as
-// classes Tailwind da paleta de cor dos cards do Kanban (ver CORES_CARD em
-// src/lib/kanban.ts), pra a mesma cor significar a mesma coisa nas duas telas.
+// Paleta usada nos gráficos do Dashboard de Resultados.
+// PALETA_CATEGORIAS: cores de CATEGORIA (as mesmas cores de etiqueta que o usuário escolhe nos cards do Kanban — ver
+// CORES_CARD em src/lib/kanban.ts). É a única exceção de hex solto da identidade: dado do usuário, não cor do sistema.
+// As demais cores (marca, ganho, perda, andamento) vêm das variáveis da identidade e mudam junto com o tema.
 export const PALETA_CATEGORIAS = [
   "#3b82f6", // blue-500
   "#10b981", // emerald-500
@@ -12,8 +13,8 @@ export const PALETA_CATEGORIAS = [
   "#94a3b8", // slate-400
 ];
 
-export const COR_BRAND = "#4338ca";
-export const COR_ACCENT = "#0d9488";
-export const COR_GANHO = "#10b981"; // emerald-500
-export const COR_PERDA = "#dc2626"; // --danger
-export const COR_ANDAMENTO = "#d97706"; // --warning
+export const COR_BRAND = "var(--brand-600)";
+export const COR_ACCENT = "var(--success-ink)";
+export const COR_GANHO = "var(--success-ink)";
+export const COR_PERDA = "var(--danger-ink)";
+export const COR_ANDAMENTO = "var(--warning-ink)";

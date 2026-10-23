@@ -332,7 +332,7 @@ export function KanbanCardModal({
                   </Button>
                   <input ref={fileInputRef} type="file" className="hidden" onChange={handleUpload} />
                 </div>
-                {uploadError && <p className="mt-1.5 text-xs text-danger">{uploadError}</p>}
+                {uploadError && <p className="mt-1.5 text-xs text-danger-ink">{uploadError}</p>}
                 <div className="mt-2 space-y-1.5">
                   {edital.documents.length === 0 && <p className="text-xs text-muted">Nenhum anexo ainda.</p>}
                   {edital.documents.map((doc) => (
@@ -352,7 +352,7 @@ export function KanbanCardModal({
                       {doc.tipo === "DOCUMENTO_USUARIO" && (
                         <button
                           onClick={() => handleRemoverAnexo(doc.id)}
-                          className="shrink-0 text-muted hover:text-danger"
+                          className="shrink-0 text-muted hover:text-danger-ink"
                           title="Remover anexo"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
@@ -375,14 +375,14 @@ export function KanbanCardModal({
               {!confirmandoExclusao ? (
                 <button
                   onClick={() => setConfirmandoExclusao(true)}
-                  className="inline-flex shrink-0 items-center gap-1.5 text-xs font-medium text-muted hover:text-danger"
+                  className="inline-flex shrink-0 items-center gap-1.5 text-xs font-medium text-muted hover:text-danger-ink"
                 >
                   <Trash2 className="h-3.5 w-3.5" /> Excluir card
                 </button>
               ) : (
                 <div className="flex shrink-0 items-center gap-2 text-xs">
                   <span
-                    className="inline-flex items-center gap-1 text-danger"
+                    className="inline-flex items-center gap-1 text-danger-ink"
                     title="Move o card pra Rascunho — a análise, a proposta e os documentos continuam salvos, e dá pra recuperar arrastando o card de volta."
                   >
                     <AlertTriangle className="h-3.5 w-3.5" /> Mover pra Rascunho?

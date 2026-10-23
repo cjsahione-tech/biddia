@@ -39,13 +39,13 @@ type SituacaoDoc = "ENVIADO" | "VENCIDO" | "VENCE_EM_BREVE" | "NAO_ENVIADO";
 
 function situacao(doc: CompanyDocumentItem | undefined): { tipo: SituacaoDoc; label: string; className: string; detalhe: string } {
   if (!doc) return { tipo: "NAO_ENVIADO", label: "Não enviado", className: "text-muted bg-muted/10", detalhe: "" };
-  if (!doc.validade) return { tipo: "ENVIADO", label: "Enviado", className: "text-accent bg-accent/10", detalhe: "Não vence" };
+  if (!doc.validade) return { tipo: "ENVIADO", label: "Enviado", className: "text-success-ink bg-success-bg", detalhe: "Não vence" };
   const dias = Math.ceil((new Date(doc.validade).getTime() - Date.now()) / 86_400_000);
   const dataBr = new Date(doc.validade).toLocaleDateString("pt-BR", { timeZone: "UTC" });
-  if (dias < 0) return { tipo: "VENCIDO", label: "Vencido", className: "text-danger bg-danger/10", detalhe: `venceu em ${dataBr}` };
+  if (dias < 0) return { tipo: "VENCIDO", label: "Vencido", className: "text-danger-ink bg-danger-bg", detalhe: `venceu em ${dataBr}` };
   if (dias <= 7)
-    return { tipo: "VENCE_EM_BREVE", label: "Enviado", className: "text-warning bg-warning/10", detalhe: `vence em ${dias} dia(s) — ${dataBr}` };
-  return { tipo: "ENVIADO", label: "Enviado", className: "text-accent bg-accent/10", detalhe: `válido até ${dataBr}` };
+    return { tipo: "VENCE_EM_BREVE", label: "Enviado", className: "text-warning-ink bg-warning-bg", detalhe: `vence em ${dias} dia(s) — ${dataBr}` };
+  return { tipo: "ENVIADO", label: "Enviado", className: "text-success-ink bg-success-bg", detalhe: `válido até ${dataBr}` };
 }
 
 function ChipAplicacao({ aplicacao }: { aplicacao: Aplicacao }) {
@@ -151,7 +151,7 @@ function MoverDocumento({
           </select>
         </label>
       </div>
-      {erro && <p className="mt-2 text-xs text-danger">{erro}</p>}
+      {erro && <p className="mt-2 text-xs text-danger-ink">{erro}</p>}
       <div className="mt-3 flex justify-end gap-2">
         <Button variant="secondary" onClick={onCancelar}>
           Cancelar
@@ -307,7 +307,7 @@ export function DocumentosClient() {
         <button
           onClick={() => remover(doc)}
           disabled={removendoId === doc.id}
-          className="rounded-md p-1.5 text-muted hover:bg-surface hover:text-danger disabled:opacity-50"
+          className="rounded-md p-1.5 text-muted hover:bg-surface hover:text-danger-ink disabled:opacity-50"
           title="Remover"
         >
           {removendoId === doc.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
@@ -554,7 +554,7 @@ export function DocumentosClient() {
         />
       )}
 
-      {erroCarga && <p className="mt-4 text-sm text-danger">{erroCarga}</p>}
+      {erroCarga && <p className="mt-4 text-sm text-danger-ink">{erroCarga}</p>}
 
       {loading ? (
         <div className="flex items-center justify-center py-24 text-muted">
@@ -569,7 +569,7 @@ export function DocumentosClient() {
             const extras = personalizadosPorPasta.get(cat.id)?.length ?? 0;
             const aberta = abertas.has(cat.id);
             return (
-              <section key={cat.id} className="rounded-2xl border border-border">
+              <section key={cat.id} className="rounded-card bg-surface shadow-card">
                 <button
                   onClick={() => alternar(cat.id)}
                   aria-expanded={aberta}
@@ -610,7 +610,7 @@ export function DocumentosClient() {
             );
           })}
 
-          <section className="rounded-2xl border border-border">
+          <section className="rounded-card bg-surface shadow-card">
             <button
               onClick={() => alternar("outros")}
               aria-expanded={abertas.has("outros")}

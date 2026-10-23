@@ -15,10 +15,10 @@ import type { ItemRelatorio, RelatorioHabilitacao } from "@/lib/habilitacao-rela
 const AVISO_IA = "Gerado por IA. Confirme com o analista responsável antes de enviar a proposta.";
 
 const ESTILO_SITUACAO: Record<string, string> = {
-  NAO_ENVIADA: "bg-danger/10 text-danger",
-  VENCIDA: "bg-danger/10 text-danger",
-  VERIFICAR: "bg-warning/10 text-warning",
-  ATENDIDA: "bg-accent/10 text-accent",
+  NAO_ENVIADA: "bg-danger-bg text-danger-ink",
+  VENCIDA: "bg-danger-bg text-danger-ink",
+  VERIFICAR: "bg-warning-bg text-warning-ink",
+  ATENDIDA: "bg-success-bg text-success-ink",
   NAO_SE_APLICA: "bg-surface text-muted",
 };
 
@@ -27,11 +27,11 @@ const dataHoraBr = (iso: string | null) =>
 const dataBr = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" }) : "—");
 
 const ESTILO_SELO_DOCUMENTO: Record<string, string> = {
-  LIDO: "bg-accent/10 text-accent",
-  PARCIAL: "bg-warning/10 text-warning",
+  LIDO: "bg-success-bg text-success-ink",
+  PARCIAL: "bg-warning-bg text-warning-ink",
   LENDO: "bg-brand-light text-brand",
-  AGUARDANDO: "bg-warning/10 text-warning",
-  NAO_LIDO: "bg-danger/10 text-danger",
+  AGUARDANDO: "bg-warning-bg text-warning-ink",
+  NAO_LIDO: "bg-danger-bg text-danger-ink",
 };
 
 type AuditoriaRelatorio = NonNullable<RelatorioHabilitacao["auditoria"]>;
@@ -43,7 +43,7 @@ function DocumentosAnalisados({ auditoria, concluida }: { auditoria: AuditoriaRe
   // Sem resultado ainda e nada com problema: o andamento já é mostrado em outro aviso.
   if (!concluida && !comProblema) return null;
   return (
-    <details open={comProblema} className="rounded-xl border border-border bg-background text-sm">
+    <details open={comProblema} className="rounded-card bg-surface shadow-card text-sm">
       <summary className="cursor-pointer select-none px-4 py-3 font-medium text-foreground">
         Documentos analisados <span className="font-normal text-muted">— {auditoria.resumoLeitura.texto}</span>
       </summary>
@@ -136,8 +136,8 @@ function CartaoAcaoHumana({
   }
 
   return (
-    <div className="rounded-xl border border-warning/40 bg-warning/10 p-4 text-sm">
-      <div className="flex items-start gap-3 text-warning">
+    <div className="rounded-xl border border-warning-ink/40 bg-warning-bg p-4 text-sm">
+      <div className="flex items-start gap-3 text-warning-ink">
         <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
         <div className="min-w-0 flex-1">
           <p className="font-medium">Precisa da sua ajuda para continuar</p>
@@ -195,7 +195,7 @@ function CartaoAcaoHumana({
           </button>
         )}
       </div>
-      {erro && <p className="mt-2 pl-7 text-xs text-danger">{erro}</p>}
+      {erro && <p className="mt-2 pl-7 text-xs text-danger-ink">{erro}</p>}
     </div>
   );
 }
@@ -209,13 +209,13 @@ function CartaoPendencia({ item, onAnexado }: { item: ItemRelatorio; onAnexado: 
   const mostrarEnviado = !!enviado || enviadoAgora;
   const vencido = item.situacao === "VENCIDA";
   return (
-    <div className="rounded-xl border border-border bg-background p-4">
+    <div className="rounded-card bg-surface shadow-card p-4">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <p className="min-w-0 flex-1 text-sm font-medium text-foreground">{item.documento}</p>
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
           {mostrarEnviado && (
             <span
-              className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${vencido ? "bg-warning/10 text-warning" : "bg-accent/10 text-accent"}`}
+              className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${vencido ? "bg-warning-bg text-warning-ink" : "bg-success-bg text-success-ink"}`}
               title="Este documento já está na base de documentos da empresa"
             >
               <Check className="h-3 w-3" /> {vencido ? "Enviado (vencido)" : "Enviado"}
@@ -378,7 +378,7 @@ export function HabilitacaoTab({ editalId, etapa, onMudou }: { editalId: string;
       </div>
     );
   }
-  if (erro || !relatorio) return <p className="text-sm text-danger">{erro ?? "Relatório indisponível."}</p>;
+  if (erro || !relatorio) return <p className="text-sm text-danger-ink">{erro ?? "Relatório indisponível."}</p>;
 
   const { resumo } = relatorio;
   const concluida = auditoria?.estado === "CONCLUIDA";
@@ -391,7 +391,7 @@ export function HabilitacaoTab({ editalId, etapa, onMudou }: { editalId: string;
 
   return (
     <div className="space-y-6">
-      <div className="rounded-2xl border border-border bg-surface/40 p-5">
+      <div className="rounded-card bg-surface shadow-card p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h3 className="text-sm font-semibold text-foreground">Habilitação da empresa neste edital</h3>
@@ -419,7 +419,7 @@ export function HabilitacaoTab({ editalId, etapa, onMudou }: { editalId: string;
         {concluida && relatorio.percentual != null && status !== "REVISAR_MANUALMENTE" && (
           <div className="mt-4 h-2 overflow-hidden rounded-full bg-border/60" aria-hidden>
             <div
-              className={`h-full rounded-full ${status === "HABILITADA" ? "bg-accent" : status === "HABILITADA_RESSALVAS" ? "bg-warning" : "bg-danger"}`}
+              className={`h-full rounded-full ${status === "HABILITADA" ? "bg-success-ink" : status === "HABILITADA_RESSALVAS" ? "bg-warning-ink" : "bg-danger-ink"}`}
               style={{ width: `${Math.min(100, relatorio.percentual)}%` }}
             />
           </div>
@@ -435,7 +435,7 @@ export function HabilitacaoTab({ editalId, etapa, onMudou }: { editalId: string;
       </div>
 
       {emAndamento && !concluida && (
-        <div className="flex items-start gap-3 rounded-xl border border-border bg-background p-4 text-sm text-muted">
+        <div className="flex items-start gap-3 rounded-card bg-surface shadow-card p-4 text-sm text-muted">
           <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin" />
           <p>
             {status === "AUDITANDO"
@@ -449,7 +449,7 @@ export function HabilitacaoTab({ editalId, etapa, onMudou }: { editalId: string;
       )}
 
       {semResultadoAinda && !concluida && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-background p-4 text-sm text-muted">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-card bg-surface shadow-card p-4 text-sm text-muted">
           <p className="flex min-w-0 flex-1 items-start gap-3">
             <Clock className="mt-0.5 h-4 w-4 shrink-0" />
             <span>
@@ -468,10 +468,10 @@ export function HabilitacaoTab({ editalId, etapa, onMudou }: { editalId: string;
         </div>
       )}
 
-      {erroPedido && <p className="text-sm text-danger">{erroPedido}</p>}
+      {erroPedido && <p className="text-sm text-danger-ink">{erroPedido}</p>}
 
       {auditoria?.avisoAdmin && !concluida && (
-        <div className="flex items-start gap-3 rounded-xl border border-warning/30 bg-warning/5 p-4 text-sm text-warning">
+        <div className="flex items-start gap-3 rounded-xl border border-warning-ink/30 bg-warning-bg p-4 text-sm text-warning-ink">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
           <p>
             <span className="font-medium">Aviso para o administrador:</span> {auditoria.avisoAdmin}
@@ -494,7 +494,7 @@ export function HabilitacaoTab({ editalId, etapa, onMudou }: { editalId: string;
       )}
 
       {concluida && auditoria && auditoria.paginasForaDoLimite > 0 && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-background p-4 text-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-card bg-surface shadow-card p-4 text-sm">
           <p className="min-w-0 flex-1 text-muted">
             <span className="font-medium text-foreground">{auditoria.paginasForaDoLimite} página(s) escaneada(s) ficaram sem leitura</span> pelo limite de {TETO_PAGINAS_POR_EDITAL} páginas por imagem por edital. Se a conferência manual
             não for suficiente, você pode liberar a leitura completa.
@@ -515,13 +515,13 @@ export function HabilitacaoTab({ editalId, etapa, onMudou }: { editalId: string;
       )}
 
       {comErro && (
-        <div className="flex items-start gap-3 rounded-xl border border-danger/30 bg-danger/5 p-4 text-sm text-danger">
+        <div className="flex items-start gap-3 rounded-xl border border-danger-ink/30 bg-danger-bg p-4 text-sm text-danger-ink">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
           <p className="min-w-0 flex-1">{auditoria?.mensagem ?? "Não foi possível concluir a auditoria deste edital."}</p>
           <button
             onClick={() => pedirAuditoria()}
             disabled={pedindo}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-danger/30 bg-background px-3 py-1.5 text-xs font-medium text-danger hover:bg-danger/10 disabled:opacity-60"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-danger-ink/30 bg-background px-3 py-1.5 text-xs font-medium text-danger-ink hover:bg-danger-bg disabled:opacity-60"
           >
             {pedindo ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />} Tentar novamente
           </button>
@@ -529,7 +529,7 @@ export function HabilitacaoTab({ editalId, etapa, onMudou }: { editalId: string;
       )}
 
       {concluida && auditoria && auditoria.motivosRevisao.length > 0 && (
-        <div className="flex items-start gap-3 rounded-xl border border-warning/40 bg-warning/10 p-4 text-sm text-warning">
+        <div className="flex items-start gap-3 rounded-xl border border-warning-ink/40 bg-warning-bg p-4 text-sm text-warning-ink">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
           <div className="min-w-0">
             <p className="font-medium">Revisar manualmente: o sistema não afirma que esta empresa está habilitada.</p>
@@ -544,7 +544,7 @@ export function HabilitacaoTab({ editalId, etapa, onMudou }: { editalId: string;
       )}
 
       {concluida && auditoria && !auditoria.leituraCompleta && auditoria.arquivosComProblema.some((a) => a.principal) && (
-        <div className="flex items-start gap-3 rounded-xl border border-warning/30 bg-warning/5 p-4 text-sm text-warning">
+        <div className="flex items-start gap-3 rounded-xl border border-warning-ink/30 bg-warning-bg p-4 text-sm text-warning-ink">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
           <div className="min-w-0">
             <p>Nem todos os documentos principais do processo (edital, termo de referência, preços) puderam ser lidos por inteiro, então este resultado não é definitivo. Veja abaixo quais ficaram sem leitura e confira-os manualmente: pode haver mais exigências neles.</p>
@@ -555,14 +555,14 @@ export function HabilitacaoTab({ editalId, etapa, onMudou }: { editalId: string;
       {concluida && auditoria && <DocumentosAnalisados auditoria={auditoria} concluida />}
 
       {concluida && resumo.pendentes === 0 && (!auditoria || (auditoria.leituraCompleta && auditoria.motivosRevisao.length === 0)) && (
-        <div className="flex items-start gap-3 rounded-xl border border-accent/30 bg-accent/5 p-4 text-sm text-accent">
+        <div className="flex items-start gap-3 rounded-xl border border-success-ink/30 bg-success-bg p-4 text-sm text-success-ink">
           <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
           <p>Sem pendências: todos os documentos exigidos estão enviados e válidos na data da sessão.</p>
         </div>
       )}
 
       {avisoAnexo && (
-        <div className="flex items-start gap-3 rounded-xl border border-accent/30 bg-accent/5 p-4 text-sm text-accent">
+        <div className="flex items-start gap-3 rounded-xl border border-success-ink/30 bg-success-bg p-4 text-sm text-success-ink">
           <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
           <p>{avisoAnexo}</p>
         </div>
@@ -583,7 +583,7 @@ export function HabilitacaoTab({ editalId, etapa, onMudou }: { editalId: string;
         ))}
 
       {concluida && relatorio.atendidas.length > 0 && (
-        <details className="rounded-xl border border-border">
+        <details className="rounded-card bg-surface shadow-card">
           <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-foreground">Documentos já atendidos ({relatorio.atendidas.length})</summary>
           <ul className="space-y-2 border-t border-border px-4 py-3 text-sm">
             {relatorio.atendidas.map((i) => (
@@ -591,7 +591,7 @@ export function HabilitacaoTab({ editalId, etapa, onMudou }: { editalId: string;
                 <span className="min-w-0 flex-1 text-foreground">
                   {i.documento}
                   {i.documentoEnviado && (
-                    <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-accent/10 px-2 py-0.5 text-[10px] font-medium text-accent" title={i.documentoEnviado.nome}>
+                    <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-success-bg px-2 py-0.5 text-[10px] font-medium text-success-ink" title={i.documentoEnviado.nome}>
                       <Check className="h-2.5 w-2.5" /> Enviado
                     </span>
                   )}
@@ -606,7 +606,7 @@ export function HabilitacaoTab({ editalId, etapa, onMudou }: { editalId: string;
       )}
 
       {concluida && relatorio.naoSeAplicam.length > 0 && (
-        <details className="rounded-xl border border-border">
+        <details className="rounded-card bg-surface shadow-card">
           <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-foreground">Exigências que não se aplicam a esta empresa ({relatorio.naoSeAplicam.length})</summary>
           <ul className="space-y-2 border-t border-border px-4 py-3 text-sm">
             {relatorio.naoSeAplicam.map((i) => (

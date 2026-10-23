@@ -12,15 +12,15 @@ import type { RequisitosEstudo, EstudoViabilidadeDetail } from "@/lib/types";
 type Decisao = "PARTICIPAR" | "PARTICIPAR_COM_RESSALVAS" | "NAO_PARTICIPAR";
 
 const INDICADOR_CONFIG: Record<IndicadorViabilidade, { label: string; icon: typeof CheckCircle2; className: string }> = {
-  VIAVEL: { label: "Viável", icon: CheckCircle2, className: "text-accent bg-accent/10" },
-  MARGINAL: { label: "Marginal", icon: AlertTriangle, className: "text-warning bg-warning/10" },
-  INVIAVEL: { label: "Inviável", icon: XCircle, className: "text-danger bg-danger/10" },
+  VIAVEL: { label: "Viável", icon: CheckCircle2, className: "text-success-ink bg-success-bg" },
+  MARGINAL: { label: "Marginal", icon: AlertTriangle, className: "text-warning-ink bg-warning-bg" },
+  INVIAVEL: { label: "Inviável", icon: XCircle, className: "text-danger-ink bg-danger-bg" },
 };
 
 const DECISAO_CONFIG: Record<Decisao, { label: string; className: string }> = {
-  PARTICIPAR: { label: "Participar", className: "text-accent" },
-  PARTICIPAR_COM_RESSALVAS: { label: "Participar com ressalvas", className: "text-warning" },
-  NAO_PARTICIPAR: { label: "Não participar", className: "text-danger" },
+  PARTICIPAR: { label: "Participar", className: "text-success-ink" },
+  PARTICIPAR_COM_RESSALVAS: { label: "Participar com ressalvas", className: "text-warning-ink" },
+  NAO_PARTICIPAR: { label: "Não participar", className: "text-danger-ink" },
 };
 
 type RelatorioData = {
@@ -69,7 +69,7 @@ export function EtapaRelatorio({ estudo }: { estudo: EstudoViabilidadeDetail }) 
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between gap-3 rounded-xl bg-accent/10 px-4 py-2.5 text-sm text-accent">
+      <div className="flex items-center justify-between gap-3 rounded-xl bg-success-bg px-4 py-2.5 text-sm text-success-ink">
         <span className="inline-flex items-center gap-1.5 font-medium">
           <CheckCircle2 className="h-4 w-4" /> Estudo de viabilidade concluído
         </span>
@@ -84,7 +84,7 @@ export function EtapaRelatorio({ estudo }: { estudo: EstudoViabilidadeDetail }) 
       </div>
 
       {decisaoCfg && indicadorCfg && (
-        <div className="rounded-2xl border border-border bg-surface/50 p-5">
+        <div className="rounded-card bg-surface shadow-card p-5">
           <div className="flex items-center justify-between gap-3">
             <h4 className="text-sm font-semibold text-foreground">Resumo executivo</h4>
             <span
@@ -147,7 +147,7 @@ export function EtapaRelatorio({ estudo }: { estudo: EstudoViabilidadeDetail }) 
       )}
 
       {requisitos && (
-        <div className="rounded-2xl border border-border bg-surface/50 p-5">
+        <div className="rounded-card bg-surface shadow-card p-5">
           <h4 className="text-sm font-semibold text-foreground">Objeto e requisitos</h4>
           <p className="mt-2 text-sm text-foreground/80">{requisitos.objeto}</p>
         </div>

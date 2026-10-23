@@ -119,7 +119,7 @@ export function AdminSiteClient() {
         Edita o texto e a imagem do topo do site público — aparece assim que você salvar, sem precisar de deploy.
       </p>
 
-      <div className="mt-6 space-y-5 rounded-xl border border-border bg-surface/50 p-5">
+      <div className="mt-6 space-y-5 rounded-card bg-surface shadow-card p-5">
         <p className="text-xs font-semibold uppercase tracking-wide text-muted">Topo (hero)</p>
         <Field label="Título" htmlFor="heroTitulo">
           <TextInput id="heroTitulo" value={form.heroTitulo} onChange={(e) => setForm((f) => ({ ...f, heroTitulo: e.target.value }))} />
@@ -153,7 +153,7 @@ export function AdminSiteClient() {
         </div>
       </div>
 
-      <div className="mt-5 space-y-5 rounded-xl border border-border bg-surface/50 p-5">
+      <div className="mt-5 space-y-5 rounded-card bg-surface shadow-card p-5">
         <p className="text-xs font-semibold uppercase tracking-wide text-muted">Seção &ldquo;6 agentes&rdquo;</p>
         <Field label="Título" htmlFor="agentesSecaoTitulo">
           <TextInput
@@ -172,7 +172,7 @@ export function AdminSiteClient() {
         </Field>
       </div>
 
-      <div className="mt-5 space-y-5 rounded-xl border border-border bg-surface/50 p-5">
+      <div className="mt-5 space-y-5 rounded-card bg-surface shadow-card p-5">
         <p className="text-xs font-semibold uppercase tracking-wide text-muted">Seção &ldquo;Estudo de Viabilidade&rdquo;</p>
         <Field label="Título" htmlFor="estudoSecaoTitulo">
           <TextInput
@@ -191,7 +191,7 @@ export function AdminSiteClient() {
         </Field>
       </div>
 
-      {erro && <p className="mt-4 text-sm text-danger">{erro}</p>}
+      {erro && <p className="mt-4 text-sm text-danger-ink">{erro}</p>}
       {salvo && <p className="mt-4 text-sm text-emerald-600">Salvo — já está no ar.</p>}
 
       <div className="mt-5">
