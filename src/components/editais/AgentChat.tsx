@@ -138,7 +138,7 @@ export function AgentChat({
                   <Paperclip className="h-3 w-3" /> {m.anexoNome}
                 </a>
               )}
-              <p className={`mt-1 text-[10px] ${m.role === "user" ? "text-white/60" : "text-muted"}`}>
+              <p className={`mt-1 text-[11px] ${m.role === "user" ? "text-white/60" : "text-muted"}`}>
                 {formatDateTime(m.createdAt)}
               </p>
             </div>

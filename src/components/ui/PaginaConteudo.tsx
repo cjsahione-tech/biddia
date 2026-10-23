@@ -38,7 +38,7 @@ export function PaginaConteudo({
             <Link href="/notificacoes" aria-label="Notificações" className="relative flex h-11 w-11 items-center justify-center rounded-full bg-surface text-ink-muted shadow-card">
               <Bell className="h-5 w-5" />
               {totalNotificacoes > 0 && (
-                <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-danger-ink px-1 text-[10px] font-bold text-on-brand">
+                <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-danger-ink px-1 text-[11px] font-bold text-on-brand">
                   {totalNotificacoes > 99 ? "99+" : totalNotificacoes}
                 </span>
               )}

@@ -48,7 +48,7 @@ export function AdminAuditoriasClient() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6 px-4 py-6 sm:px-6 lg:px-8">
+    <div className="mx-auto w-full max-w-[var(--content-max)] space-y-6 px-[var(--gutter)] py-6 md:py-8">
       <div className="flex items-start justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold text-foreground">Auditorias de habilitação — limpeza e recuperação</h1>

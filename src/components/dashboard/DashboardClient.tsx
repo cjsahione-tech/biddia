@@ -3,11 +3,14 @@
 import { etapaAudita } from "@/lib/habilitacao";
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { Search, Loader2, RefreshCw, Upload, AlertTriangle } from "lucide-react";
+import { Search, Loader2, RefreshCw, Upload } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { KanbanBoard } from "@/components/dashboard/KanbanBoard";
-import { InicioMobile } from "@/components/dashboard/InicioMobile";
-import type { EditalListItem } from "@/lib/types";
+import { Inicio } from "@/components/dashboard/Inicio";
+import { ListaEditais } from "@/components/dashboard/ListaEditais";
+import { AvisosDoQuadro, type DadosAvisos } from "@/components/dashboard/AvisosDoQuadro";
+import { PaginaConteudo } from "@/components/ui/PaginaConteudo";
+import type { EditalListItem, EtapaKanban } from "@/lib/types";
 
 type StatusLimite = { atual: number; limite: number | null; excedido: boolean };
 
@@ -17,7 +20,7 @@ type StatusLimite = { atual: number; limite: number | null; excedido: boolean };
 // único PDF) sem exagerar no custo de armazenamento/extração de texto.
 const TAMANHO_MAXIMO_PDF = 50 * 1024 * 1024;
 
-export function DashboardClient() {
+export function DashboardClient({ modo, etapaInicial }: { modo: "inicio" | "editais"; etapaInicial?: EtapaKanban }) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [editais, setEditais] = useState<EditalListItem[]>([]);
@@ -236,116 +239,79 @@ export function DashboardClient() {
     }
   }
 
+  const avisos: DadosAvisos = { limite, buscando: searching, progressoBusca, mensagemBusca: searchMsg, erroEnvio: uploadError };
+  const carregando = loading && (
+    <div className="flex items-center justify-center py-24 text-ink-muted">
+      <Loader2 className="h-5 w-5 animate-spin" />
+    </div>
+  );
+
   return (
     <>
-    <input ref={fileInputRef} type="file" accept="application/pdf" className="hidden" onChange={handleFileSelected} />
-    {/* Celular (até 768px): tela Início do design. O quadro de arrastar abaixo continua só para telas maiores. */}
-    {!loading && (
-      <InicioMobile
-        editais={editais}
-        onReload={load}
-        onBuscar={handleSearch}
-        onAdicionarPdf={() => fileInputRef.current?.click()}
-        buscando={searching}
-        enviandoPdf={uploading}
-        mensagem={
-          uploadError ??
-          (searching && progressoBusca
-            ? progressoBusca.fase === "buscando"
-              ? "Buscando nos portais — os editais aparecem sozinhos."
-              : progressoBusca.fase === "classificando"
-                ? `${progressoBusca.analisados} encontrado(s) — avaliando quais combinam com a sua empresa…`
-                : `${progressoBusca.novos} edital(is) novo(s) adicionado(s)…`
-            : searchMsg)
-        }
-      />
-    )}
-    {loading && (
-      <div className="flex items-center justify-center py-24 text-muted md:hidden">
-        <Loader2 className="h-5 w-5 animate-spin" />
-      </div>
-    )}
-    <div className="mx-auto hidden max-w-[1400px] px-4 py-6 sm:px-6 sm:py-8 md:block lg:px-8 lg:py-10">
-      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-foreground">Editais</h1>
-          <p className="mt-1 text-sm text-muted">
-            Arraste os cards entre as colunas para acompanhar o andamento de cada licitação.
-          </p>
-        </div>
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
-          <Button variant="secondary" onClick={() => fileInputRef.current?.click()} loading={uploading}>
-            {!uploading && <Upload className="h-4 w-4" />}
-            Adicionar PDF
-          </Button>
-          <Button onClick={handleSearch} loading={searching}>
-            {!searching && <Search className="h-4 w-4" />}
-            Buscar novos editais
-          </Button>
-        </div>
-      </div>
+      <input ref={fileInputRef} type="file" accept="application/pdf" className="hidden" onChange={handleFileSelected} />
 
-      <p className="mt-2 text-xs text-muted">
-        Já encontrou um edital em outro lugar? Envie o PDF em &ldquo;Adicionar PDF&rdquo; e os agentes cuidam do
-        resto — leitura, análise, proposta, anexos e checklist, automaticamente. Editais buscados pelo Agente
-        Comercial entram em &ldquo;Oportunidade&rdquo;; arraste para fora de lá quando decidir participar.
-      </p>
+      {/* Início: cumprimento, indicadores, esteira e os editais em cartões (todas as telas). */}
+      {modo === "inicio" &&
+        (loading ? (
+          carregando
+        ) : (
+          <Inicio
+            editais={editais}
+            onReload={load}
+            onBuscar={handleSearch}
+            onAdicionarPdf={() => fileInputRef.current?.click()}
+            buscando={searching}
+            enviandoPdf={uploading}
+            avisos={avisos}
+          />
+        ))}
 
-      {(limite?.editaisAtivos.excedido || limite?.analisesNoMes.excedido) && (
-        <p className="mt-4 flex items-start gap-2 rounded-lg border border-warning-ink/30 bg-warning-bg px-4 py-2.5 text-sm text-warning-ink">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-          <span>
-            {limite.editaisAtivos.excedido &&
-              `Você tem ${limite.editaisAtivos.atual} editais ativos, acima do limite de ${limite.editaisAtivos.limite} do seu plano. `}
-            {limite.analisesNoMes.excedido &&
-              `Já rodaram ${limite.analisesNoMes.atual} análises este mês, acima do limite de ${limite.analisesNoMes.limite} do seu plano. `}
-            Nada foi bloqueado — considere um upgrade de plano pra continuar dentro do previsto.
-          </span>
-        </p>
-      )}
-
-      {searching && progressoBusca && (
-        <p className="mt-4 flex items-center gap-2 rounded-lg border border-brand/20 bg-brand-light/40 px-4 py-2.5 text-sm text-foreground">
-          <Loader2 className="h-4 w-4 shrink-0 animate-spin text-brand" />
-          <span>
-            {progressoBusca.fase === "buscando" && "Buscando nos portais (PNCP, LicitaNet…) — você pode continuar usando o sistema, os cards aparecem sozinhos."}
-            {progressoBusca.fase === "classificando" &&
-              `${progressoBusca.analisados} oportunidade(s) encontrada(s) — avaliando quais combinam com a sua empresa…`}
-            {progressoBusca.fase === "criando" &&
-              `${progressoBusca.novos} edital(is) novo(s) já adicionado(s) ao quadro — finalizando a busca…`}
-          </span>
-        </p>
-      )}
-
-      {searchMsg && (
-        <p className="mt-4 rounded-lg border border-border bg-surface px-4 py-2.5 text-sm text-foreground">
-          {searchMsg}
-        </p>
-      )}
-
-      {uploadError && (
-        <p className="mt-4 rounded-lg border border-danger-ink/30 bg-danger-bg px-4 py-2.5 text-sm text-danger-ink">
-          {uploadError}
-        </p>
-      )}
-
-      {loading ? (
-        <div className="flex items-center justify-center py-24 text-muted">
-          <Loader2 className="h-5 w-5 animate-spin" />
-        </div>
-      ) : (
-        <KanbanBoard editais={editais} setEditais={setEditais} perfil={perfil} onReload={load} />
-      )}
-
-      {!loading && (
-        <button
-          onClick={load}
-          className="mt-2 inline-flex items-center gap-1.5 text-xs text-muted hover:text-foreground"
+      {/* Editais: lista de cartões no celular; quadro de arrastar (colunas por etapa) no tablet e no computador. */}
+      {modo === "editais" && (
+        <PaginaConteudo
+          larga
+          titulo="Editais"
+          subtitulo={
+            <>
+              <span className="md:hidden">{loading ? "Carregando…" : `${editais.filter((e) => e.etapaKanban !== "RASCUNHO").length} no quadro`}</span>
+              <span className="hidden md:inline">Arraste os cards entre as colunas para acompanhar o andamento de cada licitação.</span>
+            </>
+          }
+          acoes={
+            <>
+              <Button variant="secondary" onClick={() => fileInputRef.current?.click()} loading={uploading}>
+                {!uploading && <Upload className="h-4 w-4" />}
+                Adicionar PDF
+              </Button>
+              <Button onClick={handleSearch} loading={searching}>
+                {!searching && <Search className="h-4 w-4" />}
+                Buscar novos editais
+              </Button>
+            </>
+          }
         >
-          <RefreshCw className="h-3 w-3" /> Atualizar quadro
-        </button>
+          <p className="tipo-pequeno mb-3 hidden text-ink-muted md:block">
+            Já encontrou um edital em outro lugar? Envie o PDF em &ldquo;Adicionar PDF&rdquo; e os agentes cuidam do resto — leitura,
+            análise, proposta, anexos e checklist, automaticamente. Editais buscados pelo Agente Comercial entram em
+            &ldquo;Oportunidade&rdquo;; arraste para fora de lá quando decidir participar.
+          </p>
+          <AvisosDoQuadro {...avisos} />
+          {carregando}
+          {!loading && (
+            <>
+              <div className="md:hidden">
+                <ListaEditais editais={editais} onMovido={load} comBusca etapaInicial={etapaInicial} />
+              </div>
+              <div className="hidden md:block">
+                <KanbanBoard editais={editais} setEditais={setEditais} perfil={perfil} onReload={load} />
+                <Button variant="ghost" size="compacto" onClick={load} className="mt-2">
+                  <RefreshCw className="h-3.5 w-3.5" /> Atualizar quadro
+                </Button>
+              </div>
+            </>
+          )}
+        </PaginaConteudo>
       )}
-    </div>
     </>
   );
 }

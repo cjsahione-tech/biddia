@@ -113,8 +113,8 @@ export function AdminSiteClient() {
   }
 
   return (
-    <div className="mx-auto max-w-[800px] px-4 py-6 sm:px-6 sm:py-8 lg:px-8 lg:py-10">
-      <h1 className="text-2xl font-semibold text-foreground">Conteúdo da home</h1>
+    <div className="mx-auto w-full max-w-[var(--content-max)] px-[var(--gutter)] py-6 md:py-8">
+      <h1 className="tipo-titulo-pagina text-ink">Conteúdo da home</h1>
       <p className="mt-1 text-sm text-muted">
         Edita o texto e a imagem do topo do site público — aparece assim que você salvar, sem precisar de deploy.
       </p>

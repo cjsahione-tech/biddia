@@ -30,8 +30,8 @@ import {
 import type { CompanyDocumentItem } from "@/lib/types";
 import { FormularioEnvioDocumento, FORMA_LABEL } from "@/components/documentos/FormularioEnvioDocumento";
 import { EnvioEmLote } from "@/components/documentos/EnvioEmLote";
-import { CabecalhoMobile } from "@/components/shell/CabecalhoMobile";
-import { useShell } from "@/components/shell/ShellContext";
+import { Abas } from "@/components/ui/Abas";
+import { PaginaConteudo } from "@/components/ui/PaginaConteudo";
 
 type Filtro = "TODOS" | "P" | "S";
 
@@ -53,7 +53,7 @@ function ChipAplicacao({ aplicacao }: { aplicacao: Aplicacao }) {
   return (
     <span
       title={ROTULO_APLICACAO[aplicacao]}
-      className="shrink-0 rounded-md bg-surface px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-muted"
+      className="shrink-0 rounded-md bg-surface px-1.5 py-0.5 text-[11px] font-semibold tracking-wide text-muted"
     >
       {texto}
     </span>
@@ -165,7 +165,6 @@ function MoverDocumento({
 }
 
 export function DocumentosClient() {
-  const { companyName } = useShell();
   const [documentos, setDocumentos] = useState<CompanyDocumentItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [erroCarga, setErroCarga] = useState<string | null>(null);
@@ -503,34 +502,23 @@ export function DocumentosClient() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8 lg:py-10">
-      <CabecalhoMobile titulo="Documentações" subtitulo={companyName || undefined} />
-      <h1 className="text-2xl font-semibold text-foreground max-md:hidden">Documentos</h1>
-      <p className="mt-1 text-sm text-muted max-md:mt-3">
-        Documentação da empresa para habilitação em licitações. Envie só o que a empresa tem — todos os documentos são
-        opcionais. O sistema usa isso para conferir, em cada edital, o que está atendido e o que falta.
-      </p>
+    <PaginaConteudo
+      titulo="Documentos"
+      subtitulo="Documentação da empresa para habilitação em licitações. Envie só o que a empresa tem — todos os documentos são opcionais. O sistema usa isso para conferir, em cada edital, o que está atendido e o que falta."
+    >
 
       <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-1 rounded-lg border border-border bg-surface/50 p-1 text-xs font-medium">
-          {(
-            [
-              ["TODOS", "Todos"],
-              ["P", "Produtos [P]"],
-              ["S", "Serviços [S]"],
-            ] as const
-          ).map(([valor, rotulo]) => (
-            <button
-              key={valor}
-              onClick={() => setFiltro(valor)}
-              className={`rounded-md px-3 py-1.5 transition ${
-                filtro === valor ? "bg-background text-brand shadow-sm" : "text-muted hover:text-foreground"
-              }`}
-            >
-              {rotulo}
-            </button>
-          ))}
-        </div>
+        <Abas
+          variante="etapas"
+          rotuloAcessivel="Filtrar documentos"
+          itens={[
+            { chave: "TODOS", rotulo: "Todos" },
+            { chave: "P", rotulo: "Produtos [P]" },
+            { chave: "S", rotulo: "Serviços [S]" },
+          ]}
+          ativa={filtro}
+          onChange={(c) => setFiltro(c as typeof filtro)}
+        />
         <div className="flex flex-wrap items-center gap-3">
           <p className="text-sm text-muted">
             <strong className="text-foreground">{totalEnviados}</strong> de {itensVisiveis.length} documentos enviados
@@ -637,6 +625,6 @@ export function DocumentosClient() {
           </section>
         </div>
       )}
-    </div>
+    </PaginaConteudo>
   );
 }

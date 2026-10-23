@@ -197,10 +197,10 @@ export function AdminPlanosClient() {
   const formAtivo = criando || editandoId !== null;
 
   return (
-    <div className="mx-auto max-w-[1100px] px-4 py-6 sm:px-6 sm:py-8 lg:px-8 lg:py-10">
+    <div className="mx-auto w-full max-w-[var(--content-max)] px-[var(--gutter)] py-6 md:py-8">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold text-foreground">Planos</h1>
+          <h1 className="tipo-titulo-pagina text-ink">Planos</h1>
           <p className="mt-1 text-sm text-muted">
             Limites, preços e features liberadas por plano — a seção de preços do site público lê direto daqui.
           </p>
@@ -379,11 +379,11 @@ export function AdminPlanosClient() {
               <div>
                 <div className="flex items-center gap-2">
                   <p className="text-sm font-semibold text-foreground">{p.nome}</p>
-                  <span className="rounded-full bg-surface px-1.5 py-0.5 text-[10px] font-medium text-muted">
+                  <span className="rounded-full bg-surface px-1.5 py-0.5 text-[11px] font-medium text-muted">
                     {ROTULO_PUBLICO[p.publicoAlvo]}
                   </span>
                   {!p.ativo && (
-                    <span className="rounded-full bg-warning-bg px-1.5 py-0.5 text-[10px] font-medium text-warning-ink">Inativo</span>
+                    <span className="rounded-full bg-warning-bg px-1.5 py-0.5 text-[11px] font-medium text-warning-ink">Inativo</span>
                   )}
                 </div>
                 <p className="mt-0.5 text-xs text-muted">

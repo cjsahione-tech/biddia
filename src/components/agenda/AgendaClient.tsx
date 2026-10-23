@@ -18,7 +18,7 @@ import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { addDays, addWeeks, isSameWeek, subWeeks } from "date-fns";
 import { KanbanCardModal } from "@/components/dashboard/KanbanCardModal";
-import { CabecalhoMobile } from "@/components/shell/CabecalhoMobile";
+import { PaginaConteudo } from "@/components/ui/PaginaConteudo";
 import type { AgendaEditalItem } from "@/lib/types";
 
 type TipoEvento = "abertura" | "habilitacao" | "visita" | "impugnacao";
@@ -95,10 +95,18 @@ export function AgendaClient() {
   );
 
   return (
-    <>
-    <div className="px-4 pt-5 md:hidden">
-      <CabecalhoMobile titulo="Agenda" subtitulo={format(semana, "MMMM 'de' yyyy", { locale: ptBR })} />
-      <div className="mt-4 rounded-[22px] bg-white p-3">
+    <PaginaConteudo
+      larga
+      titulo="Agenda"
+      subtitulo={
+        <>
+          <span className="capitalize md:hidden">{format(semana, "MMMM 'de' yyyy", { locale: ptBR })}</span>
+          <span className="hidden md:inline">Prazos dos editais atualmente em &ldquo;Qualificação&rdquo; — some daqui quando o card avança ou volta pra Rascunho.</span>
+        </>
+      }
+    >
+    <div className="md:hidden">
+      <div className="rounded-card bg-surface p-3">
         <div className="flex items-center justify-between px-1 pb-2">
           <button onClick={() => { setSemana((s) => subWeeks(s, 1)); setDiaCelular(null); }} aria-label="Semana anterior" className="rounded-full p-1.5 text-muted">
             <ChevronLeft className="h-4 w-4" />
@@ -120,11 +128,11 @@ export function AgendaClient() {
               <button
                 key={chave}
                 onClick={() => setDiaCelular(marcado ? null : chave)}
-                className={`flex flex-col items-center gap-0.5 rounded-2xl py-2 ${marcado ? "bg-brand text-white" : hoje ? "bg-brand-light text-[#312e81]" : "text-foreground"}`}
+                className={`flex flex-col items-center gap-0.5 rounded-2xl py-2 ${marcado ? "bg-brand text-white" : hoje ? "bg-brand-light text-tint-ink" : "text-foreground"}`}
               >
-                <span className={`text-[10px] font-bold uppercase ${marcado ? "text-white/80" : "text-muted"}`}>{format(d, "EEEEE", { locale: ptBR })}</span>
+                <span className={`text-[11px] font-bold uppercase ${marcado ? "text-white/80" : "text-muted"}`}>{format(d, "EEEEE", { locale: ptBR })}</span>
                 <span className="text-[15px] font-bold">{format(d, "d")}</span>
-                <span className={`h-1.5 w-1.5 rounded-full ${tem ? (marcado ? "bg-[#fbbf24]" : "bg-brand") : "bg-transparent"}`} />
+                <span className={`h-1.5 w-1.5 rounded-full ${tem ? (marcado ? "bg-accent" : "bg-brand") : "bg-transparent"}`} />
               </button>
             );
           })}
@@ -139,7 +147,7 @@ export function AgendaClient() {
       ) : (
         <div className="space-y-2.5">
           {eventosDaSemana.map(({ dia, ev }, i) => (
-            <Link key={i} href={`/editais/${ev.edital.id}`} className="flex items-center gap-3 rounded-[20px] bg-white p-3.5">
+            <Link key={i} href={`/editais/${ev.edital.id}`} className="flex items-center gap-3 rounded-card bg-surface p-3.5">
               <span className={`h-9 w-1.5 flex-none rounded-full ${ev.tipo.dot}`} />
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-[14px] font-bold text-foreground">{ev.edital.titulo}</span>
@@ -147,7 +155,7 @@ export function AgendaClient() {
                   {ev.tipo.label} · {ev.edital.orgaoNome}
                 </span>
               </span>
-              <span className="flex-none text-right text-[11px] font-bold text-[#312e81]">
+              <span className="flex-none text-right text-[11px] font-bold text-tint-ink">
                 <span className="block capitalize">{format(dia, "EEE, d", { locale: ptBR })}</span>
                 {(() => {
                   const valor = ev.edital[ev.tipo.campo] as string | null;
@@ -157,20 +165,12 @@ export function AgendaClient() {
               </span>
             </Link>
           ))}
-          {eventosDaSemana.length === 0 && <p className="rounded-[20px] bg-white p-5 text-center text-sm text-muted">Nenhum compromisso {diaCelular ? "neste dia" : "nesta semana"}.</p>}
+          {eventosDaSemana.length === 0 && <p className="rounded-card bg-surface p-5 text-center text-sm text-muted">Nenhum compromisso {diaCelular ? "neste dia" : "nesta semana"}.</p>}
         </div>
       )}
     </div>
-    <div className="mx-auto hidden max-w-[1400px] px-4 py-6 sm:px-6 sm:py-8 md:block lg:px-8 lg:py-10">
-      <div>
-        <h1 className="text-2xl font-semibold text-foreground">Agenda</h1>
-        <p className="mt-1 text-sm text-muted">
-          Prazos dos editais atualmente em &ldquo;Qualificação&rdquo; — some daqui quando o card avança ou volta pra
-          Rascunho.
-        </p>
-      </div>
-
-      <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="hidden md:block">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2">
           <button
             onClick={() => setMesAtual((m) => subMonths(m, 1))}
@@ -235,7 +235,7 @@ export function AgendaClient() {
                       {eventos.slice(0, 4).map((ev, i) => (
                         <span key={i} className={`h-1.5 w-1.5 rounded-full ${ev.tipo.dot}`} />
                       ))}
-                      {eventos.length > 1 && <span className="text-[10px] text-muted">{eventos.length}</span>}
+                      {eventos.length > 1 && <span className="text-[11px] text-muted">{eventos.length}</span>}
                     </div>
                   )}
                 </button>
@@ -299,6 +299,6 @@ export function AgendaClient() {
         />
       )}
     </div>
-    </>
+    </PaginaConteudo>
   );
 }

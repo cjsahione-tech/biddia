@@ -57,8 +57,8 @@ export function AdminSaudeAuditoriasClient() {
   const naMeta = dados?.taxaSozinha == null ? null : dados.taxaSozinha >= dados.meta;
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
-      <h1 className="text-2xl font-semibold text-foreground">Saúde das auditorias</h1>
+    <div className="mx-auto w-full max-w-[var(--content-max)] px-[var(--gutter)] py-6 md:py-8">
+      <h1 className="tipo-titulo-pagina text-ink">Saúde das auditorias</h1>
       <p className="mt-1 text-sm text-muted">
         O que aconteceu com as auditorias de habilitação no período. A meta é que <strong>{dados ? pct(dados.meta) : "99%"}</strong> terminem sozinhas, com o resultado certo ou com um aviso claro do que falta.
       </p>

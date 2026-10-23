@@ -60,7 +60,7 @@ export function EstudoDetailClient({ estudoId }: { estudoId: string }) {
   const etapa = etapaAtualDoEstudo(estudo);
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8 lg:py-10">
+    <div className="mx-auto w-full max-w-[var(--content-max)] px-[var(--gutter)] py-6 md:py-8">
       <Link
         href="/estudo-viabilidade"
         className="inline-flex items-center gap-1.5 text-sm text-muted hover:text-foreground"
@@ -91,7 +91,7 @@ export function EstudoDetailClient({ estudoId }: { estudoId: string }) {
         </div>
       ) : (
         <div className="mt-4 flex items-center gap-2">
-          <h1 className="text-2xl font-semibold text-foreground">
+          <h1 className="tipo-titulo-pagina text-ink">
             {estudo.nome || `Estudo de Viabilidade — ${RAMO_LABEL[estudo.ramo]}`}
           </h1>
           <button

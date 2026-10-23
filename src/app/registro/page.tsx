@@ -51,7 +51,7 @@ export default function RegistroPage() {
     <div className="flex flex-1 items-center justify-center px-6 py-16">
       <div className="w-full max-w-sm">
         <Logo href="/" />
-        <h1 className="mt-6 text-2xl font-semibold text-foreground">Criar conta</h1>
+        <h1 className="mt-6 tipo-titulo-pagina text-ink">Criar conta</h1>
         <p className="mt-1 text-sm text-muted">Comece a montar sua equipe de agentes de IA.</p>
 
         <div className="mt-6 grid grid-cols-2 gap-2 rounded-lg border border-border bg-surface p-1">

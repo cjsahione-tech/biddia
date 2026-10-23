@@ -40,7 +40,7 @@ export default function LoginPage() {
     <div className="flex flex-1 items-center justify-center px-6 py-16">
       <div className="w-full max-w-sm">
         <Logo href="/" />
-        <h1 className="mt-6 text-2xl font-semibold text-foreground">Entrar na conta</h1>
+        <h1 className="mt-6 tipo-titulo-pagina text-ink">Entrar na conta</h1>
         <p className="mt-1 text-sm text-muted">Acesse o painel da sua empresa.</p>
 
         <form onSubmit={handleSubmit} className="mt-8 space-y-4">

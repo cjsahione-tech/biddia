@@ -11,7 +11,7 @@ export default async function OnboardingPage() {
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col px-6 py-12">
       <Logo />
-      <h1 className="mt-6 text-2xl font-semibold text-foreground">
+      <h1 className="mt-6 tipo-titulo-pagina text-ink">
         Vamos configurar sua empresa
       </h1>
       <p className="mt-1 text-sm text-muted">

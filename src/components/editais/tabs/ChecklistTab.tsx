@@ -108,7 +108,7 @@ function ChecklistRow({
           <p className="text-sm font-medium text-foreground">
             {item.documentoNome}
             {item.obrigatorio && (
-              <span className="ml-2 rounded-full bg-muted/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted">
+              <span className="ml-2 rounded-full bg-muted/10 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-muted">
                 Obrigatório
               </span>
             )}

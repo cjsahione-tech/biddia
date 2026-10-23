@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Loader2, Plus, Search, X } from "lucide-react";
-import { CabecalhoMobile } from "@/components/shell/CabecalhoMobile";
+import { PaginaConteudo } from "@/components/ui/PaginaConteudo";
 
 type Run = { status: "RUNNING" | "DONE" | "ERROR"; fase: string; novos: number; analisados: number; mensagem: string | null; startedAt: string } | null;
 type Palavra = { id: string; term: string };
@@ -15,7 +15,7 @@ function Fonte({ nome, descricao, ativa, detalhe }: { nome: string; descricao: s
         <p className="text-sm font-bold text-foreground">{nome}</p>
         <p className="truncate text-xs text-muted">{detalhe ?? descricao}</p>
       </div>
-      <span className={`flex-none rounded-[10px] px-2.5 py-1 text-[10.5px] font-bold ${ativa ? "bg-[#ddf3e7] text-[#14532d]" : "bg-[#e8e9f3] text-muted"}`}>
+      <span className={`flex-none rounded-chip px-2.5 py-1 text-[11px] font-bold ${ativa ? "bg-success-bg text-success-ink" : "bg-neutral-bg text-muted"}`}>
         {ativa ? "Ativa" : "Inativa"}
       </span>
     </div>
@@ -117,9 +117,7 @@ export function CaptacaoClient() {
   const quando = run ? new Date(run.startedAt).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : null;
 
   return (
-    <div className="px-4 pt-5 md:px-8 md:pt-8">
-      <CabecalhoMobile titulo="Captação" subtitulo="Fontes e palavras-chave" />
-      <h1 className="hidden text-2xl font-semibold text-foreground md:block">Captação</h1>
+    <PaginaConteudo titulo="Captação" subtitulo="Fontes e palavras-chave">
 
       {!palavras ? (
         <div className="flex justify-center py-16 text-muted">
@@ -127,20 +125,20 @@ export function CaptacaoClient() {
         </div>
       ) : (
         <div className="mt-4 space-y-3 md:max-w-xl">
-          <div className="rounded-[22px] bg-white px-4 py-2">
+          <div className="rounded-card bg-surface px-4 py-2">
             <p className="pt-2 text-[15px] font-bold text-foreground">Fontes de editais</p>
-            <div className="divide-y divide-[#ecedf8]">
+            <div className="divide-y divide-border">
               <Fonte nome="PNCP" descricao="Portal Nacional de Contratações Públicas" ativa={palavras.length > 0} detalhe={palavras.length > 0 ? "Busca pelas palavras-chave da empresa" : "Cadastre palavras-chave para ativar"} />
               <Fonte nome="LicitaNet" descricao="Captação automática" ativa={!!segmento} detalhe={segmento ? `Segmento: ${segmento}` : "Escolha o segmento em Empresa para ativar"} />
               <Fonte nome="Compras.gov.br" descricao="Captação automática" ativa={comprasGov} detalhe={comprasGov ? "Captação automática" : "Não incluída no plano atual"} />
             </div>
           </div>
 
-          <div className="rounded-[22px] bg-white p-4">
+          <div className="rounded-card bg-surface p-4">
             <p className="text-[15px] font-bold text-foreground">Palavras-chave da empresa</p>
             <div className="mt-2.5 flex flex-wrap gap-2">
               {palavras.map((k) => (
-                <span key={k.id} className="inline-flex items-center gap-1.5 rounded-[10px] bg-brand-light px-2.5 py-1 text-[12px] font-bold text-[#312e81]">
+                <span key={k.id} className="inline-flex items-center gap-1.5 rounded-chip bg-brand-light px-2.5 py-1 text-[12px] font-bold text-tint-ink">
                   {k.term}
                   <button onClick={() => remover(k.id)} aria-label={`Remover ${k.term}`}>
                     <X className="h-3 w-3" />
@@ -155,7 +153,7 @@ export function CaptacaoClient() {
                 onChange={(e) => setNovaPalavra(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && adicionar()}
                 placeholder="Nova palavra-chave"
-                className="h-10 min-w-0 flex-1 rounded-[20px] bg-background px-4 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30"
+                className="h-10 min-w-0 flex-1 rounded-card bg-background px-4 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30"
               />
               <button onClick={adicionar} aria-label="Adicionar palavra-chave" className="flex h-10 w-10 flex-none items-center justify-center rounded-full bg-brand text-white">
                 <Plus className="h-4 w-4" />
@@ -163,7 +161,7 @@ export function CaptacaoClient() {
             </div>
           </div>
 
-          <div className="rounded-[22px] bg-white p-4">
+          <div className="rounded-card bg-surface p-4">
             <p className="text-[15px] font-bold text-foreground">Última captação</p>
             {run ? (
               <>
@@ -189,16 +187,16 @@ export function CaptacaoClient() {
           <button
             onClick={captarAgora}
             disabled={iniciando || rodando}
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-[24px] bg-brand text-sm font-bold text-white disabled:opacity-70"
+            className="flex h-12 w-full items-center justify-center gap-2 rounded-pill bg-accent text-sm font-bold text-on-accent hover:brightness-95 disabled:opacity-70"
           >
             {iniciando || rodando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
             {rodando ? "Captando…" : "Captar agora"}
           </button>
-          <Link href="/editais?etapa=RASCUNHO" className="block rounded-[22px] bg-white py-3.5 text-center text-sm font-bold text-brand">
+          <Link href="/editais?etapa=RASCUNHO" className="block rounded-card bg-surface py-3.5 text-center text-sm font-bold text-brand">
             Ver editais descartados →
           </Link>
         </div>
       )}
-    </div>
+    </PaginaConteudo>
   );
 }

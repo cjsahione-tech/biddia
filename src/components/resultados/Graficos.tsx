@@ -142,7 +142,7 @@ export function EvolucaoMensalChart({ pontos }: { pontos: PontoEvolucaoMensal[] 
         <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: "var(--ink-muted)" }} axisLine={false} tickLine={false} />
         <Tooltip contentStyle={TOOLTIP_STYLE} />
         <Legend wrapperStyle={{ fontSize: 12 }} formatter={(v) => LEGENDA[v] ?? v} />
-        <Bar dataKey="captados" name="captados" fill="var(--tint)" radius={[4, 4, 0, 0]} maxBarSize={28} />
+        <Bar dataKey="captados" name="captados" fill="var(--brand-600)" fillOpacity={0.3} radius={[4, 4, 0, 0]} maxBarSize={28} />
         <Line type="monotone" dataKey="ganhos" name="ganhos" stroke={COR_GANHO} strokeWidth={2.5} dot={{ r: 3 }} />
         <Line type="monotone" dataKey="perdidos" name="perdidos" stroke={COR_PERDA} strokeWidth={2.5} dot={{ r: 3 }} />
       </ComposedChart>

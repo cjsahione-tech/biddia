@@ -144,8 +144,8 @@ export function AdminUsuariosClient() {
   }, [linhas, busca, filtroStatus]);
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
-      <h1 className="text-2xl font-semibold text-foreground">Usuários</h1>
+    <div className="mx-auto w-full max-w-[var(--content-max)] px-[var(--gutter)] py-6 md:py-8">
+      <h1 className="tipo-titulo-pagina text-ink">Usuários</h1>
       <p className="mt-1 text-sm text-muted">
         Todas as contas da plataforma, com plano, valor, custo de IA do mês e lucro. O status é mudado à mão (ainda não há cobrança automática) e{" "}
         <strong>não bloqueia o acesso</strong> da conta. O custo é só o gasto de IA atribuído à conta no mês, em reais estimados.
@@ -270,7 +270,7 @@ function FragmentoLinha(props: {
         <td className="px-3 py-3">
           <p className="font-medium text-foreground">
             {l.nome}
-            {l.ehAdmin && <span className="ml-2 rounded-full bg-brand-light px-2 py-0.5 text-[10px] font-semibold text-brand">admin</span>}
+            {l.ehAdmin && <span className="ml-2 rounded-full bg-brand-light px-2 py-0.5 text-[11px] font-semibold text-brand">admin</span>}
           </p>
           <p className="text-xs text-muted">{l.email}</p>
           <p className="text-xs text-muted">

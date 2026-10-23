@@ -48,8 +48,8 @@ export function AdminSaudeClient() {
   const totalUsd = dados?.consumo.reduce((a, c) => a + c.custoUsd, 0) ?? 0;
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
-      <h1 className="text-2xl font-semibold text-foreground">Saúde dos agentes</h1>
+    <div className="mx-auto w-full max-w-[var(--content-max)] px-[var(--gutter)] py-6 md:py-8">
+      <h1 className="tipo-titulo-pagina text-ink">Saúde dos agentes</h1>
       <p className="mt-1 text-sm text-muted">
         Quantas execuções terminaram em erro e quanto a IA consumiu, por agente. A meta é de no máximo{" "}
         <strong>{dados ? pct(dados.meta) : "5%"}</strong> de erro. Só entram execuções que já terminaram.

@@ -11,7 +11,6 @@ import {
   ChevronRight,
   FileStack,
   Gauge,
-  Loader2,
   LogOut,
   Radar,
   ShieldCheck,
@@ -19,13 +18,16 @@ import {
   Users,
   type LucideIcon,
 } from "lucide-react";
-import { CabecalhoMobile } from "@/components/shell/CabecalhoMobile";
+import { Button } from "@/components/ui/Button";
+import { Cartao } from "@/components/ui/Cartao";
+import { Chip } from "@/components/ui/Chip";
+import { PaginaConteudo } from "@/components/ui/PaginaConteudo";
 import { useShell } from "@/components/shell/ShellContext";
 import { iniciais, primeiroNome } from "@/lib/mobile-util";
 
 type Atalho = { href: string; titulo: string; descricao: string; icon: LucideIcon; selo?: number };
 
-/** Tela "Mais" do celular: tudo o que não cabe na barra inferior. */
+/** Tela "Mais": tudo o que não cabe nos 4 primeiros destinos do menu (celular, tablet e computador). */
 export function MaisClient() {
   const router = useRouter();
   const { userName, companyName, isAdmin, operandoComoAnalista, totalNotificacoes } = useShell();
@@ -62,57 +64,52 @@ export function MaisClient() {
   }
 
   return (
-    <div className="px-4 pt-5 md:px-8 md:pt-8">
-      <CabecalhoMobile titulo="Mais" subtitulo="Tudo o que a plataforma oferece" />
-      <h1 className="hidden text-2xl font-semibold text-foreground md:block">Mais</h1>
-
-      <div className="mt-4 flex items-center gap-3 rounded-[22px] bg-white p-4">
-        <div className="flex h-12 w-12 flex-none items-center justify-center rounded-full bg-brand text-lg font-bold text-white">{iniciais(userName)}</div>
+    <PaginaConteudo titulo="Mais" subtitulo="Tudo o que a plataforma oferece">
+      <Cartao className="flex items-center gap-3">
+        <div className="flex h-12 w-12 flex-none items-center justify-center rounded-full bg-brand-600 text-lg font-bold text-on-brand">{iniciais(userName)}</div>
         <div className="min-w-0">
-          <p className="truncate text-[15px] font-bold text-foreground">{primeiroNome(userName)}</p>
-          <p className="truncate text-xs text-muted">{operandoComoAnalista ? `Analista · operando como ${companyName}` : companyName}</p>
+          <p className="tipo-corpo-forte truncate text-ink">{primeiroNome(userName)}</p>
+          <p className="tipo-pequeno truncate text-ink-muted">{operandoComoAnalista ? `Analista · operando como ${companyName}` : companyName}</p>
         </div>
-      </div>
+      </Cartao>
 
       {operandoComoAnalista && (
         <button
           onClick={voltarParaCarteira}
           disabled={voltando}
-          className="mt-2.5 flex w-full items-center gap-3 rounded-[22px] bg-[#312e81] p-4 text-left text-white"
+          className="mt-3 flex min-h-14 w-full items-center gap-3 rounded-card bg-brand-900 p-4 text-left text-on-brand disabled:opacity-70"
         >
-          <Users className="h-5 w-5 flex-none text-[#fbbf24]" />
+          <Users className="h-5 w-5 flex-none text-accent" />
           <span className="flex-1">
-            <span className="block text-sm font-bold">Carteira de clientes</span>
-            <span className="block text-xs text-[#c7d2fe]">Voltar para a minha carteira de empresas</span>
+            <span className="tipo-corpo-forte block">Carteira de clientes</span>
+            <span className="tipo-pequeno block text-on-brand/80">Voltar para a minha carteira de empresas</span>
           </span>
-          {voltando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Undo2 className="h-4 w-4" />}
+          <Undo2 className="h-4 w-4" />
         </button>
       )}
 
-      <div className="mt-2.5 overflow-hidden rounded-[22px] bg-white">
-        {atalhos.map((a, i) => (
-          <Link key={a.href} href={a.href} className={`flex items-center gap-3 px-4 py-3.5 ${i > 0 ? "border-t border-[#ecedf8]" : ""}`}>
-            <span className="flex h-10 w-10 flex-none items-center justify-center rounded-xl bg-brand-light text-[#312e81]">
-              <a.icon className="h-5 w-5" />
+      <div className="mt-3 grid gap-3 md:grid-cols-2">
+        {atalhos.map((a) => (
+          <Link key={a.href} href={a.href} className="flex min-h-[72px] items-center gap-3 rounded-card bg-surface p-4 shadow-card transition hover:bg-tint">
+            <span className="flex h-11 w-11 flex-none items-center justify-center rounded-full bg-tint text-tint-ink">
+              <a.icon className="h-[22px] w-[22px]" strokeWidth={2} />
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block text-sm font-bold text-foreground">{a.titulo}</span>
-              <span className="block truncate text-xs text-muted">{a.descricao}</span>
+              <span className="tipo-corpo-forte block text-ink">{a.titulo}</span>
+              <span className="tipo-pequeno block truncate text-ink-muted">{a.descricao}</span>
             </span>
-            {!!a.selo && <span className="rounded-full bg-danger-ink px-1.5 py-0.5 text-[10px] font-bold text-white">{a.selo}</span>}
-            <ChevronRight className="h-4 w-4 flex-none text-[#8f8fb5]" />
+            {!!a.selo && <Chip tom="erro">{a.selo}</Chip>}
+            <ChevronRight className="h-4 w-4 flex-none text-ink-muted" />
           </Link>
         ))}
       </div>
 
-      <button
-        onClick={sair}
-        disabled={saindo}
-        className="mt-2.5 flex w-full items-center justify-center gap-2 rounded-[22px] bg-white py-3.5 text-sm font-bold text-danger-ink"
-      >
-        {saindo ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogOut className="h-4 w-4" />}
-        Sair
-      </button>
-    </div>
+      <div className="mt-4">
+        <Button variant="secondary" onClick={sair} loading={saindo} className="w-full md:w-auto">
+          {!saindo && <LogOut className="h-4 w-4" />}
+          Sair
+        </Button>
+      </div>
+    </PaginaConteudo>
   );
 }

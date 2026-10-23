@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
-import { CabecalhoMobile } from "@/components/shell/CabecalhoMobile";
+import { Cartao } from "@/components/ui/Cartao";
+import { Chip, type TomChip } from "@/components/ui/Chip";
+import { PaginaConteudo } from "@/components/ui/PaginaConteudo";
 import { formatBRL } from "@/lib/format";
 import { ROTULO_STATUS, type StatusAssinatura } from "@/lib/admin-usuarios";
 
@@ -16,24 +18,27 @@ type Resumo = {
   funcoes: { label: string; categoria: string }[];
 };
 
-const COR_STATUS: Record<StatusAssinatura, string> = {
-  ATIVA: "bg-[#ddf3e7] text-[#14532d]",
-  EM_TESTE: "bg-brand-light text-[#312e81]",
-  PAGAMENTO_PENDENTE: "bg-[#fef3c7] text-[#92400e]",
-  CANCELADA: "bg-[#e8e9f3] text-muted",
+const TOM_STATUS: Record<StatusAssinatura, TomChip> = {
+  ATIVA: "sucesso",
+  EM_TESTE: "info",
+  PAGAMENTO_PENDENTE: "atencao",
+  CANCELADA: "neutro",
 };
 
 function BarraLimite({ titulo, l }: { titulo: string; l: Limite }) {
   const pct = l.limite ? Math.min(100, Math.round((l.atual / l.limite) * 100)) : 0;
   return (
     <div>
-      <div className="flex items-baseline justify-between text-sm">
-        <span className="font-bold text-foreground">{titulo}</span>
-        <span className={l.excedido ? "font-bold text-danger-ink" : "text-muted"}>{l.limite != null ? `${l.atual} de ${l.limite}` : `${l.atual} · sem limite`}</span>
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="tipo-corpo-forte text-ink">{titulo}</span>
+        <span className={`tipo-corpo tabular-nums ${l.excedido ? "font-bold text-danger-ink" : "text-ink-muted"}`}>
+          {l.limite != null ? `${l.atual} de ${l.limite}` : `${l.atual} · sem limite`}
+          {l.excedido && " — acima do limite"}
+        </span>
       </div>
       {l.limite != null && (
-        <div className="mt-1.5 h-1.5 rounded-full bg-[#e3e6ff]">
-          <div className={`h-1.5 rounded-full ${l.excedido ? "bg-danger-ink" : "bg-[#fbbf24]"}`} style={{ width: `${pct}%` }} />
+        <div className="mt-1.5 h-2 rounded-pill bg-neutral-bg" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label={titulo}>
+          <div className={`h-2 rounded-pill ${l.excedido ? "bg-danger-ink" : "bg-brand-600"}`} style={{ width: `${pct}%` }} />
         </div>
       )}
     </div>
@@ -63,72 +68,70 @@ export function PlanoClient() {
   const totalExecucoes = dados?.agentes.reduce((a, x) => a + x.execucoes, 0) ?? 0;
 
   return (
-    <div className="px-4 pt-5 md:px-8 md:pt-8">
-      <CabecalhoMobile titulo="Plano e consumo" subtitulo={dados ? `Assinatura: ${ROTULO_STATUS[dados.status].toLowerCase()}` : "Carregando…"} />
-      <h1 className="hidden text-2xl font-semibold text-foreground md:block">Plano e consumo</h1>
-      {erro && <p className="mt-4 text-sm text-danger-ink">Não foi possível carregar os dados do plano.</p>}
+    <PaginaConteudo titulo="Plano e consumo" subtitulo={dados ? `Assinatura: ${ROTULO_STATUS[dados.status].toLowerCase()}` : "Carregando…"}>
+      {erro && <p className="text-sm text-danger-ink">Não foi possível carregar os dados do plano.</p>}
       {!dados && !erro && (
-        <div className="flex justify-center py-16 text-muted">
+        <div className="flex justify-center py-16 text-ink-muted">
           <Loader2 className="h-5 w-5 animate-spin" />
         </div>
       )}
       {dados && (
-        <div className="mt-4 space-y-3 md:max-w-xl">
-          <div className="rounded-[22px] bg-[#312e81] p-4 text-[#f4f5ff]">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-xs text-[#c7d2fe]">Plano atual</p>
-                <p className="mt-0.5 font-[family-name:var(--font-rubik)] text-2xl font-semibold">{dados.plano?.nome ?? "Sem plano definido"}</p>
-                {dados.plano && <p className="text-xs text-[#c7d2fe]">{formatBRL(dados.plano.precoMensal)} por mês</p>}
+        <div className="grid gap-3 lg:grid-cols-2 lg:items-start">
+          <div className="space-y-3">
+            <div className="rounded-card bg-brand-900 p-4 text-on-brand">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="tipo-pequeno text-on-brand/80">Plano atual</p>
+                  <p className="tipo-titulo-2 mt-0.5">{dados.plano?.nome ?? "Sem plano definido"}</p>
+                  {dados.plano && <p className="tipo-pequeno text-on-brand/80">{formatBRL(dados.plano.precoMensal)} por mês</p>}
+                </div>
+                <Chip tom={TOM_STATUS[dados.status]}>{ROTULO_STATUS[dados.status]}</Chip>
               </div>
-              <span className={`rounded-[10px] px-2.5 py-1 text-[10.5px] font-bold ${COR_STATUS[dados.status]}`}>{ROTULO_STATUS[dados.status]}</span>
+              {dados.status === "EM_TESTE" && dados.emTesteAte && (
+                <p className="tipo-pequeno mt-2 font-bold text-accent">Período de teste até {new Date(dados.emTesteAte).toLocaleDateString("pt-BR")}</p>
+              )}
             </div>
-            {dados.status === "EM_TESTE" && dados.emTesteAte && (
-              <p className="mt-2 text-xs text-[#fbbf24]">Período de teste até {new Date(dados.emTesteAte).toLocaleDateString("pt-BR")}</p>
+
+            <Cartao className="space-y-4">
+              <p className="tipo-titulo-3 text-ink">Limites do plano</p>
+              <BarraLimite titulo="Editais ativos" l={dados.limites.editaisAtivos} />
+              <BarraLimite titulo="Análises no mês" l={dados.limites.analisesNoMes} />
+              <p className="tipo-pequeno text-ink-muted">Os limites só avisam; nada é bloqueado.</p>
+            </Cartao>
+
+            {dados.funcoes.length > 0 && (
+              <Cartao>
+                <p className="tipo-titulo-3 text-ink">Funcionalidades do plano</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {dados.funcoes.map((f) => (
+                    <Chip key={f.label}>{f.label}</Chip>
+                  ))}
+                </div>
+              </Cartao>
             )}
           </div>
 
-          <div className="space-y-3.5 rounded-[22px] bg-white p-4">
-            <p className="text-[15px] font-bold text-foreground">Limites do plano</p>
-            <BarraLimite titulo="Editais ativos" l={dados.limites.editaisAtivos} />
-            <BarraLimite titulo="Análises no mês" l={dados.limites.analisesNoMes} />
-            <p className="text-[11px] text-muted">Os limites só avisam; nada é bloqueado.</p>
-          </div>
-
-          <div className="rounded-[22px] bg-white p-4">
-            <div className="flex items-baseline justify-between">
-              <p className="text-[15px] font-bold text-foreground">Uso dos agentes no mês</p>
-              <span className="text-xs text-muted">{totalExecucoes} execuções</span>
+          <Cartao>
+            <div className="flex items-baseline justify-between gap-3">
+              <p className="tipo-titulo-3 text-ink">Uso dos agentes no mês</p>
+              <span className="tipo-pequeno tabular-nums text-ink-muted">{totalExecucoes} execuções</span>
             </div>
             <div className="mt-3 space-y-3">
               {dados.agentes.map((a) => (
                 <div key={a.chave}>
-                  <div className="flex items-baseline justify-between text-[13px]">
-                    <span className="text-foreground">{a.nome}</span>
-                    <span className="text-muted">{a.execucoes}</span>
+                  <div className="flex items-baseline justify-between">
+                    <span className="tipo-corpo text-ink">{a.nome}</span>
+                    <span className="tipo-corpo tabular-nums text-ink-muted">{a.execucoes}</span>
                   </div>
-                  <div className="mt-1 h-1.5 rounded-full bg-[#e3e6ff]">
-                    <div className="h-1.5 rounded-full bg-brand" style={{ width: `${Math.round((a.execucoes / maisExecucoes) * 100)}%` }} />
+                  <div className="mt-1 h-2 rounded-pill bg-neutral-bg">
+                    <div className="h-2 rounded-pill bg-brand-600" style={{ width: `${Math.round((a.execucoes / maisExecucoes) * 100)}%` }} />
                   </div>
                 </div>
               ))}
             </div>
-          </div>
-
-          {dados.funcoes.length > 0 && (
-            <div className="rounded-[22px] bg-white p-4">
-              <p className="text-[15px] font-bold text-foreground">Funcionalidades do plano</p>
-              <div className="mt-2.5 flex flex-wrap gap-2">
-                {dados.funcoes.map((f) => (
-                  <span key={f.label} className="rounded-[10px] bg-brand-light px-2.5 py-1 text-[11.5px] font-bold text-[#312e81]">
-                    {f.label}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
+          </Cartao>
         </div>
       )}
-    </div>
+    </PaginaConteudo>
   );
 }

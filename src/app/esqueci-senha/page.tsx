@@ -68,7 +68,7 @@ export default function EsqueciSenhaPage() {
     <div className="flex flex-1 items-center justify-center px-6 py-16">
       <div className="w-full max-w-sm">
         <Logo href="/" />
-        <h1 className="mt-6 text-2xl font-semibold text-foreground">Esqueceu a senha?</h1>
+        <h1 className="mt-6 tipo-titulo-pagina text-ink">Esqueceu a senha?</h1>
         <p className="mt-1 text-sm text-muted">
           {etapa === "telefone"
             ? "Informe o número de WhatsApp cadastrado da empresa — enviamos um código de 6 dígitos por SMS."

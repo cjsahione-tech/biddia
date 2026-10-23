@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { AlertTriangle, ChevronDown, ChevronUp, Clock, MapPin, Paperclip, StickyNote, Trash2 } from "lucide-react";
 import { descreverValorEdital, formatDate, formatDateTime } from "@/lib/format";
-import { faixaCorCard } from "@/lib/kanban";
+import { CORES_CARD } from "@/lib/kanban";
 import { calcularEstadoInatividade } from "@/lib/kanban-atividade";
 import { diasRestantesRascunho } from "@/lib/rascunho-prazo";
 import type { EditalListItem } from "@/lib/types";
@@ -53,6 +53,7 @@ export function KanbanCard({
   const naoVisualizado = !edital.visualizado;
   const estadoInatividade = calcularEstadoInatividade(edital.etapaKanban, edital.ultimaMovimentacao);
 
+  const etiqueta = CORES_CARD.find((c) => c.key === edital.corCard) ?? null;
   return (
     <div
       draggable={!modoSelecao}
@@ -61,9 +62,9 @@ export function KanbanCard({
       onDragOver={onDragOverCard}
       onDrop={onDropCard}
       onClick={onClick}
-      className={`relative cursor-pointer rounded-lg border border-l-4 p-3 shadow-sm transition hover:shadow-md ${faixaCorCard(edital.corCard)} ${
-        naoVisualizado ? "bg-brand-light/50" : "bg-background"
-      } ${selecionado ? "border-brand ring-2 ring-brand/40" : foraDoPerfil ? "border-warning-ink/40" : "border-border"}`}
+      className={`relative cursor-pointer rounded-tile p-3 shadow-card transition hover:shadow-nav ${naoVisualizado ? "bg-tint" : "bg-surface"} ${
+        selecionado ? "ring-2 ring-brand-600" : foraDoPerfil ? "ring-1 ring-warning-ink/40" : ""
+      }`}
     >
       {dragOverPos === "before" && (
         <div className="absolute -top-1.5 left-0 right-0 h-1 rounded-full bg-brand" />
@@ -96,14 +97,15 @@ export function KanbanCard({
       )}
 
       <div className="flex flex-wrap items-center gap-1 pr-5">
+        {etiqueta && <span className={`h-2.5 w-2.5 flex-none rounded-full ${etiqueta.dot}`} title={`Etiqueta: ${etiqueta.label}`} role="img" aria-label={`Etiqueta ${etiqueta.label}`} />}
         {naoVisualizado && (
-          <span className="inline-flex items-center gap-0.5 rounded-full bg-brand px-1.5 py-0.5 text-[10px] font-medium text-white">
+          <span className="inline-flex items-center gap-0.5 rounded-full bg-brand px-1.5 py-0.5 text-[11px] font-medium text-white">
             Novo
           </span>
         )}
         {estadoInatividade === "quase_expirando" && (
           <span
-            className="inline-flex items-center gap-0.5 rounded-full bg-warning-bg px-1.5 py-0.5 text-[10px] font-medium text-warning-ink"
+            className="inline-flex items-center gap-0.5 rounded-full bg-warning-bg px-1.5 py-0.5 text-[11px] font-medium text-warning-ink"
             title="Sem atividade há mais de 36h — expira para Rascunho em 48h se ninguém mexer"
           >
             <Clock className="h-2.5 w-2.5" /> Quase expirando
@@ -111,7 +113,7 @@ export function KanbanCard({
         )}
         {edital.etapaKanban === "RASCUNHO" && (
           <span
-            className="inline-flex items-center gap-0.5 rounded-full bg-danger-bg px-1.5 py-0.5 text-[10px] font-medium text-danger-ink"
+            className="inline-flex items-center gap-0.5 rounded-full bg-danger-bg px-1.5 py-0.5 text-[11px] font-medium text-danger-ink"
             title="Rascunhos são apagados 7 dias depois de entrar aqui. Arraste o card para outra coluna para guardá-lo."
           >
             <Trash2 className="h-2.5 w-2.5" />{" "}
@@ -120,7 +122,7 @@ export function KanbanCard({
         )}
         {edital.etapaKanban === "RASCUNHO" && edital.motivoMovimentacao && (
           <span
-            className="inline-flex items-center gap-0.5 rounded-full bg-muted/10 px-1.5 py-0.5 text-[10px] font-medium text-muted"
+            className="inline-flex items-center gap-0.5 rounded-full bg-muted/10 px-1.5 py-0.5 text-[11px] font-medium text-muted"
             title={edital.movidoEm ? `Movido em ${formatDateTime(edital.movidoEm)}` : undefined}
           >
             {edital.motivoMovimentacao === "INATIVIDADE" ? (
@@ -135,21 +137,21 @@ export function KanbanCard({
           </span>
         )}
         {edital.uf && (
-          <span className="inline-flex items-center gap-0.5 rounded-full bg-brand-light px-1.5 py-0.5 text-[10px] font-medium text-brand">
+          <span className="inline-flex items-center gap-0.5 rounded-full bg-brand-light px-1.5 py-0.5 text-[11px] font-medium text-brand">
             <MapPin className="h-2.5 w-2.5" /> {edital.uf}
           </span>
         )}
         {edital.fonte === "MANUAL" && (
-          <span className="rounded-full bg-surface px-1.5 py-0.5 text-[10px] font-medium text-muted">Manual</span>
+          <span className="rounded-full bg-surface px-1.5 py-0.5 text-[11px] font-medium text-muted">Manual</span>
         )}
         {edital.tipoObjeto && (
-          <span className="rounded-full bg-surface px-1.5 py-0.5 text-[10px] font-medium text-muted">
+          <span className="rounded-full bg-surface px-1.5 py-0.5 text-[11px] font-medium text-muted">
             {TIPO_OBJETO_LABEL[edital.tipoObjeto]}
           </span>
         )}
         <SeloHabilitacao status={edital.habilitacaoStatus} percentual={edital.habilitacaoPercentual} etapa={edital.etapaKanban} />
         {foraDoPerfil && (
-          <span className="inline-flex items-center gap-0.5 rounded-full bg-warning-bg px-1.5 py-0.5 text-[10px] font-medium text-warning-ink">
+          <span className="inline-flex items-center gap-0.5 rounded-full bg-warning-bg px-1.5 py-0.5 text-[11px] font-medium text-warning-ink">
             <AlertTriangle className="h-2.5 w-2.5" /> Fora do perfil
           </span>
         )}

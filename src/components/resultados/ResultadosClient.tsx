@@ -10,9 +10,9 @@ import {
   type ContagemComValor,
 } from "@/lib/resultados";
 import { formatBRL } from "@/lib/format";
-import { COR_BRAND, COR_ACCENT, COR_GANHO, COR_PERDA } from "@/lib/chart-colors";
+import { COR_BRAND, COR_ACCENT, COR_GANHO, COR_PERDA, COR_ANDAMENTO } from "@/lib/chart-colors";
 import { Filtros } from "@/components/resultados/Filtros";
-import { CabecalhoMobile } from "@/components/shell/CabecalhoMobile";
+import { PaginaConteudo } from "@/components/ui/PaginaConteudo";
 import { BarraHorizontal, DonutPortal, EvolucaoMensalChart } from "@/components/resultados/Graficos";
 
 function formatPercentual(v: number | null): string {
@@ -40,8 +40,8 @@ function KpiCard({
   return (
     <div className="min-w-0 rounded-card bg-surface shadow-card p-4">
       <div className="flex items-center gap-2">
-        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg" style={{ backgroundColor: `${cor}1a`, color: cor }}>
-          <Icon className="h-3.5 w-3.5" />
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full" style={{ backgroundColor: `color-mix(in srgb, ${cor} 14%, transparent)`, color: cor }}>
+          <Icon className="h-[18px] w-[18px]" />
         </span>
         <span className="truncate text-xs font-medium text-muted">{label}</span>
       </div>
@@ -100,26 +100,21 @@ export function ResultadosClient() {
   const queryAtual = filtrosParaQueryString(filtros);
 
   return (
-    <div className="mx-auto max-w-[1400px] px-4 py-6 sm:px-6 sm:py-8 lg:px-8 lg:py-10">
-      <CabecalhoMobile titulo="Resultados" subtitulo="Desempenho das propostas" />
-      <div className="flex items-start justify-between gap-4 max-md:mt-4">
-        <div>
-          <h1 className="text-2xl font-semibold text-foreground max-md:hidden">Resultados</h1>
-          <p className="mt-1 text-sm text-muted">
-            Visão consolidada do desempenho da empresa nas licitações — conversão, valores e onde vale mais a pena atuar.
-          </p>
-        </div>
+    <PaginaConteudo
+      titulo="Resultados"
+      subtitulo="Visão consolidada do desempenho da empresa nas licitações — conversão, valores e onde vale mais a pena atuar."
+      acoes={
         <a
           href={`/api/resultados/pdf${queryAtual ? `?${queryAtual}` : ""}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-brand/90"
+          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-pill bg-brand-600 px-5 text-[14px] font-bold text-on-brand transition hover:bg-brand-900"
         >
           <Download className="h-4 w-4" />
           Exportar PDF
         </a>
-      </div>
-
+      }
+    >
       {resultados && (
         <Filtros filtros={filtros} onChange={setFiltros} opcoesFiltro={resultados.opcoesFiltro} />
       )}
@@ -173,7 +168,7 @@ export function ResultadosClient() {
                   label="Em disputa"
                   valor={formatBRL(resultados.valorEmDisputa)}
                   sub={`${resultados.emAndamento} edital(is) em andamento`}
-                  cor="#d97706"
+                  cor={COR_ANDAMENTO}
                 />
                 <KpiCard
                   icon={XCircle}
@@ -234,6 +229,6 @@ export function ResultadosClient() {
           )}
         </>
       ) : null}
-    </div>
+    </PaginaConteudo>
   );
 }

@@ -105,12 +105,12 @@ export function ParametrosTributariosClient() {
     "w-24 rounded-lg border border-border bg-background px-2 py-1 text-right text-sm text-foreground focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20";
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8 lg:py-10">
+    <div className="mx-auto w-full max-w-[var(--content-max)] px-[var(--gutter)] py-6 md:py-8">
       <Link href="/empresa" className="inline-flex items-center gap-1.5 text-sm text-muted hover:text-foreground">
         <ArrowLeft className="h-4 w-4" /> Voltar
       </Link>
 
-      <h1 className="mt-4 text-2xl font-semibold text-foreground">Parâmetros tributários</h1>
+      <h1 className="mt-4 tipo-titulo-pagina text-ink">Parâmetros tributários</h1>
       <p className="mt-1 text-sm text-muted">
         Alíquotas usadas no Estudo de Viabilidade para calcular o preço mínimo viável. Nada fica fixo no sistema —
         atualize aqui sempre que a legislação mudar ou os valores não corresponderem à realidade da empresa.

@@ -233,14 +233,14 @@ export function KanbanBoard({
       <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2">
-            <label htmlFor="filtroUf" className="text-xs font-medium text-muted">
+            <label htmlFor="filtroUf" className="tipo-pequeno font-bold text-ink-muted">
               Estado
             </label>
             <select
               id="filtroUf"
               value={filtroUf ?? ""}
               onChange={(e) => setFiltroUf(e.target.value || null)}
-              className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs font-medium text-foreground focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
+              className="min-h-11 rounded-tile border border-border bg-surface px-3 text-[13px] font-bold text-ink focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-focus-ring/30"
             >
               <option value="">Todos os estados</option>
               {ufsComOportunidades.map((uf) => (
@@ -252,14 +252,14 @@ export function KanbanBoard({
           </div>
 
           <div className="flex items-center gap-2">
-            <label htmlFor="filtroFonte" className="text-xs font-medium text-muted">
+            <label htmlFor="filtroFonte" className="tipo-pequeno font-bold text-ink-muted">
               Portal
             </label>
             <select
               id="filtroFonte"
               value={filtroFonte ?? ""}
               onChange={(e) => setFiltroFonte(e.target.value || null)}
-              className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs font-medium text-foreground focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
+              className="min-h-11 rounded-tile border border-border bg-surface px-3 text-[13px] font-bold text-ink focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-focus-ring/30"
             >
               <option value="">Todos os portais</option>
               {fontesComOportunidades.map((fonte) => (
@@ -271,14 +271,14 @@ export function KanbanBoard({
           </div>
 
           <div className="flex items-center gap-2">
-            <label htmlFor="filtroHabilitacao" className="text-xs font-medium text-muted">
+            <label htmlFor="filtroHabilitacao" className="tipo-pequeno font-bold text-ink-muted">
               Habilitação
             </label>
             <select
               id="filtroHabilitacao"
               value={filtroHabilitacao ?? ""}
               onChange={(e) => setFiltroHabilitacao(e.target.value || null)}
-              className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs font-medium text-foreground focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
+              className="min-h-11 rounded-tile border border-border bg-surface px-3 text-[13px] font-bold text-ink focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-focus-ring/30"
             >
               <option value="">Todas</option>
               {GRUPOS_HABILITACAO.filter((g) => g.chave !== "SEM_AUDITORIA").map((g) => (
@@ -366,13 +366,13 @@ export function KanbanBoard({
               key={key}
               onDragOver={(e) => handleColumnDragOver(e, key)}
               onDrop={(e) => handleColumnDrop(e, key)}
-              className={`flex w-[82vw] max-w-72 shrink-0 snap-start flex-col rounded-xl border bg-surface/50 transition sm:w-72 ${
-                dragOverColumn === key ? "border-brand/50 bg-brand-light/30" : "border-border"
+              className={`flex w-[82vw] max-w-72 shrink-0 snap-start flex-col rounded-card transition sm:w-72 ${
+                dragOverColumn === key ? "bg-tint ring-2 ring-brand-600/40" : "bg-neutral-bg/60"
               }`}
             >
               <div className="flex items-center justify-between px-3 py-2.5">
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">{label}</h3>
-                <span className="rounded-full bg-surface px-1.5 py-0.5 text-[11px] font-medium text-muted">
+                <h3 className="tipo-legenda uppercase text-ink-muted">{label}</h3>
+                <span className="tipo-legenda rounded-pill bg-surface px-2 py-0.5 tabular-nums text-ink-muted">
                   {cards.length}
                 </span>
               </div>
@@ -382,8 +382,8 @@ export function KanbanBoard({
                   ? agruparPorModalidade(cards).map(({ grupo, cards: cardsGrupo }) => (
                       <div key={grupo} className="flex flex-col gap-2">
                         <div className="mt-1.5 flex items-center justify-between px-0.5 first:mt-0">
-                          <h4 className="text-[10px] font-semibold uppercase tracking-wide text-muted">{grupo}</h4>
-                          <span className="text-[10px] text-muted">{cardsGrupo.length}</span>
+                          <h4 className="text-[11px] font-semibold uppercase tracking-wide text-muted">{grupo}</h4>
+                          <span className="text-[11px] text-muted">{cardsGrupo.length}</span>
                         </div>
                         {cardsGrupo.map((edital) => renderCard(edital))}
                       </div>
@@ -394,20 +394,20 @@ export function KanbanBoard({
                         <div key={chave} className="flex flex-col gap-2">
                           <div className="mt-1.5 flex items-center justify-between px-0.5 first:mt-0">
                             <h4
-                              className={`text-[10px] font-semibold uppercase tracking-wide ${
+                              className={`text-[11px] font-semibold uppercase tracking-wide ${
                                 chave === "HABILITADAS" ? "text-success-ink" : chave === "NAO_HABILITADAS" ? "text-danger-ink" : "text-muted"
                               }`}
                             >
                               {titulo}
                             </h4>
-                            <span className="text-[10px] text-muted">{cardsGrupo.length}</span>
+                            <span className="text-[11px] text-muted">{cardsGrupo.length}</span>
                           </div>
                           {cardsGrupo.map((edital) => renderCard(edital))}
                         </div>
                       ))
                     : cards.map((edital) => renderCard(edital))}
                 {cards.length === 0 && (
-                  <div className="rounded-lg border border-dashed border-border py-6 text-center text-[11px] text-muted">
+                  <div className="rounded-tile border border-dashed border-border py-6 text-center text-[11px] text-ink-muted">
                     Arraste um card para cá
                   </div>
                 )}

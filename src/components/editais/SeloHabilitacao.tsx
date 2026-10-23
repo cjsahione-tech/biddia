@@ -35,7 +35,7 @@ export function SeloHabilitacao({
   /** Etapa do card. Antes de Qualificação não há auditoria: nada de erro ou "Auditando…". */
   etapa?: string;
 }) {
-  const classes = tamanho === "pequeno" ? "px-1.5 py-0.5 text-[10px]" : "px-2.5 py-1 text-xs";
+  const classes = tamanho === "pequeno" ? "px-1.5 py-0.5 text-[11px]" : "px-2.5 py-1 text-xs";
   // Oportunidade (e Rascunho/etapas negativas): só mostra um resultado já pronto; qualquer
   // outro estado (erro, travado, sem auditoria) vira o aviso neutro de que será auditado ao qualificar.
   if (etapa && !etapaAudita(etapa) && !RESULTADOS.includes(status)) {

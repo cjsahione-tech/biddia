@@ -17,40 +17,29 @@ import { AuditTab } from "@/components/editais/tabs/AuditTab";
 import { SeloHabilitacao } from "@/components/editais/SeloHabilitacao";
 import { HabilitacaoTab } from "@/components/editais/tabs/HabilitacaoTab";
 import { ViabilidadeTab } from "@/components/editais/tabs/ViabilidadeTab";
-import { useCelular } from "@/lib/use-celular";
+import { Abas } from "@/components/ui/Abas";
+import { Cartao } from "@/components/ui/Cartao";
+import { Chip } from "@/components/ui/Chip";
 
+// Abas do edital (as mesmas em qualquer tela; no celular rolam para o lado). "Documentos" guarda as declarações e anexos
+// que o Agente Advogado gera; "Auditoria" é o histórico dos agentes.
 const TABS = [
-  { key: "analise", label: "Análise" },
-  { key: "habilitacao", label: "Habilitação" },
-  { key: "financeiro", label: "Financeiro" },
-  { key: "documentos", label: "Documentos" },
-  { key: "checklist", label: "Checklist" },
-  { key: "auditoria", label: "Auditoria" },
+  { chave: "analise", rotulo: "Análise" },
+  { chave: "viabilidade", rotulo: "Viabilidade" },
+  { chave: "habilitacao", rotulo: "Habilitação" },
+  { chave: "financeiro", rotulo: "Financeiro" },
+  { chave: "documentos", rotulo: "Documentos" },
+  { chave: "checklist", rotulo: "Checklist" },
+  { chave: "auditoria", rotulo: "Auditoria" },
 ] as const;
-
-// Abas do celular (design): Análise, Viabilidade, Financeiro, Advogado, Checklist e Auditoria. "Advogado" é a aba
-// Documentos (declarações e anexos que o Agente Advogado gera) e "Auditoria" junta o resultado da habilitação com o
-// histórico dos agentes. No computador continuam as abas de sempre.
-const TABS_CELULAR = [
-  { key: "analise", label: "Análise" },
-  { key: "viabilidade", label: "Viabilidade" },
-  { key: "financeiro", label: "Financeiro" },
-  { key: "documentos", label: "Advogado" },
-  { key: "checklist", label: "Checklist" },
-  { key: "auditoria", label: "Auditoria" },
-] as const;
+type ChaveAba = (typeof TABS)[number]["chave"];
 
 export function EditalDetailClient({ editalId }: { editalId: string }) {
-  const celular = useCelular();
   const searchParams = useSearchParams();
-  const tabInicial =
-    (TABS.find((t) => t.key === searchParams.get("tab"))?.key as (typeof TABS)[number]["key"] | undefined) ??
-    "analise";
+  const tabInicial = (TABS.find((t) => t.chave === searchParams.get("tab"))?.chave as ChaveAba | undefined) ?? "analise";
 
   const [edital, setEdital] = useState<EditalDetail | null>(null);
-  const [tabEscolhida, setTab] = useState<(typeof TABS)[number]["key"] | "viabilidade">(tabInicial);
-  // No celular a aba "Habilitação" não existe sozinha: o resultado dela aparece dentro de "Auditoria".
-  const tab = celular && tabEscolhida === "habilitacao" ? "auditoria" : tabEscolhida;
+  const [tab, setTab] = useState<ChaveAba>(tabInicial);
   const [movendoEtapa, setMovendoEtapa] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -113,35 +102,33 @@ export function EditalDetailClient({ editalId }: { editalId: string }) {
 
   const pipelineRunning = edital.status === "APROVADO" && edital.agentRuns.length > 0;
 
+  const valor = descreverValorEdital(edital);
+
   return (
-    <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8 lg:py-10 max-md:pt-5">
-      <Link href={celular ? "/editais" : "/dashboard"} className="inline-flex items-center gap-1.5 text-sm text-muted hover:text-foreground">
-        <ArrowLeft className="h-4 w-4" /> {celular ? "Editais" : "Voltar"}
+    <div className="mx-auto w-full max-w-[var(--content-max)] px-[var(--gutter)] pb-8 pt-5 md:pt-8">
+      <Link href="/editais" className="tipo-corpo-forte inline-flex min-h-11 items-center gap-1.5 text-brand-600">
+        <ArrowLeft className="h-4 w-4" /> Editais
       </Link>
 
-      <div className="mt-4 flex flex-col gap-4 max-md:rounded-[22px] max-md:bg-white max-md:p-4 md:flex-row md:items-start md:justify-between md:gap-6">
+      <Cartao className="mt-1 flex flex-col gap-4 md:flex-row md:items-start md:justify-between md:gap-6 md:p-5">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded-full bg-brand-light px-2.5 py-0.5 text-xs font-medium text-brand">
-              {edital.modalidade ?? "Modalidade não informada"}
-            </span>
-            <span className="text-xs text-muted">
-              {edital.fonte === "MANUAL" ? "Adicionado manualmente" : edital.numeroControlePNCP}
-            </span>
+            <Chip>{edital.modalidade ?? "Modalidade não informada"}</Chip>
+            <span className="tipo-pequeno text-ink-muted">{edital.fonte === "MANUAL" ? "Adicionado manualmente" : edital.numeroControlePNCP}</span>
             <SeloHabilitacao status={edital.habilitacaoStatus} percentual={edital.habilitacaoPercentual} tamanho="normal" etapa={edital.etapaKanban} />
-            {["HABILITADA_RESSALVAS", "NAO_HABILITADA", "REVISAR_MANUALMENTE"].includes(edital.habilitacaoStatus) && (
-              <button onClick={() => setTab("habilitacao")} className="text-xs font-medium text-brand hover:underline">
+            {["HABILITADA_RESSALVAS", "NAO_HABILITADA", "REVISAR_MANUALMENTE", "PRECISA_ACAO_HUMANA"].includes(edital.habilitacaoStatus) && (
+              <button onClick={() => setTab("habilitacao")} className="tipo-pequeno font-bold text-brand-600 hover:underline">
                 Ver pendências
               </button>
             )}
           </div>
-          <h1 className="mt-2 break-words text-xl font-semibold text-foreground sm:text-2xl">{edital.titulo}</h1>
-          <p className="mt-1 text-sm text-muted">
+          <h1 className="tipo-titulo-pagina mt-2 break-words text-ink">{edital.titulo}</h1>
+          <p className="tipo-corpo mt-1 text-ink-muted">
             {edital.orgaoNome} — {edital.municipio ?? "?"}/{edital.uf ?? "?"}
           </p>
 
-          <div className="mt-3 flex items-center gap-2">
-            <label htmlFor="etapaKanban" className="text-xs font-medium text-muted">
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <label htmlFor="etapaKanban" className="tipo-pequeno font-bold text-ink-muted">
               Etapa
             </label>
             <select
@@ -149,7 +136,7 @@ export function EditalDetailClient({ editalId }: { editalId: string }) {
               value={edital.etapaKanban}
               onChange={(e) => moverEtapa(e.target.value as EtapaKanban)}
               disabled={movendoEtapa}
-              className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs font-medium text-foreground focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
+              className="min-h-11 rounded-tile border border-border bg-surface px-3 text-[13px] font-bold text-ink focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-focus-ring/30"
             >
               {ETAPAS_KANBAN.map((et) => (
                 <option key={et.key} value={et.key}>
@@ -157,88 +144,47 @@ export function EditalDetailClient({ editalId }: { editalId: string }) {
                 </option>
               ))}
             </select>
-            {movendoEtapa && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted" />}
+            {movendoEtapa && <Loader2 className="h-4 w-4 animate-spin text-ink-muted" />}
           </div>
           {edital.status === "NOVO" && (
-            <p className="mt-1.5 text-xs text-muted">
+            <p className="tipo-pequeno mt-1.5 text-ink-muted">
               Os agentes de IA começam a analisar assim que este card vai para &ldquo;Qualificação&rdquo;.
             </p>
           )}
         </div>
-        <div className="shrink-0 md:text-right">
-          <p
-            className={`text-xl font-semibold ${descreverValorEdital(edital).apagado ? "text-muted italic" : "text-foreground"}`}
-          >
-            {descreverValorEdital(edital).texto}
-          </p>
-          {descreverValorEdital(edital).nota && <p className="mt-0.5 max-w-xs text-xs text-muted md:ml-auto">{descreverValorEdital(edital).nota}</p>}
-          <p className="mt-1 text-xs text-muted">Encerra {formatDate(edital.dataEncerramentoProposta)}</p>
+        <div className="shrink-0 border-t border-border pt-3 md:border-t-0 md:pt-0 md:text-right">
+          <p className={`tipo-numero ${valor.apagado ? "italic text-ink-muted" : "text-ink"}`}>{valor.texto}</p>
+          {valor.nota && <p className="tipo-pequeno mt-0.5 max-w-xs text-ink-muted md:ml-auto">{valor.nota}</p>}
+          <p className="tipo-pequeno mt-1 tabular-nums text-ink-muted">Encerra {formatDate(edital.dataEncerramentoProposta)}</p>
           {edital.linkPortal && (
-            <a
-              href={edital.linkPortal}
-              target="_blank"
-              rel="noreferrer"
-              className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-brand hover:underline"
-            >
+            <a href={edital.linkPortal} target="_blank" rel="noreferrer" className="tipo-pequeno mt-1 inline-flex min-h-11 items-center gap-1.5 font-bold text-brand-600 hover:underline">
               {labelVerNoPortal(edital.fonte)} <ExternalLink className="h-3 w-3" />
             </a>
           )}
         </div>
-      </div>
+      </Cartao>
 
       {pipelineRunning && (
-        <div className="mt-6">
+        <div className="mt-4">
           <PipelineStatus runs={edital.agentRuns} />
         </div>
       )}
 
-      {celular ? (
-        <div className="rolagem-oculta -mx-4 mt-5 flex gap-2 overflow-x-auto px-4 pb-1">
-          {TABS_CELULAR.map((t) => (
-            <button
-              key={t.key}
-              onClick={() => setTab(t.key)}
-              className={`flex-none whitespace-nowrap rounded-[18px] px-3.5 py-2 text-[12.5px] font-bold ${tab === t.key ? "bg-brand text-white" : "bg-white text-muted"}`}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-      ) : (
-      <div className="mt-8 flex items-center gap-1 overflow-x-auto border-b border-border">
-        {TABS.map((t) => (
-          <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            className={`-mb-px shrink-0 whitespace-nowrap border-b-2 px-3 py-2.5 text-sm font-medium transition sm:px-4 ${
-              tab === t.key
-                ? "border-brand text-brand"
-                : "border-transparent text-muted hover:text-foreground"
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
-      )}
+      <Abas
+        className="mt-5"
+        rotuloAcessivel="Abas do edital"
+        itens={TABS.map((t) => ({ chave: t.chave, rotulo: t.rotulo }))}
+        ativa={tab}
+        onChange={(c) => setTab(c as ChaveAba)}
+      />
 
-      <div className="mt-6">
+      <div className="mt-5">
         {tab === "analise" && <AnalysisTab edital={edital} onUpdate={load} />}
+        {tab === "viabilidade" && <ViabilidadeTab editalId={edital.id} />}
         {tab === "habilitacao" && <HabilitacaoTab editalId={edital.id} etapa={edital.etapaKanban} onMudou={load} />}
         {tab === "financeiro" && <FinanceTab edital={edital} onUpdate={load} />}
-        {tab === "documentos" && (
-          <DocumentsTab editalId={edital.id} documents={edital.documents} onUpdate={load} />
-        )}
-        {tab === "checklist" && (
-          <ChecklistTab editalId={edital.id} items={edital.checklistItems} onUpdate={load} />
-        )}
-        {tab === "viabilidade" && <ViabilidadeTab editalId={edital.id} />}
-        {tab === "auditoria" && celular && (
-          <div className="mb-6">
-            <HabilitacaoTab editalId={edital.id} etapa={edital.etapaKanban} onMudou={load} />
-            <h3 className="mb-3 mt-8 text-[15px] font-bold text-foreground">Histórico dos agentes</h3>
-          </div>
-        )}
+        {tab === "documentos" && <DocumentsTab editalId={edital.id} documents={edital.documents} onUpdate={load} />}
+        {tab === "checklist" && <ChecklistTab editalId={edital.id} items={edital.checklistItems} onUpdate={load} />}
         {tab === "auditoria" && <AuditTab editalId={edital.id} logs={edital.auditLogs} onUpdate={load} />}
       </div>
     </div>

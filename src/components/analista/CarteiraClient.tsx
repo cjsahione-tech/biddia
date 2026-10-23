@@ -242,10 +242,10 @@ export function CarteiraClient() {
   const noLimite = plano?.maxEmpresas != null && ativos.length >= plano.maxEmpresas;
 
   return (
-    <div className="mx-auto max-w-[1000px] px-4 py-6 sm:px-6 sm:py-8 lg:px-8 lg:py-10">
+    <div className="mx-auto w-full max-w-[var(--content-max)] px-[var(--gutter)] py-6 md:py-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-foreground">Minha carteira</h1>
+          <h1 className="tipo-titulo-pagina text-ink">Minha carteira</h1>
           <p className="mt-1 text-sm text-muted">
             {plano ? `Plano ${plano.nome}` : "Sem plano atribuído"} · {ativos.length}
             {plano?.maxEmpresas != null ? ` de ${plano.maxEmpresas}` : ""} cliente(s)

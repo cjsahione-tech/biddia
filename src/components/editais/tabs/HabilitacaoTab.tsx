@@ -54,7 +54,7 @@ function DocumentosAnalisados({ auditoria, concluida }: { auditoria: AuditoriaRe
               <FileText className="h-3.5 w-3.5 shrink-0 text-muted" />
               <span className="min-w-0 flex-1 break-words text-xs font-medium text-foreground">{d.nome}</span>
               <span
-                className="rounded-full bg-surface px-2 py-0.5 text-[10px] font-medium text-muted"
+                className="rounded-full bg-surface px-2 py-0.5 text-[11px] font-medium text-muted"
                 title={
                   d.papel === "principal"
                     ? "Edital, termo de referência, preços e planilhas: se não forem lidos por inteiro, o resultado fica com ressalva."
@@ -63,7 +63,7 @@ function DocumentosAnalisados({ auditoria, concluida }: { auditoria: AuditoriaRe
               >
                 {d.papel === "principal" ? "Principal" : "Apoio"}
               </span>
-              <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${ESTILO_SELO_DOCUMENTO[d.selo]}`}>{d.rotulo}</span>
+              <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${ESTILO_SELO_DOCUMENTO[d.selo]}`}>{d.rotulo}</span>
             </div>
             {d.problema && (
               <p className="mt-1 pl-5 text-xs text-muted">
@@ -591,7 +591,7 @@ export function HabilitacaoTab({ editalId, etapa, onMudou }: { editalId: string;
                 <span className="min-w-0 flex-1 text-foreground">
                   {i.documento}
                   {i.documentoEnviado && (
-                    <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-success-bg px-2 py-0.5 text-[10px] font-medium text-success-ink" title={i.documentoEnviado.nome}>
+                    <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-success-bg px-2 py-0.5 text-[11px] font-medium text-success-ink" title={i.documentoEnviado.nome}>
                       <Check className="h-2.5 w-2.5" /> Enviado
                     </span>
                   )}

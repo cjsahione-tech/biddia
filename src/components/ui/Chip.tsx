@@ -2,8 +2,9 @@ import type { LucideIcon } from "lucide-react";
 
 // Chip / selo: 11px, cantos de 10px, ícone + palavra.
 //  info    = UF, tipo, prazo normal (tint)       neutro = informação de apoio (neutral-bg)
+//  marca = destaque de marca ("Novo")
 //  sucesso / atencao / erro = status (sempre com palavra ou ícone — nunca só a cor)
-export type TomChip = "info" | "neutro" | "sucesso" | "atencao" | "erro";
+export type TomChip = "info" | "neutro" | "sucesso" | "atencao" | "erro" | "marca";
 
 const TONS: Record<TomChip, string> = {
   info: "bg-tint text-tint-ink",
@@ -11,6 +12,7 @@ const TONS: Record<TomChip, string> = {
   sucesso: "bg-success-bg text-success-ink",
   atencao: "bg-warning-bg text-warning-ink",
   erro: "bg-danger-bg text-danger-ink",
+  marca: "bg-brand-600 text-on-brand", // "Novo"
 };
 
 export function Chip({

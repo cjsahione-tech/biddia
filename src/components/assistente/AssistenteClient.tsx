@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Bot, Download, Loader2, Send, Sparkles, User } from "lucide-react";
+import { Download, Loader2, Send, User } from "lucide-react";
+import { AvatarBidd } from "@/components/ui/Marca";
 import { Button } from "@/components/ui/Button";
 
 type Arquivo = { nome: string; contentType: string; base64: string };
@@ -61,24 +62,22 @@ export function AssistenteClient() {
   }
 
   return (
-    <div className="mx-auto flex h-[calc(100dvh-5rem)] max-w-3xl flex-col px-4 py-4 max-md:h-[calc(100dvh-8.5rem)] sm:px-6 sm:py-6 lg:h-[calc(100vh-2rem)] lg:px-8">
-      <div className="flex items-center gap-2">
-        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-light text-brand max-md:bg-[#312e81] max-md:text-[#fbbf24]">
-          <Sparkles className="h-4.5 w-4.5" />
-        </div>
-        <div>
-          <h1 className="text-lg font-semibold text-foreground">Bidd.IA</h1>
-          <p className="text-xs text-muted">
+    <div className="mx-auto flex h-[calc(100dvh-9rem)] w-full max-w-3xl flex-col px-[var(--gutter)] py-4 md:h-[calc(100dvh-4rem)] md:py-6">
+      <div className="flex items-center gap-3">
+        <AvatarBidd tamanho={44} />
+        <div className="min-w-0">
+          <h1 className="tipo-titulo-2 text-ink">Bidd.IA</h1>
+          <p className="tipo-pequeno text-ink-muted">
             <span className="md:hidden">Assistente com os 6 agentes</span>
             <span className="hidden md:inline">Pergunte sobre qualquer processo ou peça pra gerar um arquivo.</span>
           </p>
         </div>
       </div>
 
-      <div ref={listRef} className="mt-4 flex-1 space-y-4 overflow-y-auto rounded-card bg-surface shadow-card p-4 max-md:border-0 max-md:bg-transparent max-md:p-0">
+      <div ref={listRef} className="mt-4 flex-1 space-y-4 overflow-y-auto">
         {mensagens.length === 0 && (
           <div className="flex h-full flex-col items-center justify-center gap-4 text-center">
-            <p className="text-sm text-muted">
+            <p className="tipo-corpo max-w-md text-ink-muted">
               Converse comigo sobre seus editais, sua empresa ou seus estudos de viabilidade — ou peça pra eu gerar
               uma planilha, um PDF ou um ZIP.
             </p>
@@ -87,7 +86,7 @@ export function AssistenteClient() {
                 <button
                   key={s}
                   onClick={() => enviarMensagem(s)}
-                  className="rounded-full border border-border bg-background px-3 py-1.5 text-xs text-foreground hover:bg-surface max-md:border-0 max-md:bg-white max-md:font-bold"
+                  className="min-h-11 rounded-pill bg-surface px-4 text-[13px] font-bold text-ink shadow-card hover:bg-tint"
                 >
                   {s}
                 </button>
@@ -97,27 +96,23 @@ export function AssistenteClient() {
         )}
 
         {mensagens.map((m, i) => (
-          <div key={i} className={`flex gap-2 ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-            {m.role === "assistant" && (
-              <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-light text-brand">
-                <Bot className="h-3.5 w-3.5" />
-              </div>
-            )}
+          <div key={i} className={`flex items-end gap-2 ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+            {m.role === "assistant" && <AvatarBidd tamanho={28} />}
             <div
-              className={`max-w-[85%] rounded-xl px-3.5 py-2.5 text-sm ${
-                m.role === "user" ? "bg-brand text-white" : "border border-border bg-background text-foreground max-md:border-0 max-md:bg-white"
-              } max-md:rounded-[18px]`}
+              className={`max-w-[85%] rounded-card px-4 py-3 ${
+                m.role === "user" ? "rounded-br-chip bg-brand-600 text-on-brand" : "rounded-bl-chip bg-surface text-ink shadow-card"
+              }`}
             >
-              <p className="whitespace-pre-wrap">{m.content}</p>
+              <p className="tipo-corpo whitespace-pre-wrap">{m.content}</p>
               {m.arquivos && m.arquivos.length > 0 && (
                 <div className="mt-2 space-y-1.5">
                   {m.arquivos.map((a, j) => (
                     <button
                       key={j}
                       onClick={() => baixarArquivo(a)}
-                      className="flex w-full items-center gap-2 rounded-lg border border-border bg-surface px-2.5 py-1.5 text-left text-xs text-foreground hover:bg-brand-light"
+                      className="flex min-h-11 w-full items-center gap-2 rounded-tile bg-tint px-3 text-left text-[13px] font-bold text-tint-ink hover:brightness-95"
                     >
-                      <Download className="h-3.5 w-3.5 shrink-0 text-brand" />
+                      <Download className="h-4 w-4 shrink-0" />
                       <span className="min-w-0 flex-1 truncate">{a.nome}</span>
                     </button>
                   ))}
@@ -125,7 +120,7 @@ export function AssistenteClient() {
               )}
             </div>
             {m.role === "user" && (
-              <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-surface text-muted">
+              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-tint text-tint-ink" aria-hidden>
                 <User className="h-3.5 w-3.5" />
               </div>
             )}
@@ -133,14 +128,14 @@ export function AssistenteClient() {
         ))}
 
         {enviando && (
-          <div className="flex items-center gap-2 pl-8 text-xs text-muted">
+          <div className="tipo-pequeno flex items-center gap-2 pl-9 text-ink-muted">
             <Loader2 className="h-3.5 w-3.5 animate-spin" /> Bidd.IA está pensando...
           </div>
         )}
       </div>
 
       <div className="mt-3">
-        {erro && <p className="mb-2 text-xs text-danger-ink">{erro}</p>}
+        {erro && <p className="tipo-pequeno mb-2 text-danger-ink">{erro}</p>}
         <div className="flex items-end gap-2">
           <textarea
             value={texto}
@@ -154,9 +149,9 @@ export function AssistenteClient() {
             rows={1}
             disabled={enviando}
             placeholder="Pergunte à Bidd.IA sobre seus editais, ou peça um arquivo..."
-            className="max-h-32 flex-1 resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20 max-md:rounded-[22px] max-md:border-0 max-md:bg-white max-md:px-4 max-md:py-3"
+            className="tipo-corpo max-h-32 min-h-11 flex-1 resize-none rounded-card bg-surface px-4 py-2.5 text-ink shadow-card placeholder:text-ink-muted/70 focus:outline-none focus:ring-2 focus:ring-focus-ring/40"
           />
-          <Button onClick={() => enviarMensagem(texto)} loading={enviando} disabled={!texto.trim()} className="shrink-0 px-3 max-md:h-11 max-md:w-11 max-md:rounded-full max-md:p-0">
+          <Button onClick={() => enviarMensagem(texto)} loading={enviando} disabled={!texto.trim()} aria-label="Enviar" className="h-11 w-11 shrink-0 !px-0">
             {!enviando && <Send className="h-4 w-4" />}
           </Button>
         </div>

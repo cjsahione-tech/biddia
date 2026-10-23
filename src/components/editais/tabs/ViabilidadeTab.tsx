@@ -18,9 +18,9 @@ type Estudo = {
 
 const REGIME: Record<string, string> = { SIMPLES_NACIONAL: "Simples Nacional", LUCRO_PRESUMIDO: "Lucro Presumido", LUCRO_REAL: "Lucro Real" };
 const DECISAO = {
-  PARTICIPAR: { texto: "Sim", cor: "bg-[#ddf3e7] text-[#14532d]" },
-  PARTICIPAR_COM_RESSALVAS: { texto: "Com ressalvas", cor: "bg-[#fef3c7] text-[#92400e]" },
-  NAO_PARTICIPAR: { texto: "Não", cor: "bg-[#fde4e4] text-[#7f1d1d]" },
+  PARTICIPAR: { texto: "Sim", cor: "bg-success-bg text-success-ink" },
+  PARTICIPAR_COM_RESSALVAS: { texto: "Com ressalvas", cor: "bg-warning-bg text-warning-ink" },
+  NAO_PARTICIPAR: { texto: "Não", cor: "bg-danger-bg text-danger-ink" },
 } as const;
 
 function lerResultado(json: string | null): ResultadoCalculoViabilidade | null {
@@ -65,10 +65,10 @@ export function ViabilidadeTab({ editalId }: { editalId: string }) {
   }
   if (estudos.length === 0) {
     return (
-      <div className="rounded-[22px] bg-white p-5 text-center">
+      <div className="rounded-card bg-surface p-5 text-center">
         <p className="text-[15px] font-bold text-foreground">Ainda não há estudo para este edital</p>
         <p className="mt-1 text-xs text-muted">O estudo calcula custos, tributos e a margem para decidir se vale participar.</p>
-        <Link href="/estudo-viabilidade" className="mt-3 inline-flex h-11 items-center justify-center rounded-[22px] bg-brand px-5 text-sm font-bold text-white">
+        <Link href="/estudo-viabilidade" className="mt-3 inline-flex h-11 items-center justify-center rounded-card bg-brand px-5 text-sm font-bold text-white">
           Criar estudo de viabilidade
         </Link>
       </div>
@@ -81,13 +81,13 @@ export function ViabilidadeTab({ editalId }: { editalId: string }) {
         const r = lerResultado(e.resultadoCalculoJson);
         const d = r ? DECISAO[r.recomendacao.decisao] : null;
         return (
-          <div key={e.id} className="space-y-3 rounded-[22px] bg-white p-4">
+          <div key={e.id} className="space-y-3 rounded-card bg-surface p-4">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-[15px] font-bold text-foreground">Vale participar?</p>
                 <p className="truncate text-xs text-muted">{e.nome ?? (e.ramo === "SERVICO" ? "Estudo de serviço" : "Estudo de produto")}</p>
               </div>
-              {d && <span className={`flex-none rounded-[10px] px-3 py-1 text-xs font-bold ${d.cor}`}>{d.texto}</span>}
+              {d && <span className={`flex-none rounded-chip px-3 py-1 text-xs font-bold ${d.cor}`}>{d.texto}</span>}
             </div>
             {r ? (
               <>

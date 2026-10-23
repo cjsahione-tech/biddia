@@ -37,7 +37,7 @@ export function Abas({
         const conteudo = (
           <>
             {item.rotulo}
-            {item.contagem !== undefined && <span className="tabular-nums"> · {item.contagem}</span>}
+            {item.contagem !== undefined && <span className="ml-1 tabular-nums">· {item.contagem}</span>}
           </>
         );
         return item.href ? (

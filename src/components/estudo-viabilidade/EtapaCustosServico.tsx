@@ -230,7 +230,7 @@ export function EtapaCustosServico({
                       placeholder="Nome do cargo"
                       className="w-full rounded-lg border border-border bg-background px-2 py-1.5 text-xs text-foreground focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
                     />
-                    {cargo.origemEdital && <span className="mt-1 block text-[10px] text-muted">Sugerido do edital</span>}
+                    {cargo.origemEdital && <span className="mt-1 block text-[11px] text-muted">Sugerido do edital</span>}
                   </td>
                   <td className="px-3 py-2">
                     <input
