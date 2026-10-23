@@ -13,17 +13,17 @@ export function Field({
 }) {
   return (
     <div>
-      <label htmlFor={htmlFor} className="block text-sm font-medium text-foreground">
+      <label htmlFor={htmlFor} className="block text-[13px] font-bold text-ink">
         {label}
       </label>
       {children}
-      {hint && <p className="mt-1 text-xs text-muted">{hint}</p>}
+      {hint && <p className="tipo-pequeno mt-1 text-ink-muted">{hint}</p>}
     </div>
   );
 }
 
 const baseInputClass =
-  "mt-1.5 block w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted/70 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20";
+  "mt-1.5 block min-h-11 w-full rounded-tile border border-border bg-surface px-4 py-2.5 text-[15px] text-ink placeholder:text-ink-muted/70 focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-focus-ring/30";
 
 export function TextInput(props: InputHTMLAttributes<HTMLInputElement>) {
   return <input {...props} className={`${baseInputClass} ${props.className ?? ""}`} />;

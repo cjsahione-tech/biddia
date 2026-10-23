@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Field, TextInput, Select } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
+import { Logo } from "@/components/ui/Marca";
 
 type TipoConta = "EMPRESA" | "ANALISTA";
 
@@ -49,9 +50,7 @@ export default function RegistroPage() {
   return (
     <div className="flex flex-1 items-center justify-center px-6 py-16">
       <div className="w-full max-w-sm">
-        <Link href="/" className="text-lg font-semibold tracking-tight text-foreground">
-          Bidd<span className="text-brand">.IA</span>
-        </Link>
+        <Logo href="/" />
         <h1 className="mt-6 text-2xl font-semibold text-foreground">Criar conta</h1>
         <p className="mt-1 text-sm text-muted">Comece a montar sua equipe de agentes de IA.</p>
 

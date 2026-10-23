@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
-import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
 import { LogoutButton } from "@/components/analista/LogoutButton";
+import { Logo } from "@/components/ui/Marca";
 
 // Home do Analista — sem o AppShell/nav completo do (app), porque as abas de
 // Editais/Agenda/etc. só fazem sentido depois de "entrar" no login de um cliente (nesse
@@ -14,9 +14,7 @@ export default async function CarteiraLayout({ children }: { children: React.Rea
   return (
     <div className="flex min-h-screen flex-1 flex-col">
       <header className="flex items-center justify-between border-b border-border px-4 py-4 sm:px-6 lg:px-8">
-        <Link href="/carteira" className="text-lg font-semibold tracking-tight text-foreground">
-          Bidd<span className="text-brand">.IA</span>
-        </Link>
+        <Logo href="/carteira" />
         <div className="flex items-center gap-3">
           <span className="text-sm text-muted">{user.name}</span>
           <LogoutButton />

@@ -17,6 +17,7 @@ import {
   Check,
   type LucideIcon,
 } from "lucide-react";
+import { Logo } from "@/components/ui/Marca";
 
 // Valores padrão usados enquanto o admin não salvou nada em /admin/site (SiteContent
 // vazio na primeira execução) — nunca deixa a home pública sem texto.
@@ -116,9 +117,7 @@ export default async function LandingPage() {
     <div className="flex-1">
       <header className="border-b border-border">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
-          <span className="text-lg font-semibold tracking-tight text-foreground">
-            Bidd<span className="text-brand">.IA</span>
-          </span>
+          <Logo />
           <nav className="flex items-center gap-3">
             <Link
               href="/login"
