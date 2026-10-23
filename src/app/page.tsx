@@ -121,13 +121,13 @@ export default async function LandingPage() {
           <nav className="flex items-center gap-3">
             <Link
               href="/login"
-              className="rounded-lg px-4 py-2 text-sm font-medium text-muted hover:text-foreground"
+              className="inline-flex min-h-11 items-center rounded-pill px-4 text-[14px] font-bold text-ink-muted hover:text-ink"
             >
               Entrar
             </Link>
             <Link
               href="/registro"
-              className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-brand/90"
+              className="inline-flex min-h-11 items-center rounded-pill bg-brand-600 px-5 text-[14px] font-bold text-on-brand hover:bg-brand-900"
             >
               Criar conta
             </Link>
@@ -154,13 +154,13 @@ export default async function LandingPage() {
         <div className="mt-8 flex items-center justify-center gap-3">
           <Link
             href="/registro"
-            className="inline-flex items-center gap-2 rounded-lg bg-brand px-5 py-3 text-sm font-medium text-white shadow-sm hover:bg-brand/90"
+            className="inline-flex min-h-11 items-center gap-2 rounded-pill bg-brand-600 px-6 text-[14px] font-bold text-on-brand hover:bg-brand-900"
           >
             Começar agora <ArrowRight className="h-4 w-4" />
           </Link>
           <Link
             href="/login"
-            className="rounded-lg border border-border px-5 py-3 text-sm font-medium text-foreground hover:bg-surface"
+            className="inline-flex min-h-11 items-center rounded-pill border-[1.5px] border-brand-600 bg-surface px-6 text-[14px] font-bold text-brand-600 hover:bg-tint"
           >
             Já tenho conta
           </Link>
@@ -241,7 +241,7 @@ export default async function LandingPage() {
                   </ul>
                   <Link
                     href="/registro"
-                    className="mt-6 rounded-lg bg-brand px-4 py-2.5 text-center text-sm font-medium text-white shadow-sm hover:bg-brand/90"
+                    className="mt-6 inline-flex min-h-11 items-center justify-center rounded-pill bg-brand-600 px-5 text-center text-[14px] font-bold text-on-brand hover:bg-brand-900"
                   >
                     Começar
                   </Link>

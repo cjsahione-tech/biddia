@@ -192,7 +192,7 @@ export function AdminSiteClient() {
       </div>
 
       {erro && <p className="mt-4 text-sm text-danger-ink">{erro}</p>}
-      {salvo && <p className="mt-4 text-sm text-emerald-600">Salvo — já está no ar.</p>}
+      {salvo && <p className="mt-4 text-sm text-success-ink">Salvo — já está no ar.</p>}
 
       <div className="mt-5">
         <Button onClick={salvar} loading={salvando}>

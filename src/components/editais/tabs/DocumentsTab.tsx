@@ -33,7 +33,7 @@ function DocumentRow({ editalId, doc }: { editalId: string; doc: DocumentItem })
         href={`/api/editais/${editalId}/documents/${doc.id}/download`}
         target="_blank"
         rel="noreferrer"
-        className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-surface"
+        className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-pill px-4 text-[13px] font-bold transition border-[1.5px] border-brand-600 bg-surface text-brand-600 hover:bg-tint shrink-0"
       >
         <Download className="h-3.5 w-3.5" /> Baixar PDF
       </a>

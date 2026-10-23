@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Bell } from "lucide-react";
 import { useShell } from "@/components/shell/ShellContext";
-import { iniciais } from "@/lib/mobile-util";
+import { iniciais } from "@/lib/painel-util";
 
 // Estrutura de página da identidade: conteúdo com até 1200px, centralizado ao lado do menu, com a margem lateral
 // (--gutter) de 18px no celular, 24px no tablet e 32px no computador. Cabeçalho: título (titulo-2 no celular,

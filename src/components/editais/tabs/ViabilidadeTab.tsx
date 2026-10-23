@@ -68,7 +68,7 @@ export function ViabilidadeTab({ editalId }: { editalId: string }) {
       <div className="rounded-card bg-surface p-5 text-center">
         <p className="text-[15px] font-bold text-foreground">Ainda não há estudo para este edital</p>
         <p className="mt-1 text-xs text-muted">O estudo calcula custos, tributos e a margem para decidir se vale participar.</p>
-        <Link href="/estudo-viabilidade" className="mt-3 inline-flex h-11 items-center justify-center rounded-card bg-brand px-5 text-sm font-bold text-white">
+        <Link href="/estudo-viabilidade" className="mt-3 inline-flex h-11 items-center justify-center rounded-card bg-brand px-5 text-sm font-bold text-on-brand">
           Criar estudo de viabilidade
         </Link>
       </div>

@@ -59,7 +59,7 @@ export default function RegistroPage() {
             type="button"
             onClick={() => setTipoConta("EMPRESA")}
             className={`rounded-md px-3 py-2 text-sm font-medium transition ${
-              tipoConta === "EMPRESA" ? "bg-brand text-white" : "text-muted hover:text-foreground"
+              tipoConta === "EMPRESA" ? "bg-brand text-on-brand" : "text-muted hover:text-foreground"
             }`}
           >
             Sou uma Empresa
@@ -68,7 +68,7 @@ export default function RegistroPage() {
             type="button"
             onClick={() => setTipoConta("ANALISTA")}
             className={`rounded-md px-3 py-2 text-sm font-medium transition ${
-              tipoConta === "ANALISTA" ? "bg-brand text-white" : "text-muted hover:text-foreground"
+              tipoConta === "ANALISTA" ? "bg-brand text-on-brand" : "text-muted hover:text-foreground"
             }`}
           >
             Sou Analista de Licitação

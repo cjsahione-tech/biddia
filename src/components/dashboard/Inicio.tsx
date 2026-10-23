@@ -9,7 +9,7 @@ import { useShell } from "@/components/shell/ShellContext";
 import { ListaEditais } from "@/components/dashboard/ListaEditais";
 import { AvisosDoQuadro, type DadosAvisos } from "@/components/dashboard/AvisosDoQuadro";
 import { etapasDaEsteira } from "@/lib/funil";
-import { mesmoDiaBrasilia, primeiroNome, saudacao } from "@/lib/mobile-util";
+import { mesmoDiaBrasilia, primeiroNome, saudacao } from "@/lib/painel-util";
 import type { EditalListItem } from "@/lib/types";
 
 const SEMANA_MS = 7 * 24 * 3_600_000;

@@ -180,7 +180,7 @@ function ChecklistRow({
             <button
               onClick={() => fileInputRef.current?.click()}
               disabled={uploading}
-              className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-border px-2 py-1 text-xs font-medium text-foreground hover:bg-surface disabled:opacity-60"
+              className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-pill px-4 text-[13px] font-bold transition border-[1.5px] border-brand-600 bg-surface text-brand-600 hover:bg-tint shrink-0 disabled:opacity-60"
             >
               {uploading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Paperclip className="h-3 w-3" />}
               Anexar

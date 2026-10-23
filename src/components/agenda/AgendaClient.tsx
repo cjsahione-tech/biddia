@@ -24,10 +24,10 @@ import type { AgendaEditalItem } from "@/lib/types";
 type TipoEvento = "abertura" | "habilitacao" | "visita" | "impugnacao";
 
 const TIPOS: { key: TipoEvento; campo: keyof AgendaEditalItem; label: string; dot: string; texto: string }[] = [
-  { key: "abertura", campo: "dataAberturaProposta", label: "Abertura das propostas", dot: "bg-blue-500", texto: "text-blue-600" },
-  { key: "habilitacao", campo: "dataPrazoHabilitacao", label: "Prazo de habilitação", dot: "bg-orange-500", texto: "text-orange-600" },
-  { key: "visita", campo: "dataVisitaTecnica", label: "Visita técnica", dot: "bg-purple-500", texto: "text-purple-600" },
-  { key: "impugnacao", campo: "dataPrazoImpugnacao", label: "Impugnação/esclarecimento", dot: "bg-red-500", texto: "text-red-600" },
+  { key: "abertura", campo: "dataAberturaProposta", label: "Abertura das propostas", dot: "bg-brand-600", texto: "text-brand-600" },
+  { key: "habilitacao", campo: "dataPrazoHabilitacao", label: "Prazo de habilitação", dot: "bg-warning-ink", texto: "text-warning-ink" },
+  { key: "visita", campo: "dataVisitaTecnica", label: "Visita técnica", dot: "bg-success-ink", texto: "text-success-ink" },
+  { key: "impugnacao", campo: "dataPrazoImpugnacao", label: "Impugnação/esclarecimento", dot: "bg-danger-ink", texto: "text-danger-ink" },
 ];
 
 type Evento = { edital: AgendaEditalItem; tipo: (typeof TIPOS)[number] };
@@ -128,9 +128,9 @@ export function AgendaClient() {
               <button
                 key={chave}
                 onClick={() => setDiaCelular(marcado ? null : chave)}
-                className={`flex flex-col items-center gap-0.5 rounded-2xl py-2 ${marcado ? "bg-brand text-white" : hoje ? "bg-brand-light text-tint-ink" : "text-foreground"}`}
+                className={`flex flex-col items-center gap-0.5 rounded-2xl py-2 ${marcado ? "bg-brand text-on-brand" : hoje ? "bg-brand-light text-tint-ink" : "text-foreground"}`}
               >
-                <span className={`text-[11px] font-bold uppercase ${marcado ? "text-white/80" : "text-muted"}`}>{format(d, "EEEEE", { locale: ptBR })}</span>
+                <span className={`text-[11px] font-bold uppercase ${marcado ? "text-on-brand/80" : "text-muted"}`}>{format(d, "EEEEE", { locale: ptBR })}</span>
                 <span className="text-[15px] font-bold">{format(d, "d")}</span>
                 <span className={`h-1.5 w-1.5 rounded-full ${tem ? (marcado ? "bg-accent" : "bg-brand") : "bg-transparent"}`} />
               </button>
@@ -226,7 +226,7 @@ export function AgendaClient() {
                   } ${eventos.length > 0 ? "hover:bg-surface" : "cursor-default"}`}
                 >
                   <span
-                    className={`text-xs font-medium ${hoje ? "rounded-full bg-brand px-1.5 py-0.5 text-white" : ""}`}
+                    className={`text-xs font-medium ${hoje ? "rounded-full bg-brand px-1.5 py-0.5 text-on-brand" : ""}`}
                   >
                     {format(dia, "d")}
                   </span>
@@ -247,11 +247,11 @@ export function AgendaClient() {
 
       {diaSelecionado && (
         <div
-          className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-foreground/40 px-4 py-10"
+          className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-ink/40 md:items-center md:p-6"
           onClick={() => setDiaSelecionado(null)}
         >
           <div
-            className="w-full max-w-md rounded-2xl border border-border bg-background p-5 shadow-xl"
+            className="janela-painel flex max-h-[90dvh] w-full max-w-[560px] flex-col overflow-y-auto rounded-t-card bg-surface shadow-nav md:rounded-card p-5"
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="text-sm font-semibold text-foreground">
@@ -278,7 +278,7 @@ export function AgendaClient() {
             </div>
             <button
               onClick={() => setDiaSelecionado(null)}
-              className="mt-4 w-full rounded-lg border border-border px-3 py-2 text-sm font-medium text-foreground hover:bg-surface"
+              className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-pill px-4 text-[13px] font-bold transition border-[1.5px] border-brand-600 bg-surface text-brand-600 hover:bg-tint mt-4 w-full"
             >
               Fechar
             </button>

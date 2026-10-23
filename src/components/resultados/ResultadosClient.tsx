@@ -120,7 +120,7 @@ export function ResultadosClient() {
       )}
 
       {erro && (
-        <p className="mt-4 rounded-lg border border-danger-ink/30 bg-danger-bg px-4 py-2.5 text-sm text-danger-ink">{erro}</p>
+        <p className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-pill px-4 text-[13px] font-bold transition border-[1.5px] border-danger-ink bg-surface text-danger-ink hover:bg-danger-bg mt-4 bg-danger-bg">{erro}</p>
       )}
 
       {loading && !resultados ? (

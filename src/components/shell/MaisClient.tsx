@@ -23,7 +23,7 @@ import { Cartao } from "@/components/ui/Cartao";
 import { Chip } from "@/components/ui/Chip";
 import { PaginaConteudo } from "@/components/ui/PaginaConteudo";
 import { useShell } from "@/components/shell/ShellContext";
-import { iniciais, primeiroNome } from "@/lib/mobile-util";
+import { iniciais, primeiroNome } from "@/lib/painel-util";
 
 type Atalho = { href: string; titulo: string; descricao: string; icon: LucideIcon; selo?: number };
 

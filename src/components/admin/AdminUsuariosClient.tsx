@@ -390,8 +390,8 @@ function ModalExcluir({ alvo, onFechar, onExcluido }: { alvo: Linha; onFechar: (
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-label="Excluir conta">
-      <div className="w-full max-w-lg rounded-2xl border border-border bg-background p-5 shadow-xl">
+    <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-ink/40 md:items-center md:p-6" role="dialog" aria-modal="true" aria-label="Excluir conta">
+      <div className="janela-painel flex max-h-[90dvh] w-full max-w-[560px] flex-col overflow-y-auto rounded-t-card bg-surface shadow-nav md:rounded-card p-5">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-2 text-danger-ink">
             <AlertTriangle className="h-5 w-5" />

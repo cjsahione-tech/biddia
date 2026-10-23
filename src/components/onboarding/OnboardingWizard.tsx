@@ -172,7 +172,7 @@ export function OnboardingWizard() {
               <span
                 className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold ${
                   done
-                    ? "bg-brand text-white"
+                    ? "bg-brand text-on-brand"
                     : active
                       ? "border-2 border-brand text-brand"
                       : "border border-border text-muted"

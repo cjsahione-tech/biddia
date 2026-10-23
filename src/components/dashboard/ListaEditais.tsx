@@ -13,7 +13,7 @@ import { etapaAudita } from "@/lib/habilitacao";
 import { descreverValorEdital } from "@/lib/format";
 import { labelPortal } from "@/lib/fonte-edital";
 import { ETAPAS_KANBAN } from "@/lib/kanban";
-import { rotuloPrazo, type TomPrazo } from "@/lib/mobile-util";
+import { rotuloPrazo, type TomPrazo } from "@/lib/painel-util";
 import type { EditalListItem, EtapaKanban } from "@/lib/types";
 
 const TOM_DO_PRAZO: Record<TomPrazo, TomChip> = { urgente: "atencao", normal: "info", encerrado: "neutro", semData: "neutro" };

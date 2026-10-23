@@ -77,7 +77,7 @@ export function EtapaRelatorio({ estudo }: { estudo: EstudoViabilidadeDetail }) 
           href={`/api/estudos/${estudo.id}/relatorio/pdf`}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-3 py-1.5 text-xs font-medium text-white shadow-sm transition hover:bg-brand/90"
+          className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-pill px-4 text-[13px] font-bold transition bg-brand-600 text-on-brand hover:bg-brand-900"
         >
           <Download className="h-3.5 w-3.5" /> Baixar relatório em PDF
         </a>

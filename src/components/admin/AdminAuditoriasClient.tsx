@@ -56,7 +56,7 @@ export function AdminAuditoriasClient() {
             A auditoria agora roda só quando o edital entra em Qualificação. Aqui você arruma o passado: primeiro vê a simulação (nada muda, nada gasta), depois decide.
           </p>
         </div>
-        <button onClick={carregar} className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium hover:bg-surface">
+        <button onClick={carregar} className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-pill px-4 text-[13px] font-bold transition border-[1.5px] border-brand-600 bg-surface text-brand-600 hover:bg-tint">
           <RefreshCw className="h-3.5 w-3.5" /> Simular de novo
         </button>
       </div>
@@ -79,7 +79,7 @@ export function AdminAuditoriasClient() {
             <button
               disabled={ocupado || sim.limpar.total === 0}
               onClick={() => executar({ acao: "limpar_selos" }, `Limpar o selo de ${sim.limpar.total} edital(is)? Não gasta IA.`)}
-              className="mt-3 rounded-lg bg-brand px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
+              className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-pill px-4 text-[13px] font-bold transition bg-brand-600 text-on-brand hover:bg-brand-900 mt-3 disabled:opacity-50"
             >
               Limpar {sim.limpar.total} selo(s)
             </button>
@@ -115,7 +115,7 @@ export function AdminAuditoriasClient() {
                   `Auditar ${sim.auditar.total} edital(is)? Custo estimado ${brl(sim.auditar.custoBrl.medio)} (faixa ${brl(sim.auditar.custoBrl.minimo)} a ${brl(sim.auditar.custoBrl.maximo)}). Elas rodam pela fila, 3 por vez.`
                 )
               }
-              className="mt-3 rounded-lg bg-brand px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
+              className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-pill px-4 text-[13px] font-bold transition bg-brand-600 text-on-brand hover:bg-brand-900 mt-3 disabled:opacity-50"
             >
               Auditar {sim.auditar.total} edital(is) — {brl(sim.auditar.custoBrl.medio)}
             </button>

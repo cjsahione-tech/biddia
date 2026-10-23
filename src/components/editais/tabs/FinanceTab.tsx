@@ -105,7 +105,7 @@ export function FinanceTab({ edital, onUpdate }: { edital: EditalDetail; onUpdat
         <div className="flex shrink-0 flex-wrap items-center gap-2">
           <a
             href={`/api/editais/${edital.id}/proposal/modelo`}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-2 text-sm font-medium text-foreground hover:bg-surface"
+            className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-pill px-4 text-[13px] font-bold transition border-[1.5px] border-brand-600 bg-surface text-brand-600 hover:bg-tint"
           >
             <FileSpreadsheet className="h-4 w-4" /> Baixar modelo (.xlsx)
           </a>
@@ -398,7 +398,7 @@ export function FinanceTab({ edital, onUpdate }: { edital: EditalDetail; onUpdat
 
         <a
           href={`/api/editais/${edital.id}/proposal/planilha`}
-          className="mt-4 inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-4 py-2 text-sm font-medium text-foreground hover:bg-surface"
+          className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-pill px-4 text-[13px] font-bold transition border-[1.5px] border-brand-600 bg-surface text-brand-600 hover:bg-tint mt-4"
         >
           <Download className="h-4 w-4" /> Baixar planilha da proposta (.xlsx)
         </a>

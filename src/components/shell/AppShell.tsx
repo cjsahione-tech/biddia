@@ -8,7 +8,7 @@ import { ShellProvider } from "@/components/shell/ShellContext";
 import { BarraNavegacaoMobile } from "@/components/shell/BarraNavegacaoMobile";
 import { ITENS_NAVEGACAO, ITENS_NAVEGACAO_ADMIN } from "@/components/shell/navegacao";
 import { Logo } from "@/components/ui/Marca";
-import { iniciais } from "@/lib/mobile-util";
+import { iniciais } from "@/lib/painel-util";
 
 // Estrutura do sistema, igual em qualquer tela: celular (até 767px) = barra inferior flutuante; tablet e computador
 // (a partir de 768px) = menu lateral brand-900 de 248px com os MESMOS 5 destinos, e o conteúdo (até 1200px) ao lado.

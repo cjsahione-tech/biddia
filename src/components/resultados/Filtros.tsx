@@ -59,7 +59,7 @@ export function Filtros({
               key={p.label}
               onClick={() => onChange({ ...filtros, de: p.de(), ate: null })}
               className={`rounded-md px-2 py-1 text-xs font-medium transition ${
-                presetAtivo === p.label ? "bg-brand text-white" : "bg-background text-muted hover:text-foreground"
+                presetAtivo === p.label ? "bg-brand text-on-brand" : "bg-background text-muted hover:text-foreground"
               } border border-border`}
             >
               {p.label}

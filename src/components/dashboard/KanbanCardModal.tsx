@@ -169,9 +169,9 @@ export function KanbanCardModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-foreground/40 px-4 py-10" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-ink/40 md:items-center md:p-6" onClick={onClose}>
       <div
-        className="w-full max-w-lg overflow-hidden rounded-2xl border border-border bg-background shadow-xl"
+        className="janela-painel flex max-h-[90dvh] w-full max-w-[560px] flex-col overflow-y-auto rounded-t-card bg-surface shadow-nav md:rounded-card"
         onClick={(e) => e.stopPropagation()}
       >
         {!edital ? (

@@ -16,7 +16,7 @@ export function EtapaStepper({ atual }: { atual: EtapaEstudoKey }) {
             <div
               className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold ${
                 feita
-                  ? "bg-brand text-white"
+                  ? "bg-brand text-on-brand"
                   : ativa
                     ? "border-2 border-brand text-brand"
                     : "border border-border text-muted"

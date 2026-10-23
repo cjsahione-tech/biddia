@@ -159,7 +159,7 @@ function CartaoAcaoHumana({
                 </option>
               ))}
             </select>
-            <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-brand/30 bg-brand-light/30 px-3 py-1.5 text-xs font-medium text-brand hover:bg-brand-light/60">
+            <label className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-pill px-4 text-[13px] font-bold transition bg-tint text-tint-ink hover:brightness-95 cursor-pointer -light/30">
               {enviando || ocupado ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Paperclip className="h-3.5 w-3.5" />} Enviar arquivo
               <input
                 type="file"
@@ -180,7 +180,7 @@ function CartaoAcaoHumana({
               if (window.confirm(`Liberar a leitura completa eleva o limite de custo deste edital para US$ ${TETO_CUSTO_LIBERADO_USD.toFixed(2).replace(".", ",")}. Confirma?`)) onLiberarLeitura();
             }}
             disabled={ocupado}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground hover:bg-surface disabled:opacity-60"
+            className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-pill px-4 text-[13px] font-bold transition border-[1.5px] border-brand-600 bg-surface text-brand-600 hover:bg-tint disabled:opacity-60"
           >
             <FileText className="h-3.5 w-3.5" /> Liberar leitura completa (custo extra)
           </button>
@@ -189,7 +189,7 @@ function CartaoAcaoHumana({
           <button
             onClick={onTentarDeNovo}
             disabled={ocupado}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground hover:bg-surface disabled:opacity-60"
+            className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-pill px-4 text-[13px] font-bold transition border-[1.5px] border-brand-600 bg-surface text-brand-600 hover:bg-tint disabled:opacity-60"
           >
             <RefreshCw className="h-3.5 w-3.5" /> Tentar de novo
           </button>
@@ -250,7 +250,7 @@ function CartaoPendencia({ item, onAnexado }: { item: ItemRelatorio; onAnexado: 
         <div className="mt-2 flex flex-wrap items-center gap-3">
           <button
             onClick={() => setAnexando(true)}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-brand/30 bg-brand-light/30 px-2.5 py-1 text-xs font-medium text-brand hover:bg-brand-light/60"
+            className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-pill px-4 text-[13px] font-bold transition bg-tint text-tint-ink hover:brightness-95 -light/30"
           >
             <Paperclip className="h-3.5 w-3.5" /> {vencido ? "Anexar versão atualizada" : mostrarEnviado ? "Substituir documento" : "Anexar documento"}
           </button>
@@ -409,7 +409,7 @@ export function HabilitacaoTab({ editalId, etapa, onMudou }: { editalId: string;
               href={`/api/editais/${editalId}/habilitacao/relatorio`}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground hover:bg-surface"
+              className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-pill px-4 text-[13px] font-bold transition border-[1.5px] border-brand-600 bg-surface text-brand-600 hover:bg-tint"
             >
               <Download className="h-3.5 w-3.5" /> Baixar PDF / imprimir
             </a>
@@ -461,7 +461,7 @@ export function HabilitacaoTab({ editalId, etapa, onMudou }: { editalId: string;
           <button
             onClick={() => pedirAuditoria()}
             disabled={pedindo}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-1.5 text-xs font-medium text-foreground hover:bg-border/30 disabled:opacity-60"
+            className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-pill px-4 text-[13px] font-bold transition border-[1.5px] border-brand-600 bg-surface text-brand-600 hover:bg-tint disabled:opacity-60"
           >
             {pedindo ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />} Auditar agora
           </button>
@@ -507,7 +507,7 @@ export function HabilitacaoTab({ editalId, etapa, onMudou }: { editalId: string;
               }
             }}
             disabled={pedindo}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-brand/30 bg-brand-light/30 px-3 py-1.5 text-xs font-medium text-brand hover:bg-brand-light/60 disabled:opacity-60"
+            className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-pill px-4 text-[13px] font-bold transition bg-tint text-tint-ink hover:brightness-95 shrink-0 -light/30 disabled:opacity-60"
           >
             {pedindo ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />} Liberar leitura completa (custo extra)
           </button>
@@ -521,7 +521,7 @@ export function HabilitacaoTab({ editalId, etapa, onMudou }: { editalId: string;
           <button
             onClick={() => pedirAuditoria()}
             disabled={pedindo}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-danger-ink/30 bg-background px-3 py-1.5 text-xs font-medium text-danger-ink hover:bg-danger-bg disabled:opacity-60"
+            className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-pill px-4 text-[13px] font-bold transition border-[1.5px] border-danger-ink bg-surface text-danger-ink hover:bg-danger-bg shrink-0 disabled:opacity-60"
           >
             {pedindo ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />} Tentar novamente
           </button>

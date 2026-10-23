@@ -155,7 +155,7 @@ export function CaptacaoClient() {
                 placeholder="Nova palavra-chave"
                 className="h-10 min-w-0 flex-1 rounded-card bg-background px-4 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30"
               />
-              <button onClick={adicionar} aria-label="Adicionar palavra-chave" className="flex h-10 w-10 flex-none items-center justify-center rounded-full bg-brand text-white">
+              <button onClick={adicionar} aria-label="Adicionar palavra-chave" className="flex h-10 w-10 flex-none items-center justify-center rounded-full bg-brand text-on-brand">
                 <Plus className="h-4 w-4" />
               </button>
             </div>

@@ -123,7 +123,7 @@ export function EtapaCustosProduto({
               />
               <button
                 onClick={() => aplicarATodos(campo.key)}
-                className="shrink-0 rounded-lg border border-border px-2 py-1.5 text-xs font-medium text-foreground hover:bg-surface"
+                className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-pill px-4 text-[13px] font-bold transition border-[1.5px] border-brand-600 bg-surface text-brand-600 hover:bg-tint shrink-0"
               >
                 Aplicar
               </button>

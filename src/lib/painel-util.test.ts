@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { diasAte, iniciais, mesmoDiaBrasilia, primeiroNome, rotuloPrazo, saudacao } from "@/lib/mobile-util";
+import { diasAte, iniciais, mesmoDiaBrasilia, primeiroNome, rotuloPrazo, saudacao } from "@/lib/painel-util";
 
 describe("visual de celular: textos", () => {
   it("primeiro nome e iniciais, mesmo com nome em maiúsculas ou vazio", () => {

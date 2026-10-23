@@ -99,7 +99,7 @@ export function KanbanCard({
       <div className="flex flex-wrap items-center gap-1 pr-5">
         {etiqueta && <span className={`h-2.5 w-2.5 flex-none rounded-full ${etiqueta.dot}`} title={`Etiqueta: ${etiqueta.label}`} role="img" aria-label={`Etiqueta ${etiqueta.label}`} />}
         {naoVisualizado && (
-          <span className="inline-flex items-center gap-0.5 rounded-full bg-brand px-1.5 py-0.5 text-[11px] font-medium text-white">
+          <span className="inline-flex items-center gap-0.5 rounded-full bg-brand px-1.5 py-0.5 text-[11px] font-medium text-on-brand">
             Novo
           </span>
         )}

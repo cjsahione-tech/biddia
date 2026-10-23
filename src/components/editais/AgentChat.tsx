@@ -122,7 +122,7 @@ export function AgentChat({
             )}
             <div
               className={`max-w-[80%] rounded-xl px-3 py-2 text-sm ${
-                m.role === "user" ? "bg-brand text-white" : "border border-border bg-background text-foreground"
+                m.role === "user" ? "bg-brand text-on-brand" : "border border-border bg-background text-foreground"
               }`}
             >
               <p className="whitespace-pre-wrap">{m.conteudo}</p>
@@ -132,13 +132,13 @@ export function AgentChat({
                   target="_blank"
                   rel="noreferrer"
                   className={`mt-1.5 inline-flex items-center gap-1 text-xs ${
-                    m.role === "user" ? "text-white/80 hover:text-white" : "text-brand hover:underline"
+                    m.role === "user" ? "text-on-brand/80 hover:text-on-brand" : "text-brand hover:underline"
                   }`}
                 >
                   <Paperclip className="h-3 w-3" /> {m.anexoNome}
                 </a>
               )}
-              <p className={`mt-1 text-[11px] ${m.role === "user" ? "text-white/60" : "text-muted"}`}>
+              <p className={`mt-1 text-[11px] ${m.role === "user" ? "text-on-brand/60" : "text-muted"}`}>
                 {formatDateTime(m.createdAt)}
               </p>
             </div>
