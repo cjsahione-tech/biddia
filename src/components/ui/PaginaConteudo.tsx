@@ -7,7 +7,7 @@ import { iniciais } from "@/lib/painel-util";
 
 // Estrutura de página da identidade: conteúdo com até 1200px, centralizado ao lado do menu, com a margem lateral
 // (--gutter) de 18px no celular, 24px no tablet e 32px no computador. Cabeçalho: título (titulo-2 no celular,
-// titulo-1 a partir de 768px), subtítulo e ações; no celular o sino e o avatar ficam aqui (no computador, na barra do topo).
+// titulo-1 a partir de 768px), subtítulo e ações (ao lado do título só no computador; no celular e no tablet vão abaixo dele); no celular o sino e o avatar ficam aqui (do tablet em diante, na barra do topo).
 export function PaginaConteudo({
   titulo,
   subtitulo,
@@ -33,7 +33,7 @@ export function PaginaConteudo({
           {subtitulo && <p className="tipo-pequeno mt-1 text-ink-muted">{subtitulo}</p>}
         </div>
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-          {acoes && <div className="hidden flex-wrap items-center justify-end gap-2 md:flex">{acoes}</div>}
+          {acoes && <div className="hidden flex-wrap items-center justify-end gap-2 lg:flex">{acoes}</div>}
           <div className="flex items-center gap-2.5 md:hidden">
             <Link href="/notificacoes" aria-label="Notificações" className="relative flex h-11 w-11 items-center justify-center rounded-full bg-surface text-ink-muted shadow-card">
               <Bell className="h-5 w-5" />
@@ -49,7 +49,7 @@ export function PaginaConteudo({
           </div>
         </div>
       </header>
-      {acoes && <div className="mt-3 flex flex-wrap items-center gap-2 md:hidden">{acoes}</div>}
+      {acoes && <div className="mt-3 flex flex-wrap items-center gap-2 lg:hidden">{acoes}</div>}
       <div className="mt-5 md:mt-6">{children}</div>
     </div>
   );
