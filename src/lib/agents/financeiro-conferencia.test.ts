@@ -2,12 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   acharLacunasDeNumeracao,
   blocosSuspeitos,
-  compararComTotais,
   conferirLinhas,
-  montarVeredito,
   paraNumero,
   pontuarDefeitos,
-  totaisDeclaradosNoTexto,
   type ItemConferivel,
 } from "@/lib/agents/financeiro-conferencia";
 
@@ -129,56 +126,5 @@ describe("blocosSuspeitos e pontuarDefeitos", () => {
     const boa = [item(1, 1, 1), item(2, 10, 5), item(3, 1, 1), item(4, 1, 1)];
     expect(pontuarDefeitos(ruim)).toBe(1);
     expect(pontuarDefeitos(boa)).toBe(0);
-  });
-});
-
-describe("totais declarados no texto", () => {
-  it("acha os totais escritos no edital, sem inventar", () => {
-    const texto = "Valor total estimado da contratação: R$ 1.234.567,89\nOutra linha\nTotal geral ..... R$ 500,00\nvalor unitário R$ 12,00";
-    expect(totaisDeclaradosNoTexto(texto).sort((a, b) => a - b)).toEqual([500, 1234567.89]);
-  });
-
-  it("devolve vazio quando o texto não declara total", () => {
-    expect(totaisDeclaradosNoTexto("Item 1 caneta R$ 2,00 R$ 20,00")).toEqual([]);
-  });
-
-  it("a soma bate com o total do edital (inteiro ou por lote)", () => {
-    expect(compararComTotais(1000, [], [1000.02]).confere).toBe(true);
-    expect(compararComTotais(1500, [600, 900], [900]).confere).toBe(true);
-    expect(compararComTotais(1000, [], [], [1000]).confere).toBe(true); // total do PNCP
-  });
-
-  it("só acusa quando o MAIOR total do texto é maior que a soma (sinal de item faltando)", () => {
-    expect(compararComTotais(1000, [], [2000])).toEqual({ confere: false, declaradoMaior: 2000 });
-    // total menor que a soma pode ser de uma linha ou de um lote: não prova nada
-    expect(compararComTotais(1000, [], [300, 40])).toEqual({ confere: false });
-  });
-});
-
-describe("montarVeredito", () => {
-  const sempreBate = { confere: true, valorQueBateu: 1 };
-
-  it("CONFERIDA quando tudo que dava para conferir fechou", () => {
-    const itens = [1, 2, 3, 4, 5].map((n) => item(n, 2, 10));
-    expect(montarVeredito({ itens, totais: sempreBate }).status).toBe("CONFERIDA");
-  });
-
-  it("DIVERGENTE e explica quando uma linha não fecha", () => {
-    const itens = [item(1, 1, 1), { ...item(2, 10, 5), valorUnitario: 50 }, item(3, 1, 1), item(4, 1, 1)];
-    const v = montarVeredito({ itens, totais: sempreBate });
-    expect(v.status).toBe("DIVERGENTE");
-    expect(v.avisos[0]).toContain("imprime R$ 50.00");
-  });
-
-  it("DIVERGENTE quando o edital declara um total maior que a soma dos itens", () => {
-    const itens = [1, 2, 3, 4].map((n) => item(n, 1, 10));
-    const v = montarVeredito({ itens, totais: { confere: false, declaradoMaior: 500 } });
-    expect(v.status).toBe("DIVERGENTE");
-    expect(v.avisos.join(" ")).toContain("podem faltar itens");
-  });
-
-  it("PARCIAL quando nada está errado mas quase nada era conferível", () => {
-    const itens = [1, 2, 3, 4].map((n) => ({ ...item(n, 1, 10), valorTotalLinha: null }));
-    expect(montarVeredito({ itens, totais: { confere: false } }).status).toBe("PARCIAL");
   });
 });

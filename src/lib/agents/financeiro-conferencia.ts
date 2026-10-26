@@ -1,6 +1,6 @@
 // Conferência da planilha do Agente Financeiro ANTES de ela ser entregue: contas e checagens que não gastam IA.
 // O agente lê a tabela com a IA e depois confere o resultado aqui; só o que não fecha volta para uma segunda leitura
-// mais cuidadosa (ver agente3-financeiro.ts). Regra de ouro: quando não dá para provar que está certo, avisa.
+// mais cuidadosa (ver agente3-financeiro.ts).
 
 export type ItemConferivel = {
   numero?: number | null;
@@ -132,101 +132,4 @@ export function blocosSuspeitos(itens: ItemConferivel[], problemas: ProblemaLinh
 export function pontuarDefeitos(itens: ItemConferivel[]): number {
   const faltando = acharLacunasDeNumeracao(itens).reduce((soma, l) => soma + l.faltando.length, 0);
   return conferirLinhas(itens).length + faltando;
-}
-
-/**
- * Totais que o próprio texto do edital declara ("Valor total estimado: R$ 1.234.567,89", "Valor global", "Total geral"…).
- * Procura de forma literal no texto (nada inventado pela IA): serve para ver se a soma dos itens bate com algum deles.
- */
-export function totaisDeclaradosNoTexto(texto: string): number[] {
-  const achados = new Set<number>();
-  const re = /(?:valor|pre[çc]o|custo)\s+(?:total|global|estimado\s+total|total\s+estimado)[^\n]{0,80}?R\$\s*([\d]{1,3}(?:\.\d{3})*,\d{2})|(?:total\s+geral|valor\s+global|total\s+do\s+lote|total\s+estimado)[^\n]{0,60}?R\$\s*([\d]{1,3}(?:\.\d{3})*,\d{2})/gi;
-  for (const m of texto.matchAll(re)) {
-    const v = paraNumero(m[1] ?? m[2]);
-    if (Number.isFinite(v) && v > 0) achados.add(Number(v.toFixed(2)));
-  }
-  return [...achados];
-}
-
-export type ResultadoTotais = {
-  /** Algum total declarado (no texto ou no PNCP) bate com a soma dos itens (ou de um lote)? */
-  confere: boolean;
-  /** Qual valor bateu, para mostrar ao usuário. */
-  valorQueBateu?: number;
-  /** O MAIOR total que o texto declara é maior que a soma dos itens: sinal de que podem faltar itens. */
-  declaradoMaior?: number;
-};
-
-/**
- * A soma dos itens (inteira ou por lote) bate, com folga de 0,5%, com algum total que o edital declara (no texto ou
- * no PNCP)? Só acusa quando o MAIOR total do texto é maior que a soma: totais menores que a soma podem ser de uma
- * linha ou de um lote, e não provam nada; um total geral maior que a soma sugere item faltando.
- */
-export function compararComTotais(
-  somaItens: number,
-  somaPorLote: number[],
-  totaisNoTexto: number[],
-  outrosTotais: number[] = []
-): ResultadoTotais {
-  const candidatos = [somaItens, ...somaPorLote];
-  for (const alvo of [...totaisNoTexto, ...outrosTotais]) {
-    for (const c of candidatos) {
-      if (alvo > 0 && Math.abs(c - alvo) <= Math.max(0.05, alvo * 0.005)) return { confere: true, valorQueBateu: alvo };
-    }
-  }
-  const maior = totaisNoTexto.length > 0 ? Math.max(...totaisNoTexto) : 0;
-  if (maior > somaItens * 1.005 + 0.05) return { confere: false, declaradoMaior: maior };
-  return { confere: false };
-}
-
-export type Veredito = {
-  /** CONFERIDA = tudo que dava para conferir fechou; PARCIAL = nada errado, mas pouco foi conferível; DIVERGENTE = há defeito. */
-  status: "CONFERIDA" | "PARCIAL" | "DIVERGENTE";
-  linhasConferidas: number;
-  linhasComDefeito: number;
-  itensFaltando: number;
-  /** Frases prontas (em português) para mostrar ao usuário. */
-  avisos: string[];
-};
-
-export function montarVeredito(args: {
-  itens: ItemConferivel[];
-  totais: ResultadoTotais;
-  /** Quantos itens vieram com preço sugerido pela IA porque o edital não publicou preço. */
-  precosEstimados?: number;
-}): Veredito {
-  const problemas = conferirLinhas(args.itens);
-  const lacunas = acharLacunasDeNumeracao(args.itens);
-  const itensFaltando = lacunas.reduce((s, l) => s + l.faltando.length, 0);
-  const linhasConferidas = args.itens.filter((i) => {
-    const t = i.valorTotalLinha == null ? NaN : paraNumero(i.valorTotalLinha);
-    return Number.isFinite(t) && t > 0;
-  }).length;
-  const avisos: string[] = [];
-
-  for (const p of problemas.slice(0, 5)) {
-    const it = args.itens[p.indice];
-    const nome = `${it.numero != null ? `item ${it.numero} ` : ""}"${it.descricao.slice(0, 50)}"`;
-    if (p.tipo === "TOTAL_NAO_BATE") {
-      avisos.push(`${nome}: quantidade × valor unitário dá R$ ${p.calculado?.toFixed(2)}, mas o edital imprime R$ ${p.impresso?.toFixed(2)} na linha`);
-    } else if (p.tipo === "QUANTIDADE_INVALIDA") {
-      avisos.push(`${nome}: quantidade inválida`);
-    } else {
-      avisos.push(`${nome}: valor unitário inválido`);
-    }
-  }
-  if (problemas.length > 5) avisos.push(`e mais ${problemas.length - 5} linha(s) que não fecham`);
-  for (const l of lacunas) {
-    const lista = l.faltando.slice(0, 8).join(", ") + (l.faltando.length > 8 ? "…" : "");
-    avisos.push(`faltam itens na sequência${l.lote ? ` do lote ${l.lote}` : ""}: ${lista}`);
-  }
-  if (args.totais.declaradoMaior) {
-    avisos.push(`o edital declara um total de R$ ${args.totais.declaradoMaior.toFixed(2)}, maior que a soma dos itens — podem faltar itens`);
-  }
-  if (args.precosEstimados) avisos.push(`${args.precosEstimados} preço(s) foram sugeridos pela Bidd.IA porque o edital não os publicou`);
-
-  const defeitos = problemas.length + itensFaltando + (args.totais.declaradoMaior ? 1 : 0);
-  const status: Veredito["status"] =
-    defeitos > 0 ? "DIVERGENTE" : linhasConferidas >= Math.max(3, args.itens.length * 0.5) || args.totais.confere ? "CONFERIDA" : "PARCIAL";
-  return { status, linhasConferidas, linhasComDefeito: problemas.length, itensFaltando, avisos };
 }

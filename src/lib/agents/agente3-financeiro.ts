@@ -4,16 +4,7 @@ import { obterTextoCompletoEdital } from "@/lib/agents/pdf-extract";
 import { withAgentRun, logAudit } from "@/lib/agents/run-tracker";
 import { buscarItensCompra, parseNumeroControlePNCP } from "@/lib/agents/pncp";
 import { CAMPOS_EXTRAS_CATALOGO, chaveCampoExtraValida, type ChaveCampoExtra, type LoteMeta } from "@/lib/proposal";
-import {
-  acharLacunasDeNumeracao,
-  blocosSuspeitos,
-  compararComTotais,
-  conferirLinhas,
-  montarVeredito,
-  paraNumero,
-  pontuarDefeitos,
-  totaisDeclaradosNoTexto,
-} from "@/lib/agents/financeiro-conferencia";
+import { acharLacunasDeNumeracao, blocosSuspeitos, conferirLinhas, pontuarDefeitos } from "@/lib/agents/financeiro-conferencia";
 
 // Quanto de saída reservar na chamada de IA, em função de quantos itens se espera —
 // reservar 16k tokens para um edital de 20 itens só fazia a chamada disputar cota de
@@ -567,7 +558,6 @@ ${textoEdital ? `\n=== TRECHOS RELEVANTES DO EDITAL ===\n${textoEdital}` : ""}
     let colunasExtras: ChaveCampoExtra[] = [];
     let blocosTexto: string[] = [];
     let estruturaTabela: string | undefined;
-    let precosEstimados = 0;
     const cabecalhoEdital = `Objeto: ${edital.titulo}\nDescrição: ${edital.descricao}`;
 
     if (temTextoCompleto) {
@@ -598,7 +588,6 @@ ${textoEdital ? `\n=== TRECHOS RELEVANTES DO EDITAL ===\n${textoEdital}` : ""}
       if (itens.length > 0 && semPrecoAntes / itens.length > 0.5) {
         const { itens: preenchidos, qtdEstimados } = await preencherPrecosFaltantes(edital, itens);
         itens = preenchidos;
-        precosEstimados = qtdEstimados;
         if (qtdEstimados > 0) {
           avisoPreco = ` O edital não publicou valor unitário de referência para ${qtdEstimados} item(ns) — a Bidd.IA sugeriu preços de mercado plausíveis para eles; ajuste antes de enviar a proposta.`;
         }
@@ -717,8 +706,8 @@ Responda em JSON:
 
     // "Pensar antes de soltar a planilha": confere as contas da lista (quantidade × unitário = total impresso na
     // linha, numeração sem buracos) e, se algo não fechar, relê SÓ aquele trecho com o modelo forte e raciocínio
-    // estendido. A troca só vale se reduzir os defeitos. O que continuar errado vai explicado nas observações.
-    let relatoReleitura = "";
+    // estendido. A troca só vale se reduzir os defeitos. Nada disso vira texto para o usuário: só o resultado
+    // melhor entra na planilha e o balanço fica no registro do servidor.
     if (result.itensEncontradosNoTexto && itensFinais.length > 0) {
       try {
         const releitura = await relerBlocosSuspeitos({
@@ -729,16 +718,9 @@ Responda em JSON:
           limite: LIMITE_RELEITURA_MS,
         });
         itensFinais = releitura.itens;
-        if (releitura.blocosRelidos > 0) {
-          relatoReleitura =
-            releitura.defeitosDepois < releitura.defeitosAntes
-              ? `Releitura cuidadosa de ${releitura.blocosRelidos} trecho(s) com problema: ${releitura.defeitosAntes} defeito(s) → ${releitura.defeitosDepois}.`
-              : `Releitura cuidadosa de ${releitura.blocosRelidos} trecho(s) com problema não resolveu os ${releitura.defeitosAntes} defeito(s).`;
-          if (releitura.interrompido) relatoReleitura += " A releitura foi interrompida por falta de tempo.";
-        } else if (releitura.interrompido) {
-          relatoReleitura = "Havia defeitos na conferência, mas não restava tempo para relê-los com cuidado.";
-        }
-        console.log(`[agente3-financeiro] edital ${editalId}: conferência ${releitura.defeitosAntes} → ${releitura.defeitosDepois} defeito(s) em ${Date.now() - inicioMs}ms.`);
+        console.log(
+          `[agente3-financeiro] edital ${editalId}: conferência ${releitura.defeitosAntes} → ${releitura.defeitosDepois} defeito(s), ${releitura.blocosRelidos} trecho(s) relido(s)${releitura.interrompido ? ", releitura interrompida por tempo" : ""}, ${Date.now() - inicioMs}ms.`
+        );
       } catch (err) {
         console.error(`Falha na releitura cuidadosa dos itens do edital ${editalId}:`, err);
       }
@@ -747,33 +729,6 @@ Responda em JSON:
     // Conferência complementar contra a API de itens do PNCP — só preenche lacunas,
     // nunca sobrescreve o que a IA já leu com confiança (ver conferirComPncp).
     itensFinais = await conferirComPncp(edital, itensFinais);
-
-    // Veredito final, em palavras: o que foi conferido e o que não fecha. Só quando os itens vieram do texto real.
-    const somaParaVeredito = itensFinais.reduce((acc, i) => acc + paraNumero(i.quantidade) * paraNumero(i.valorUnitario), 0);
-    const somaPorLoteParaVeredito = Array.from(
-      itensFinais.reduce((m, i) => (i.lote ? m.set(i.lote, (m.get(i.lote) ?? 0) + paraNumero(i.quantidade) * paraNumero(i.valorUnitario)) : m), new Map<string, number>()).values()
-    );
-    const veredito = result.itensEncontradosNoTexto
-      ? montarVeredito({
-          itens: itensFinais,
-          totais: compararComTotais(
-            somaParaVeredito,
-            somaPorLoteParaVeredito,
-            totaisDeclaradosNoTexto(areaFinanceira),
-            valorReferencia ? [valorReferencia] : []
-          ),
-          precosEstimados,
-        })
-      : null;
-    if (veredito) {
-      const rotulo =
-        veredito.status === "CONFERIDA"
-          ? `Conferência automática: ${veredito.linhasConferidas} linha(s) com total conferido (quantidade × valor unitário = total do edital) e nenhum defeito encontrado.`
-          : veredito.status === "PARCIAL"
-            ? "Conferência automática: nenhum defeito encontrado, mas poucas linhas puderam ser conferidas contra um total impresso — revise com atenção."
-            : `ATENÇÃO — conferência automática encontrou problemas: ${veredito.avisos.join("; ")}.`;
-      observacoesFinais = `${observacoesFinais}\n\n${[relatoReleitura, rotulo].filter(Boolean).join(" ")}`;
-    }
 
     const itensComTotal = itensFinais.map((item) => ({
       numero: item.numero ?? null,
@@ -832,13 +787,8 @@ Responda em JSON:
       editalId,
       "Agente Financeiro",
       "Montagem da proposta",
-      divergenciaSignificativa || possivelmenteIncompleta || veredito?.status === "DIVERGENTE" ? "ALERTA" : "OK",
+      divergenciaSignificativa || possivelmenteIncompleta ? "ALERTA" : "OK",
       `Proposta montada com ${itensComTotal.length} item(ns) (${origemLabel})${lotes.length > 0 ? `, em ${lotes.length} lote(s)` : ""}, somando R$ ${somaItens.toFixed(2)}.` +
-        (veredito
-          ? veredito.status === "DIVERGENTE"
-            ? ` A conferência automática encontrou problemas: ${veredito.avisos.join("; ")}. Confira antes de enviar.${relatoReleitura ? ` ${relatoReleitura}` : ""}`
-            : ` Conferência automática: ${veredito.status === "CONFERIDA" ? `${veredito.linhasConferidas} linha(s) com total conferido, sem defeitos` : "sem defeitos, mas pouca coisa pôde ser conferida"}.${relatoReleitura ? ` ${relatoReleitura}` : ""}`
-          : "") +
         (possivelmenteIncompleta
           ? ` O texto-fonte parece ter aproximadamente ${itensEsperados} linhas de tabela — a lista capturada pode estar incompleta, confira contra o PDF original antes de enviar.`
           : "") +
