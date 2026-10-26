@@ -475,7 +475,7 @@ function deduplicarItens(itens: ItemProposta[]): ItemProposta[] {
  * sai toda R$ 0,00, o que é enganoso. Quando a maioria dos itens está nessa situação,
  * pede uma estimativa de preço de mercado plausível para preencher a lacuna.
  */
-async function preencherPrecosFaltantes(
+export async function preencherPrecosFaltantes(
   edital: { titulo: string; descricao: string },
   itens: ItemProposta[]
 ): Promise<{ itens: ItemProposta[]; qtdEstimados: number }> {
@@ -484,9 +484,36 @@ async function preencherPrecosFaltantes(
     .filter(({ it }) => it.valorUnitario == null || Number.isNaN(it.valorUnitario) || it.valorUnitario === 0);
   if (semPreco.length === 0) return { itens, qtdEstimados: 0 };
 
-  const lista = semPreco.map(({ it, i }) => `[${i}] ${it.descricao} | ${it.unidade} | qtd ${it.quantidade}`).join("\n");
-  try {
-    const resultado = await askJSON<{ precos: { indice: number; valorUnitario: number }[] }>(
+  // Em lotes de 60 itens, em paralelo: uma resposta única com centenas de preços passava do limite de tamanho, era
+  // cortada, e a falha silenciosa deixava a proposta inteira em R$ 0,00. Se um lote falhar, só os itens dele ficam sem preço.
+  const TAMANHO_LOTE_PRECOS = 60;
+  const lotes: typeof semPreco[] = [];
+  for (let k = 0; k < semPreco.length; k += TAMANHO_LOTE_PRECOS) lotes.push(semPreco.slice(k, k + TAMANHO_LOTE_PRECOS));
+
+  const mapa = new Map<number, number>();
+  await Promise.all(
+    lotes.map(async (lote) => {
+      const lista = lote.map(({ it, i }) => `[${i}] ${it.descricao} | ${it.unidade} | qtd ${it.quantidade}`).join("\n");
+      try {
+        const resultado = await sugerirPrecosDoLote(edital, lista, lote.length);
+        for (const p of resultado.precos ?? []) {
+          if (typeof p.indice === "number" && typeof p.valorUnitario === "number" && p.valorUnitario > 0) mapa.set(p.indice, p.valorUnitario);
+        }
+      } catch (err) {
+        console.error(`Falha ao estimar preços de mercado de ${lote.length} item(ns) sem valor unitário publicado:`, err);
+      }
+    })
+  );
+  const preenchidos = itens.map((it, i) => (mapa.has(i) ? { ...it, valorUnitario: mapa.get(i)! } : it));
+  return { itens: preenchidos, qtdEstimados: mapa.size };
+}
+
+async function sugerirPrecosDoLote(
+  edital: { titulo: string; descricao: string },
+  lista: string,
+  qtdItens: number
+): Promise<{ precos: { indice: number; valorUnitario: number }[] }> {
+  return askJSON<{ precos: { indice: number; valorUnitario: number }[] }>(
       `Você é o agente financeiro de uma empresa respondendo a uma licitação pública brasileira. O edital publicou a
 lista de itens e quantidades estimadas, mas NÃO publicou valores unitários de referência para eles — é a própria
 empresa licitante que precisa propor um preço competitivo por item, dentro da realidade de mercado brasileira atual.
@@ -500,15 +527,8 @@ ${INSTRUCAO_FORMATO_NUMERICO}
 
 Responda em JSON: { "precos": [{ "indice": number, "valorUnitario": number }] }`,
       lista,
-      { model: MODELO_SONNET, maxTokens: maxTokensParaItens(semPreco.length, 8_000) }
+      { model: MODELO_SONNET, maxTokens: maxTokensParaItens(qtdItens, 8_000) }
     );
-    const mapa = new Map((resultado.precos ?? []).map((p) => [p.indice, p.valorUnitario]));
-    const preenchidos = itens.map((it, i) => (mapa.has(i) ? { ...it, valorUnitario: mapa.get(i)! } : it));
-    return { itens: preenchidos, qtdEstimados: mapa.size };
-  } catch (err) {
-    console.error("Falha ao estimar preços de mercado para itens sem valor unitário publicado:", err);
-    return { itens, qtdEstimados: 0 };
-  }
 }
 
 export async function executarAgente3(editalId: string) {

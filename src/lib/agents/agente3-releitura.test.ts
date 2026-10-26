@@ -16,7 +16,7 @@ vi.mock("@/lib/agents/pdf-extract", () => ({ obterTextoCompletoEdital: vi.fn() }
 vi.mock("@/lib/agents/run-tracker", () => ({ withAgentRun: vi.fn(), logAudit: vi.fn() }));
 vi.mock("@/lib/agents/pncp", () => ({ buscarItensCompra: vi.fn(), parseNumeroControlePNCP: vi.fn() }));
 
-import { relerBlocosSuspeitos } from "@/lib/agents/agente3-financeiro";
+import { preencherPrecosFaltantes, relerBlocosSuspeitos } from "@/lib/agents/agente3-financeiro";
 
 type It = { numero: number; descricao: string; unidade: string; quantidade: number; valorUnitario: number; valorTotalLinha: number | null; bloco: number; lote?: string | null };
 const mk = (numero: number, bloco: number, extra: Partial<It> = {}): It => ({
@@ -101,5 +101,39 @@ describe("relerBlocosSuspeitos", () => {
     expect(chamadas).toHaveLength(0);
     expect(r.interrompido).toBe(true);
     expect(r.itens).toEqual(itens);
+  });
+});
+
+// A lista enviada à IA tem uma linha por item começando com o índice entre colchetes: "[12] descrição | UN | qtd 10".
+const indicesDaLista = (chamada: unknown[]) =>
+  String(chamada[1])
+    .split("\n")
+    .map((linha) => /^\[(\d+)\]/.exec(linha)?.[1])
+    .filter((n): n is string => n !== undefined)
+    .map(Number);
+
+describe("preencherPrecosFaltantes — preços sugeridos em lotes", () => {
+  const semPreco = Array.from({ length: 130 }, (_, i) => ({ descricao: `Exame ${i}`, unidade: "UN", quantidade: 10, valorUnitario: 0 }));
+  const edital = { titulo: "Exames", descricao: "Laboratório" };
+
+  it("divide em lotes de 60 e preenche todos os itens, mesmo com centenas deles", async () => {
+    comportamento = async (chamada) => ({ precos: indicesDaLista(chamada).map((indice) => ({ indice, valorUnitario: 12.5 })) });
+    const r = await preencherPrecosFaltantes(edital, semPreco);
+    expect(chamadas).toHaveLength(3); // 60 + 60 + 10
+    expect(r.qtdEstimados).toBe(130);
+    expect(r.itens.every((i) => i.valorUnitario === 12.5)).toBe(true);
+  });
+
+  it("se um lote falha, só os itens dele ficam sem preço", async () => {
+    const silencio = vi.spyOn(console, "error").mockImplementation(() => {});
+    let n = 0;
+    comportamento = async (chamada) => {
+      if (++n === 2) throw new Error("resposta cortada");
+      return { precos: indicesDaLista(chamada).map((indice) => ({ indice, valorUnitario: 7 })) };
+    };
+    const r = await preencherPrecosFaltantes(edital, semPreco);
+    silencio.mockRestore();
+    expect(r.qtdEstimados).toBe(70);
+    expect(r.itens.filter((i) => i.valorUnitario === 0)).toHaveLength(60);
   });
 });
