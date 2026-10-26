@@ -4,6 +4,16 @@ import { obterTextoCompletoEdital } from "@/lib/agents/pdf-extract";
 import { withAgentRun, logAudit } from "@/lib/agents/run-tracker";
 import { buscarItensCompra, parseNumeroControlePNCP } from "@/lib/agents/pncp";
 import { CAMPOS_EXTRAS_CATALOGO, chaveCampoExtraValida, type ChaveCampoExtra, type LoteMeta } from "@/lib/proposal";
+import {
+  acharLacunasDeNumeracao,
+  blocosSuspeitos,
+  compararComTotais,
+  conferirLinhas,
+  montarVeredito,
+  paraNumero,
+  pontuarDefeitos,
+  totaisDeclaradosNoTexto,
+} from "@/lib/agents/financeiro-conferencia";
 
 // Quanto de saída reservar na chamada de IA, em função de quantos itens se espera —
 // reservar 16k tokens para um edital de 20 itens só fazia a chamada disputar cota de
@@ -20,6 +30,9 @@ type ItemProposta = {
   valorUnitario: number;
   lote?: string | null;
   camposExtras?: Partial<Record<ChaveCampoExtra, number | string>>;
+  // Só para a conferência (não vão para o banco): o total da linha como o edital imprime, e de qual trecho veio.
+  valorTotalLinha?: number | null;
+  bloco?: number;
 };
 
 type FinanceiroResult = {
@@ -130,7 +143,7 @@ const LISTA_CAMPOS_EXTRAS_CATALOGO = Object.entries(CAMPOS_EXTRAS_CATALOGO)
   .map(([chave, def]) => `"${chave}" (${def.label})`)
   .join(", ");
 
-function montarPromptBloco(indice: number, total: number, reforco?: string): string {
+function montarPromptBloco(indice: number, total: number, reforco?: string, estrutura?: string): string {
   return `Você é o agente financeiro de uma empresa, extraindo a tabela de itens/preços de um edital
 público brasileiro. Abaixo está APENAS UM TRECHO de uma tabela (trecho ${indice + 1} de ${total}) — TRANSCREVA
 TODOS os itens presentes NESTE TRECHO, um por um, exatamente como estão (mesmo que a tabela continue antes ou
@@ -138,7 +151,7 @@ depois dele, fora do que foi te mostrado). Não invente itens que não estejam n
 pular nenhum item que esteja nele, por mais numeroso ou repetitivo que pareça — isso é transcrição literal linha
 por linha, não um resumo. Faltar um item na lista é um erro grave para quem vai usar esta proposta.
 
-Preste atenção especial a dois pontos:
+Preste atenção especial a três pontos:
 1. Se este trecho tiver um cabeçalho do tipo "LOTE X" ou "GRUPO X" (numeral ou por extenso) antes de uma sequência
 de itens, preencha "lote" com esse número/identificação em TODOS os itens daquela sequência, até o próximo
 cabeçalho de lote/grupo. Se não houver estrutura de lote/grupo neste edital, deixe "lote" como null em todos.
@@ -148,11 +161,16 @@ null se não houver numeração clara.
 outra chave): ${LISTA_CAMPOS_EXTRAS_CATALOGO}, preencha "camposExtras" com um objeto usando exatamente essas
 chaves. Colunas que não batem com nenhuma dessas são ignoradas (não force encaixe).
 
+3. "valorTotalLinha" é o valor TOTAL daquele item como está IMPRESSO na própria linha da tabela (a coluna de valor
+total/global do item), copiado literalmente — NÃO calcule nada: se a tabela não tiver coluna de total por linha,
+use null. Ele serve para conferir depois se quantidade × valor unitário fecha; copiar errado ou calcular por conta
+própria estraga essa conferência.
+${estrutura ? `\nESTRUTURA DA TABELA (cabeçalho lido no início da tabela, vale para todos os trechos — use-o para saber qual coluna é qual, mesmo que este trecho não mostre o cabeçalho):\n${estrutura}\n` : ""}
 ${INSTRUCAO_FORMATO_NUMERICO}
 ${reforco ?? ""}
 
 Responda em JSON: { "itens": [{ "numero": number | null, "descricao": string, "unidade": string, "quantidade": number,
-"valorUnitario": number, "lote": string | null, "camposExtras"?: object }] }
+"valorUnitario": number, "valorTotalLinha": number | null, "lote": string | null, "camposExtras"?: object }] }
 Se este trecho não contiver nenhuma linha de tabela reconhecível, devolva "itens": [].`;
 }
 
@@ -166,7 +184,8 @@ async function extrairBlocoDeItens(
   bloco: string,
   indice: number,
   total: number,
-  cabecalho: string
+  cabecalho: string,
+  estrutura?: string
 ): Promise<ItemProposta[]> {
   const contexto = `${cabecalho}\n\n=== TRECHO ${indice + 1} DE ${total} DA TABELA DE ITENS ===\n${bloco}`;
   const itensEsperadosBloco = estimarQuantidadeDeItens(bloco);
@@ -176,7 +195,7 @@ async function extrairBlocoDeItens(
     try {
       // Bloco pequeno e delimitado — Haiku transcreve com fidelidade, é bem mais
       // rápido, e não consome a cota de Sonnet (que fica reservada para a escalada).
-      const resultado = await askJSON<{ itens: ItemProposta[] }>(montarPromptBloco(indice, total), contexto, {
+      const resultado = await askJSON<{ itens: ItemProposta[] }>(montarPromptBloco(indice, total, undefined, estrutura), contexto, {
         model: MODELO_HAIKU,
         maxTokens: 8000,
       });
@@ -198,7 +217,8 @@ async function extrairBlocoDeItens(
           total,
           `\nATENÇÃO: este trecho parece conter aproximadamente ${itensEsperadosBloco} itens (cada linha com dois
 valores em R$ é um item), mas uma tentativa anterior encontrou só ${itens.length}. Releia com atenção do início ao
-fim deste trecho e devolva a lista COMPLETA — não pare antes do fim.`
+fim deste trecho e devolva a lista COMPLETA — não pare antes do fim.`,
+          estrutura
         ),
         contexto,
         { model: MODELO_SONNET, maxTokens: maxTokensParaItens(itensEsperadosBloco) }
@@ -209,7 +229,7 @@ fim deste trecho e devolva a lista COMPLETA — não pare antes do fim.`
     }
   }
 
-  return itens;
+  return itens.map((it) => ({ ...it, bloco: indice }));
 }
 
 /**
@@ -236,23 +256,142 @@ function preencherLotePorArrastamento(itens: ItemProposta[]): ItemProposta[] {
  * usa, se alguma. Roda uma vez só sobre o início da área financeira, onde o cabeçalho da
  * tabela normalmente aparece.
  */
-async function detectarColunasExtras(areaFinanceira: string): Promise<ChaveCampoExtra[]> {
-  if (!areaFinanceira.trim()) return [];
+async function detectarColunasExtras(areaFinanceira: string): Promise<{ colunas: ChaveCampoExtra[]; cabecalho: string | null }> {
+  if (!areaFinanceira.trim()) return { colunas: [], cabecalho: null };
+  const trecho = areaFinanceira.slice(0, 20_000);
   try {
-    const resultado = await askJSON<{ colunas: string[] }>(
-      `Você está olhando um trecho de edital público brasileiro com uma tabela de itens/preços. Diga quais destas
-colunas, SE ALGUMA, a tabela realmente usa (procure pelo cabeçalho da tabela): ${LISTA_CAMPOS_EXTRAS_CATALOGO}.
+    const resultado = await askJSON<{ colunas: string[]; cabecalho?: string | null }>(
+      `Você está olhando um trecho de edital público brasileiro com uma tabela de itens/preços. Faça duas coisas:
+1. Diga quais destas colunas, SE ALGUMA, a tabela realmente usa (procure pelo cabeçalho da tabela): ${LISTA_CAMPOS_EXTRAS_CATALOGO}.
 Não force encaixe — se a tabela não tiver nenhuma dessas colunas, devolva uma lista vazia.
+2. Copie LITERALMENTE a linha de cabeçalho da tabela de itens (os nomes das colunas na ordem em que aparecem, ex:
+"Item | Descrição | Unid. | Quant. | Valor unitário | Valor total"), exatamente como está no texto. Se não houver um
+cabeçalho claro, use null. Não invente nem reescreva.
 
-Responda em JSON: { "colunas": string[] } — usando exatamente as chaves entre aspas listadas acima.`,
-      areaFinanceira.slice(0, 20_000),
-      { model: MODELO_HAIKU, maxTokens: 200 }
+Responda em JSON: { "colunas": string[], "cabecalho": string | null } — "colunas" usa exatamente as chaves entre aspas listadas acima.`,
+      trecho,
+      { model: MODELO_HAIKU, maxTokens: 400 }
     );
-    return (resultado.colunas ?? []).filter(chaveCampoExtraValida);
+    // Só vale o cabeçalho que realmente existe no texto (a IA não pode inventar um que não está lá).
+    const normaliza = (s: string) => s.replace(/\s+/g, " ").trim().toLowerCase();
+    const cab = resultado.cabecalho?.trim();
+    const cabecalho = cab && cab.length >= 8 && cab.length <= 400 && normaliza(trecho).includes(normaliza(cab)) ? cab : null;
+    return { colunas: (resultado.colunas ?? []).filter(chaveCampoExtraValida), cabecalho };
   } catch (err) {
     console.error("Falha ao detectar colunas extras da tabela de itens:", err);
-    return [];
+    return { colunas: [], cabecalho: null };
   }
+}
+
+// Segunda leitura, cuidadosa, SÓ dos trechos onde a conferência achou defeito (linha que não fecha, item que falta
+// na sequência). Usa o modelo mais forte com raciocínio estendido e recebe a lista exata do que está errado. O
+// resultado só entra se REDUZIR os defeitos da planilha — nunca troca um resultado por outro à toa.
+const ORCAMENTO_PENSAR_TOKENS = 3_000;
+const MAX_BLOCOS_RELIDOS = 6;
+const MIN_MS_PARA_RELER = 14_000;
+
+type ResultadoReleitura = { itens: ItemProposta[]; blocosRelidos: number; defeitosAntes: number; defeitosDepois: number; interrompido: boolean };
+
+export async function relerBlocosSuspeitos(args: {
+  itens: ItemProposta[];
+  blocosTexto: string[];
+  cabecalho: string;
+  estrutura?: string;
+  /** Instante (ms desde 1970) em que a releitura precisa estar encerrada. */
+  limite: number;
+}): Promise<ResultadoReleitura> {
+  let atual = args.itens;
+  const defeitosAntes = pontuarDefeitos(atual);
+  const semMudanca: ResultadoReleitura = { itens: atual, blocosRelidos: 0, defeitosAntes, defeitosDepois: defeitosAntes, interrompido: false };
+  if (defeitosAntes === 0 || args.blocosTexto.length === 0) return semMudanca;
+  if (args.limite - Date.now() < MIN_MS_PARA_RELER) return { ...semMudanca, interrompido: true };
+
+  const problemas = conferirLinhas(atual);
+  const lacunas = acharLacunasDeNumeracao(atual);
+  const suspeitos = blocosSuspeitos(atual, problemas, lacunas)
+    .filter((b) => b >= 0 && b < args.blocosTexto.length)
+    .slice(0, MAX_BLOCOS_RELIDOS);
+  if (suspeitos.length === 0) return semMudanca;
+
+  // O que está errado em cada trecho, dito com precisão para o modelo saber onde olhar.
+  const suspeitasDoBloco = (b: number): string[] => {
+    const linhas: string[] = [];
+    for (const p of problemas) {
+      const it = atual[p.indice];
+      if (it?.bloco !== b) continue;
+      const nome = `${it.numero != null ? `item ${it.numero}` : "um item"} ("${it.descricao.slice(0, 60)}")`;
+      if (p.tipo === "TOTAL_NAO_BATE") {
+        linhas.push(
+          `${nome}: li quantidade ${it.quantidade} e valor unitário ${it.valorUnitario} (= ${p.calculado}), mas o total impresso na linha é ${p.impresso}. Alguma coluna foi lida errada (quantidade, unidade de medida, unitário ou total) ou o número foi lido com separador errado.`
+        );
+      } else {
+        linhas.push(`${nome}: quantidade ou valor lido é inválido (quantidade ${it.quantidade}, unitário ${it.valorUnitario}).`);
+      }
+    }
+    for (const l of lacunas) {
+      if (l.blocos.includes(b)) linhas.push(`Na sequência de numeração${l.lote ? ` do lote ${l.lote}` : ""} faltam os itens de número ${l.faltando.join(", ")} — procure por eles neste trecho (podem não estar aqui, e então não invente).`);
+    }
+    return linhas;
+  };
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), Math.max(1_000, args.limite - Date.now()));
+  let interrompido = false;
+  try {
+    const relidos = await Promise.all(
+      suspeitos.map(async (b) => {
+        const anteriores = atual
+          .filter((it) => it.bloco === b)
+          .map((it) => `- item ${it.numero ?? "?"} | ${it.descricao} | ${it.unidade} | qtd ${it.quantidade} | unit ${it.valorUnitario} | total impresso ${it.valorTotalLinha ?? "-"} | lote ${it.lote ?? "-"}`)
+          .join("\n");
+        try {
+          const r = await askJSON<{ itens: ItemProposta[] }>(
+            `${montarPromptBloco(b, args.blocosTexto.length, undefined, args.estrutura)}
+
+RELEITURA CUIDADOSA: uma conferência automática achou defeitos na leitura anterior DESTE trecho. Antes de responder,
+raciocine coluna por coluna: identifique qual coluna é qual (use o cabeçalho), releia cada linha com problema e confira
+que quantidade × valor unitário dá o total impresso. Devolva a lista COMPLETA e corrigida de TODOS os itens deste
+trecho (não só dos que tinham defeito).
+
+O que a conferência achou neste trecho:
+${suspeitasDoBloco(b).map((s) => `* ${s}`).join("\n")}
+
+Leitura anterior deste trecho (pode conter os erros acima):
+${anteriores || "(nenhum item foi lido neste trecho)"}`,
+            `${args.cabecalho}\n\n=== TRECHO ${b + 1} DE ${args.blocosTexto.length} DA TABELA DE ITENS ===\n${args.blocosTexto[b]}`,
+            {
+              model: MODELO_SONNET,
+              maxTokens: maxTokensParaItens(Math.max(estimarQuantidadeDeItens(args.blocosTexto[b]), 8), 8_000),
+              pensar: ORCAMENTO_PENSAR_TOKENS,
+              sinal: controller.signal,
+            }
+          );
+          return { b, itens: (r.itens ?? []).map((it) => ({ ...it, bloco: b })) };
+        } catch (err) {
+          if (controller.signal.aborted) interrompido = true;
+          console.error(`[agente3-financeiro] falha na releitura do trecho ${b + 1}/${args.blocosTexto.length}:`, err);
+          return { b, itens: null as ItemProposta[] | null };
+        }
+      })
+    );
+
+    // Aplica um trecho por vez e só fica com a troca se os defeitos da planilha inteira diminuírem.
+    for (const { b, itens: novos } of relidos) {
+      if (!novos || novos.length === 0) continue;
+      // Tira os itens antigos do trecho e põe os novos na posição certa (antes do primeiro item de um trecho
+      // posterior), para a ordem da tabela e a herança de lote continuarem corretas.
+      const semB = atual.filter((it) => it.bloco !== b);
+      const posicao = semB.findIndex((it) => (it.bloco ?? Number.POSITIVE_INFINITY) > b);
+      const corte = posicao === -1 ? semB.length : posicao;
+      const candidato = preencherLotePorArrastamento([...semB.slice(0, corte), ...novos, ...semB.slice(corte)]);
+      if (pontuarDefeitos(candidato) < pontuarDefeitos(atual)) atual = candidato;
+    }
+  } finally {
+    clearTimeout(timer);
+  }
+
+  const final = deduplicarItens(atual);
+  return { itens: final, blocosRelidos: suspeitos.length, defeitosAntes, defeitosDepois: pontuarDefeitos(final), interrompido };
 }
 
 /**
@@ -419,8 +558,17 @@ ${textoEdital ? `\n=== TRECHOS RELEVANTES DO EDITAL ===\n${textoEdital}` : ""}
     const areaFinanceira = [textoAnexosPrecos, textoTermoReferencia, textoEdital].filter(Boolean).join("\n");
     const itensEsperados = estimarQuantidadeDeItens(areaFinanceira);
 
+    // Prazo da execução (a função da Vercel morre em 60s; o pipeline desiste em ~52s): a releitura cuidadosa só
+    // roda se ainda houver tempo, e é interrompida antes de estourar.
+    const inicioMs = Date.now();
+    const LIMITE_RELEITURA_MS = inicioMs + 46_000;
+
     let result: FinanceiroResult;
     let colunasExtras: ChaveCampoExtra[] = [];
+    let blocosTexto: string[] = [];
+    let estruturaTabela: string | undefined;
+    let precosEstimados = 0;
+    const cabecalhoEdital = `Objeto: ${edital.titulo}\nDescrição: ${edital.descricao}`;
 
     if (temTextoCompleto) {
       // SEMPRE divide em blocos e extrai em paralelo — mesmo uma tabela pequena vira
@@ -428,15 +576,19 @@ ${textoEdital ? `\n=== TRECHOS RELEVANTES DO EDITAL ===\n${textoEdital}` : ""}
       // uma tabela de 200 itens. Isso existe porque uma chamada única sobre a tabela
       // inteira, em vez de blocos delimitados, era exatamente onde o modelo às vezes
       // "resumia" no meio de uma lista de tamanho médio em vez de transcrever tudo.
-      const cabecalho = `Objeto: ${edital.titulo}\nDescrição: ${edital.descricao}`;
+      const cabecalho = cabecalhoEdital;
       const blocos = dividirEmBlocosPorLinha(areaFinanceira, TAMANHO_BLOCO_ITENS);
+      blocosTexto = blocos;
       console.log(`[agente3-financeiro] edital ${editalId}: ~${itensEsperados} itens estimados — extraindo em ${blocos.length} bloco(s).`);
 
-      const [itensPorBloco, colunasDetectadas] = await Promise.all([
-        Promise.all(blocos.map((bloco, i) => extrairBlocoDeItens(bloco, i, blocos.length, cabecalho))),
-        detectarColunasExtras(areaFinanceira),
-      ]);
-      colunasExtras = colunasDetectadas;
+      // Primeiro "olha" a tabela (cabeçalho e colunas) e só depois lê os trechos, passando o cabeçalho para cada um:
+      // um trecho do meio da tabela não mostra o cabeçalho e, sem ele, a IA chuta qual coluna é qual.
+      const estrutura = await detectarColunasExtras(areaFinanceira);
+      colunasExtras = estrutura.colunas;
+      estruturaTabela = estrutura.cabecalho ?? undefined;
+      const itensPorBloco = await Promise.all(
+        blocos.map((bloco, i) => extrairBlocoDeItens(bloco, i, blocos.length, cabecalho, estruturaTabela))
+      );
       let itens = deduplicarItens(preencherLotePorArrastamento(itensPorBloco.flat()));
 
       // Edital publicou a tabela sem coluna de preço (comum em registro de preços) —
@@ -446,6 +598,7 @@ ${textoEdital ? `\n=== TRECHOS RELEVANTES DO EDITAL ===\n${textoEdital}` : ""}
       if (itens.length > 0 && semPrecoAntes / itens.length > 0.5) {
         const { itens: preenchidos, qtdEstimados } = await preencherPrecosFaltantes(edital, itens);
         itens = preenchidos;
+        precosEstimados = qtdEstimados;
         if (qtdEstimados > 0) {
           avisoPreco = ` O edital não publicou valor unitário de referência para ${qtdEstimados} item(ns) — a Bidd.IA sugeriu preços de mercado plausíveis para eles; ajuste antes de enviar a proposta.`;
         }
@@ -492,7 +645,7 @@ Gere entre 2 e 20 itens plausíveis. Use números puros (sem "R$" ou separadores
     if (result.itensEncontradosNoTexto && result.itens.length > 0 && result.itens.length <= LIMITE_ITENS_PARA_REVISAO) {
       try {
         const listaIndexada = result.itens
-          .map((it, i) => `[${i}] ${it.descricao} | ${it.unidade} | qtd ${it.quantidade} | unit ${it.valorUnitario} | lote ${it.lote ?? "-"}`)
+          .map((it, i) => `[${i}] ${it.descricao} | ${it.unidade} | qtd ${it.quantidade} | unit ${it.valorUnitario} | total impresso ${it.valorTotalLinha ?? "-"} | lote ${it.lote ?? "-"}`)
           .join("\n");
 
         const diff = await askJSON<RevisaoDiff>(
@@ -524,6 +677,9 @@ Responda em JSON:
           if (!c) return item;
           ajustes.push(`item "${item.descricao}" ajustado`);
           return {
+            // valorTotalLinha e bloco (só da conferência) continuam valendo: se a revisão mexer num valor e a
+            // linha deixar de fechar com o total impresso, a conferência logo adiante pega.
+            ...item,
             numero: typeof c.numero === "number" ? c.numero : item.numero,
             descricao: c.descricao ?? item.descricao,
             unidade: c.unidade ?? item.unidade,
@@ -559,9 +715,65 @@ Responda em JSON:
       }
     }
 
+    // "Pensar antes de soltar a planilha": confere as contas da lista (quantidade × unitário = total impresso na
+    // linha, numeração sem buracos) e, se algo não fechar, relê SÓ aquele trecho com o modelo forte e raciocínio
+    // estendido. A troca só vale se reduzir os defeitos. O que continuar errado vai explicado nas observações.
+    let relatoReleitura = "";
+    if (result.itensEncontradosNoTexto && itensFinais.length > 0) {
+      try {
+        const releitura = await relerBlocosSuspeitos({
+          itens: itensFinais,
+          blocosTexto,
+          cabecalho: cabecalhoEdital,
+          estrutura: estruturaTabela,
+          limite: LIMITE_RELEITURA_MS,
+        });
+        itensFinais = releitura.itens;
+        if (releitura.blocosRelidos > 0) {
+          relatoReleitura =
+            releitura.defeitosDepois < releitura.defeitosAntes
+              ? `Releitura cuidadosa de ${releitura.blocosRelidos} trecho(s) com problema: ${releitura.defeitosAntes} defeito(s) → ${releitura.defeitosDepois}.`
+              : `Releitura cuidadosa de ${releitura.blocosRelidos} trecho(s) com problema não resolveu os ${releitura.defeitosAntes} defeito(s).`;
+          if (releitura.interrompido) relatoReleitura += " A releitura foi interrompida por falta de tempo.";
+        } else if (releitura.interrompido) {
+          relatoReleitura = "Havia defeitos na conferência, mas não restava tempo para relê-los com cuidado.";
+        }
+        console.log(`[agente3-financeiro] edital ${editalId}: conferência ${releitura.defeitosAntes} → ${releitura.defeitosDepois} defeito(s) em ${Date.now() - inicioMs}ms.`);
+      } catch (err) {
+        console.error(`Falha na releitura cuidadosa dos itens do edital ${editalId}:`, err);
+      }
+    }
+
     // Conferência complementar contra a API de itens do PNCP — só preenche lacunas,
     // nunca sobrescreve o que a IA já leu com confiança (ver conferirComPncp).
     itensFinais = await conferirComPncp(edital, itensFinais);
+
+    // Veredito final, em palavras: o que foi conferido e o que não fecha. Só quando os itens vieram do texto real.
+    const somaParaVeredito = itensFinais.reduce((acc, i) => acc + paraNumero(i.quantidade) * paraNumero(i.valorUnitario), 0);
+    const somaPorLoteParaVeredito = Array.from(
+      itensFinais.reduce((m, i) => (i.lote ? m.set(i.lote, (m.get(i.lote) ?? 0) + paraNumero(i.quantidade) * paraNumero(i.valorUnitario)) : m), new Map<string, number>()).values()
+    );
+    const veredito = result.itensEncontradosNoTexto
+      ? montarVeredito({
+          itens: itensFinais,
+          totais: compararComTotais(
+            somaParaVeredito,
+            somaPorLoteParaVeredito,
+            totaisDeclaradosNoTexto(areaFinanceira),
+            valorReferencia ? [valorReferencia] : []
+          ),
+          precosEstimados,
+        })
+      : null;
+    if (veredito) {
+      const rotulo =
+        veredito.status === "CONFERIDA"
+          ? `Conferência automática: ${veredito.linhasConferidas} linha(s) com total conferido (quantidade × valor unitário = total do edital) e nenhum defeito encontrado.`
+          : veredito.status === "PARCIAL"
+            ? "Conferência automática: nenhum defeito encontrado, mas poucas linhas puderam ser conferidas contra um total impresso — revise com atenção."
+            : `ATENÇÃO — conferência automática encontrou problemas: ${veredito.avisos.join("; ")}.`;
+      observacoesFinais = `${observacoesFinais}\n\n${[relatoReleitura, rotulo].filter(Boolean).join(" ")}`;
+    }
 
     const itensComTotal = itensFinais.map((item) => ({
       numero: item.numero ?? null,
@@ -620,8 +832,13 @@ Responda em JSON:
       editalId,
       "Agente Financeiro",
       "Montagem da proposta",
-      divergenciaSignificativa || possivelmenteIncompleta ? "ALERTA" : "OK",
+      divergenciaSignificativa || possivelmenteIncompleta || veredito?.status === "DIVERGENTE" ? "ALERTA" : "OK",
       `Proposta montada com ${itensComTotal.length} item(ns) (${origemLabel})${lotes.length > 0 ? `, em ${lotes.length} lote(s)` : ""}, somando R$ ${somaItens.toFixed(2)}.` +
+        (veredito
+          ? veredito.status === "DIVERGENTE"
+            ? ` A conferência automática encontrou problemas: ${veredito.avisos.join("; ")}. Confira antes de enviar.${relatoReleitura ? ` ${relatoReleitura}` : ""}`
+            : ` Conferência automática: ${veredito.status === "CONFERIDA" ? `${veredito.linhasConferidas} linha(s) com total conferido, sem defeitos` : "sem defeitos, mas pouca coisa pôde ser conferida"}.${relatoReleitura ? ` ${relatoReleitura}` : ""}`
+          : "") +
         (possivelmenteIncompleta
           ? ` O texto-fonte parece ter aproximadamente ${itensEsperados} linhas de tabela — a lista capturada pode estar incompleta, confira contra o PDF original antes de enviar.`
           : "") +

@@ -72,9 +72,13 @@ export async function askJSON<T>(
   system: string,
   userPrompt: string,
   // sinal: para de esperar a IA quando o prazo da execução (60s da Vercel) está acabando.
-  opts?: { model?: string; maxTokens?: number; uso?: UsoTokens; sinal?: AbortSignal }
+  // pensar: deixa o modelo "pensar" antes de responder (raciocínio estendido), com este teto de tokens de reflexão
+  // (mínimo 1024). Mais lento e mais caro — só para o que precisa de exatidão. maxTokens continua sendo o teto da
+  // RESPOSTA; o espaço da reflexão é somado por fora.
+  opts?: { model?: string; maxTokens?: number; uso?: UsoTokens; sinal?: AbortSignal; pensar?: number }
 ): Promise<T> {
   const anthropic = getClient();
+  const pensar = opts?.pensar ? Math.max(1024, Math.round(opts.pensar)) : undefined;
 
   // Além das tentativas do próprio SDK (erro de rede/sobrecarga), repete quando a resposta
   // volta cortada ou fora do formato JSON — falha intermitente do modelo, não do edital.
@@ -82,7 +86,8 @@ export async function askJSON<T>(
     async () => {
       const message = await anthropic.messages.create({
         model: opts?.model ?? MODELO_SONNET,
-        max_tokens: opts?.maxTokens ?? 4000,
+        max_tokens: (opts?.maxTokens ?? 4000) + (pensar ?? 0),
+        ...(pensar ? { thinking: { type: "enabled" as const, budget_tokens: pensar } } : {}),
         system: `${system}\n\nResponda ESTRITAMENTE com um objeto JSON válido, sem markdown, sem texto antes ou depois.`,
         messages: [{ role: "user", content: userPrompt }],
       }, opts?.sinal ? { signal: opts.sinal } : undefined);
@@ -93,7 +98,8 @@ export async function askJSON<T>(
       }
       await registrarConsumo(opts?.model ?? MODELO_SONNET, message.usage);
 
-      const block = message.content[0];
+      // Com raciocínio estendido, o primeiro bloco é a reflexão ("thinking"): a resposta é o bloco de texto.
+      const block = message.content.find((b) => b.type === "text");
       if (!block || block.type !== "text") throw new Error("Resposta inesperada do modelo");
 
       try {
