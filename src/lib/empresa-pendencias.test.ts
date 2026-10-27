@@ -43,7 +43,7 @@ describe("camposPendentes", () => {
       totalKeywords: 0,
     });
     expect(p).toEqual([
-      "Busca de editais (palavras-chave ou segmento do LicitaNet)",
+      "Busca de editais (palavras-chave)",
       "Objeto social",
       "Endereço",
       "Dados bancários",
@@ -52,8 +52,8 @@ describe("camposPendentes", () => {
     ]);
   });
 
-  it("só o segmento do LicitaNet já basta para a busca", () => {
-    expect(camposPendentes({ ...completa, totalKeywords: 0, licitanetSegmentoId: 90 })).toEqual([]);
+  it("com a captação só no PNCP, o segmento do LicitaNet não substitui as palavras-chave", () => {
+    expect(camposPendentes({ ...completa, totalKeywords: 0, licitanetSegmentoId: 90 })).toEqual(["Busca de editais (palavras-chave)"]);
   });
 
   it("endereço incompleto continua pendente", () => {

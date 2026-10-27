@@ -35,7 +35,7 @@ export function AvisosDoQuadro({ limite, buscando, progressoBusca, mensagemBusca
         <p className="flex items-center gap-2 rounded-tile bg-tint px-4 py-3 text-sm text-tint-ink">
           <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
           <span>
-            {progressoBusca.fase === "buscando" && "Buscando nos portais (PNCP, LicitaNet…) — você pode continuar usando o sistema, os cards aparecem sozinhos."}
+            {progressoBusca.fase === "buscando" && "Buscando no PNCP… — você pode continuar usando o sistema, os cards aparecem sozinhos."}
             {progressoBusca.fase === "classificando" &&
               `${progressoBusca.analisados} oportunidade(s) encontrada(s) — avaliando quais combinam com a sua empresa…`}
             {progressoBusca.fase === "criando" &&

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { X, Upload, Check, Loader2 } from "lucide-react";
+import { fonteAtiva } from "@/lib/fontes-captacao";
 import { Field, TextInput, TextArea } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
 import { buscarEnderecoPorCep } from "@/lib/cep";
@@ -275,17 +276,19 @@ export function OnboardingWizard() {
             )}
           </Field>
 
-          <Field
-            label="Segmento no LicitaNet (opcional)"
-            htmlFor="licitanetSegmento"
-            hint="Além do PNCP, o Agente Comercial também pode buscar editais no portal LicitaNet, filtrados por este segmento."
-          >
-            <SegmentoLicitaNetSelect
-              id="licitanetSegmento"
-              value={licitanetSegmentoId}
-              onChange={setLicitanetSegmentoId}
-            />
-          </Field>
+          {fonteAtiva("LICITANET") && (
+            <Field
+              label="Segmento no LicitaNet (opcional)"
+              htmlFor="licitanetSegmento"
+              hint="Além do PNCP, o Agente Comercial também pode buscar editais no portal LicitaNet, filtrados por este segmento."
+            >
+              <SegmentoLicitaNetSelect
+                id="licitanetSegmento"
+                value={licitanetSegmentoId}
+                onChange={setLicitanetSegmentoId}
+              />
+            </Field>
+          )}
 
           <Field
             label="WhatsApp para notificações (opcional)"

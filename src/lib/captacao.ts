@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { executarAgente1 } from "@/lib/agents/agente1-comercial";
 import { descreverErro } from "@/lib/ia-erros";
 
-// A busca varre PNCP/LicitaNet/Compras.gov.br, classifica com IA e cria os cards — pode
+// A busca varre o PNCP (as outras fontes ficam em fontes-captacao.ts), classifica com IA e cria os cards — pode
 // levar quase o teto de 60s da Vercel. Por isso roda em SEGUNDO PLANO (after): quem chama
 // responde na hora com o registro da execução (CaptacaoRun) e a tela acompanha o progresso
 // por GET /api/editais/search. Usado pelo botão "Buscar novos editais" e pelo cadastro de

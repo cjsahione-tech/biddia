@@ -7,9 +7,10 @@ import { vigiarAuditorias } from "@/lib/agents/auditoria-fila";
 import { notificarNovosEditais } from "@/lib/notifications";
 import { excluirRascunhosVencidos } from "@/lib/rascunho-expiracao";
 import { repararEditais } from "@/lib/agents/edital-disponivel";
+import { fonteAtiva } from "@/lib/fontes-captacao";
 
 // Roda o Agente Comercial para todas as empresas com alguma fonte de busca configurada
-// (palavras-chave do PNCP e/ou segmento do LicitaNet) e notifica por e-mail/WhatsApp
+// (palavras-chave do PNCP; segmento do LicitaNet só se essa fonte estiver ligada em fontes-captacao.ts) e notifica por e-mail/WhatsApp
 // quando aparece edital novo. Chamada duas vezes ao dia (8:30 e 15:30 horário de
 // Brasília) por um agendador externo, já que Cron Jobs nativos da Vercel no plano Hobby
 // só rodam 1x/dia — ver instruções de configuração no README de deploy.
@@ -20,7 +21,9 @@ export async function GET(req: Request) {
   if (naoAutorizado) return naoAutorizado;
 
   const empresas = await prisma.company.findMany({
-    where: { OR: [{ keywords: { some: {} } }, { licitanetSegmentoId: { not: null } }] },
+    where: fonteAtiva("LICITANET")
+      ? { OR: [{ keywords: { some: {} } }, { licitanetSegmentoId: { not: null } }] }
+      : { keywords: { some: {} } },
     select: {
       id: true,
       razaoSocial: true,

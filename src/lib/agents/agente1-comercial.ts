@@ -18,6 +18,7 @@ import {
   type LicitaNetPublication,
 } from "@/lib/agents/licitanet";
 import { buscarLicitacoesComprasGov, resolverUasg, linkComprasGov, type ComprasGovLicitacao } from "@/lib/agents/comprasgov";
+import { fonteAtiva } from "@/lib/fontes-captacao";
 import { verificarAcessoPlano } from "@/lib/plano";
 import { classificarTipoObjeto, empresaAtende, type TipoObjeto } from "@/lib/agents/classificador-objeto";
 import { classificarEditaisEmLote } from "@/lib/agents/relevancia";
@@ -108,8 +109,9 @@ function normalizarBusca(s: string): string {
 }
 
 /**
- * Agente Comercial: varre o PNCP com as palavras-chave da empresa e o LicitaNet com o
- * segmento cadastrado da empresa, e replica na plataforma as oportunidades encontradas.
+ * Agente Comercial: varre o PNCP com as palavras-chave da empresa (e, se estiverem ligadas em
+ * fontes-captacao.ts, o LicitaNet pelo segmento e o Compras.gov.br), e replica na plataforma as
+ * oportunidades encontradas.
  * Não lista editais cujo tipo (compra de bem x prestação de serviço) não bate com o que
  * a empresa declarou atender no cadastro, nem os que a IA considera sem relação direta
  * com o objeto social.
@@ -131,11 +133,15 @@ async function executarAgente1Interno(
     include: { keywords: true },
   });
   if (!company) throw new Error("Empresa não encontrada");
-  if (company.keywords.length === 0 && !company.licitanetSegmentoId) {
+  // Só conta o segmento do LicitaNet se essa fonte estiver ligada (ver fontes-captacao.ts).
+  const usaLicitaNet = fonteAtiva("LICITANET") && !!company.licitanetSegmentoId;
+  if (company.keywords.length === 0 && !usaLicitaNet) {
     return {
       novos: 0,
       analisados: 0,
-      mensagem: "Nenhuma palavra-chave (PNCP) nem segmento LicitaNet cadastrados.",
+      mensagem: fonteAtiva("LICITANET")
+        ? "Nenhuma palavra-chave (PNCP) nem segmento LicitaNet cadastrados."
+        : "Nenhuma palavra-chave cadastrada para buscar no PNCP.",
     };
   }
 
@@ -178,7 +184,7 @@ async function executarAgente1Interno(
   // PNCP, então uma falha aqui não impede o restante da busca (e vice-versa).
   let falhaLicitaNet: string | null = null;
   const buscaLicitaNet = (async () => {
-    if (!company.licitanetSegmentoId) return;
+    if (!usaLicitaNet || !company.licitanetSegmentoId) return;
     try {
       const publicacoes = await buscarPublicacoesLicitaNet(company.licitanetSegmentoId, MAX_POR_SEGMENTO_LICITANET);
       for (const item of publicacoes) {
@@ -206,7 +212,7 @@ async function executarAgente1Interno(
   // campo de "encerramento" nesta fonte, ver comprasgov.ts).
   let falhaComprasGov: string | null = null;
   const buscaComprasGov = (async () => {
-    if (company.keywords.length === 0 || !(await verificarAcessoPlano(company.id, "CAPTACAO_COMPRASGOV"))) return;
+    if (!fonteAtiva("COMPRASGOV") || company.keywords.length === 0 || !(await verificarAcessoPlano(company.id, "CAPTACAO_COMPRASGOV"))) return;
     try {
       const licitacoes = await buscarLicitacoesComprasGov();
       const termos = company.keywords.map((k) => ({ termo: k.term, normalizado: normalizarBusca(k.term) }));
@@ -379,7 +385,7 @@ async function executarAgente1Interno(
       ? company.objetoSocial
       : `(objeto social ainda não informado) Empresa que busca licitações sobre: ${[
           ...company.keywords.map((k) => k.term),
-          ...(company.licitanetSegmentoNome ? [company.licitanetSegmentoNome] : []),
+          ...(usaLicitaNet && company.licitanetSegmentoNome ? [company.licitanetSegmentoNome] : []),
         ].join("; ")}`;
   const classificacoes = await classificarEditaisEmLote(
     objetoParaRelevancia,
@@ -602,7 +608,7 @@ async function executarAgente1Interno(
 
   const fontesUsadas = [
     company.keywords.length > 0 ? `${criadosPncp} do PNCP` : null,
-    company.licitanetSegmentoId ? `${criadosLicitaNet} do LicitaNet` : null,
+    usaLicitaNet ? `${criadosLicitaNet} do LicitaNet` : null,
     criadosComprasGov > 0 ? `${criadosComprasGov} do Compras.gov.br` : null,
   ].filter((s): s is string => s !== null);
   const partes = [`${criadosIds.length} novo(s) edital(is) captado(s)`];

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Loader2, Check, Settings2, Info } from "lucide-react";
+import { fonteAtiva } from "@/lib/fontes-captacao";
 import { Field, TextInput, TextArea } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
 import { REGIMES_TRIBUTARIOS, ANEXOS_SIMPLES, type RegimeTributario, type AnexoSimples } from "@/lib/tributos";
@@ -185,19 +186,21 @@ export function EmpresaClient() {
           onRemove={removeKeyword}
         />
 
-        <div className="mt-6 border-t border-border pt-6">
-          <Field
-            label="Segmento no LicitaNet (opcional)"
-            htmlFor="licitanetSegmento"
-            hint="Além do PNCP, o Agente Comercial também pode buscar editais no portal LicitaNet, filtrados por este segmento."
-          >
-            <SegmentoLicitaNetSelect
-              id="licitanetSegmento"
-              value={company.licitanetSegmentoId}
-              onChange={(id) => set("licitanetSegmentoId", id)}
-            />
-          </Field>
-        </div>
+        {fonteAtiva("LICITANET") && (
+          <div className="mt-6 border-t border-border pt-6">
+            <Field
+              label="Segmento no LicitaNet (opcional)"
+              htmlFor="licitanetSegmento"
+              hint="Além do PNCP, o Agente Comercial também pode buscar editais no portal LicitaNet, filtrados por este segmento."
+            >
+              <SegmentoLicitaNetSelect
+                id="licitanetSegmento"
+                value={company.licitanetSegmentoId}
+                onChange={(id) => set("licitanetSegmentoId", id)}
+              />
+            </Field>
+          </div>
+        )}
 
         <div className="mt-6 border-t border-border pt-6">
           <Field

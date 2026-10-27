@@ -39,7 +39,7 @@ const AGENTES: { icon: LucideIcon; nome: string; descricao: string; imagens: [st
     icon: Search,
     nome: "Agente Comercial",
     descricao:
-      "Varre continuamente os principais portais de licitação do Brasil com base nas suas palavras-chave e traz os editais até você.",
+      "Varre continuamente o PNCP, o Portal Nacional de Contratações Públicas, com base nas suas palavras-chave e traz os editais até você.",
     imagens: ["/agentes/comercial-1.png", "/agentes/comercial-2.png"],
   },
   {

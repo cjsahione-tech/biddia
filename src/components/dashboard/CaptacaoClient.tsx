@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Loader2, Plus, Search, X } from "lucide-react";
+import { FONTES_ATIVAS, fonteAtiva } from "@/lib/fontes-captacao";
 import { PaginaConteudo } from "@/components/ui/PaginaConteudo";
 
 type Run = { status: "RUNNING" | "DONE" | "ERROR"; fase: string; novos: number; analisados: number; mensagem: string | null; startedAt: string } | null;
@@ -129,9 +130,14 @@ export function CaptacaoClient() {
             <p className="pt-2 text-[15px] font-bold text-foreground">Fontes de editais</p>
             <div className="divide-y divide-border">
               <Fonte nome="PNCP" descricao="Portal Nacional de Contratações Públicas" ativa={palavras.length > 0} detalhe={palavras.length > 0 ? "Busca pelas palavras-chave da empresa" : "Cadastre palavras-chave para ativar"} />
-              <Fonte nome="LicitaNet" descricao="Captação automática" ativa={!!segmento} detalhe={segmento ? `Segmento: ${segmento}` : "Escolha o segmento em Empresa para ativar"} />
-              <Fonte nome="Compras.gov.br" descricao="Captação automática" ativa={comprasGov} detalhe={comprasGov ? "Captação automática" : "Não incluída no plano atual"} />
+              {fonteAtiva("LICITANET") && (
+                <Fonte nome="LicitaNet" descricao="Captação automática" ativa={!!segmento} detalhe={segmento ? `Segmento: ${segmento}` : "Escolha o segmento em Empresa para ativar"} />
+              )}
+              {fonteAtiva("COMPRASGOV") && (
+                <Fonte nome="Compras.gov.br" descricao="Captação automática" ativa={comprasGov} detalhe={comprasGov ? "Captação automática" : "Não incluída no plano atual"} />
+              )}
             </div>
+            {FONTES_ATIVAS.length === 1 && <p className="pb-3 text-xs text-muted">Captação disponível apenas no PNCP.</p>}
           </div>
 
           <div className="rounded-card bg-surface p-4">

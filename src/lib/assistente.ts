@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { fonteAtiva } from "@/lib/fontes-captacao";
 import type { FerramentaDef, ExecutarFerramenta } from "@/lib/anthropic";
 import { formatBRL, formatDate } from "@/lib/format";
 import { parseItens } from "@/lib/proposal";
@@ -220,7 +221,7 @@ export function criarExecutorAssistente(companyId: string): ExecutarFerramenta {
           resultadoTexto: [
             `Razão social: ${company.razaoSocial}`,
             `CNPJ: ${company.cnpj}`,
-            `Segmento (LicitaNet): ${company.licitanetSegmentoNome ?? "não configurado"}`,
+            ...(fonteAtiva("LICITANET") ? [`Segmento (LicitaNet): ${company.licitanetSegmentoNome ?? "não configurado"}`] : []),
             `Atende serviço: ${company.atendeServico ? "sim" : "não"} / Atende bem/produto: ${company.atendeBem ? "sim" : "não"}`,
             `Regime tributário padrão: ${company.regimeTributarioPadrao ?? "não configurado"}`,
           ].join("\n"),

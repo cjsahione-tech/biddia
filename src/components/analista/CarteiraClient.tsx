@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Plus, LogIn, X, Info, PowerOff, Power } from "lucide-react";
+import { fonteAtiva } from "@/lib/fontes-captacao";
 import { Button } from "@/components/ui/Button";
 import { Field, TextInput, TextArea, Select } from "@/components/ui/Field";
 import { SegmentoLicitaNetSelect } from "@/components/empresa/SegmentoLicitaNetSelect";
@@ -168,7 +169,9 @@ export function CarteiraClient() {
       setAviso(
         data.buscaIniciada
           ? "Cliente adicionado. O Agente Comercial já começou a buscar editais para ele."
-          : "Cliente adicionado. Preencha as palavras-chave ou o segmento do LicitaNet para o Agente Comercial começar a buscar."
+          : fonteAtiva("LICITANET")
+            ? "Cliente adicionado. Preencha as palavras-chave ou o segmento do LicitaNet para o Agente Comercial começar a buscar."
+            : "Cliente adicionado. Preencha as palavras-chave para o Agente Comercial começar a buscar."
       );
       await load();
     } finally {
@@ -373,15 +376,17 @@ export function CarteiraClient() {
                     onRemove={(k) => setKeywords((ks) => ks.filter((x) => x !== k))}
                   />
                 </div>
-                <div className="mt-4">
-                  <Field
-                    label="Segmento no LicitaNet (opcional)"
-                    htmlFor="segmentoCliente"
-                    hint="Além do PNCP, o Agente Comercial também busca no LicitaNet, filtrando por este segmento."
-                  >
-                    <SegmentoLicitaNetSelect id="segmentoCliente" value={segmentoId} onChange={setSegmentoId} />
-                  </Field>
-                </div>
+                {fonteAtiva("LICITANET") && (
+                  <div className="mt-4">
+                    <Field
+                      label="Segmento no LicitaNet (opcional)"
+                      htmlFor="segmentoCliente"
+                      hint="Além do PNCP, o Agente Comercial também busca no LicitaNet, filtrando por este segmento."
+                    >
+                      <SegmentoLicitaNetSelect id="segmentoCliente" value={segmentoId} onChange={setSegmentoId} />
+                    </Field>
+                  </div>
+                )}
               </div>
 
               <div className="mt-6 border-t border-border pt-5">
