@@ -25,15 +25,19 @@ export type GrupoHabilitacao = { categoriaEdital: string; itens: string[] };
 // "15/10/2026 às 09:00"), "referencia" a cláusula/seção de onde veio (null quando não há).
 export type PrazoEdital = { tipo: string; prazo: string; referencia: string | null };
 
-type AnalysisResult = {
+type LeituraPrincipal = {
   resumoObjeto: string;
   prazos: PrazoEdital[];
   obrigacoesContratada: string[];
   obrigacoesContratante: string[];
-  habilitacao: GrupoHabilitacao[];
   requisitosObrigatorios: string[];
   requisitosAdicionais: string[];
   pontosDeAtencao: unknown[];
+  avisos: string[];
+};
+
+type LeituraHabilitacao = {
+  habilitacao: GrupoHabilitacao[];
   avisos: string[];
 };
 
@@ -57,7 +61,6 @@ const PALAVRAS_CHAVE_ANALISE = [
   "abertura",
   "garantia",
   "assinatura",
-  "habilitação",
   "objeto",
   "obrigações",
   "contratada",
@@ -69,52 +72,60 @@ const PALAVRAS_CHAVE_ANALISE = [
   "multa",
 ];
 
+// A leitura da habilitação olha só as seções de habilitação do edital (texto bem menor).
+const PALAVRAS_CHAVE_HABILITACAO = [
+  "habilitação",
+  "regularidade",
+  "certidão",
+  "qualificação",
+  "balanço",
+  "atestado",
+  "declaração",
+  "jurídica",
+  "fiscal",
+  "trabalhista",
+  "econômico",
+  "documentos",
+];
+
+// Duas leituras em PARALELO (o tempo é o da mais lenta, não a soma) e com a resposta bem enxuta: a IA gasta a maior parte do
+// tempo ESCREVENDO a resposta, então o que mais acelera é pedir só o essencial, em frases curtas e com limite de itens. Uma
+// versão anterior pedia tudo numa resposta só, grande demais: batia no teto de tokens, vinha cortada e era refeita várias vezes.
+const MAX_TOKENS_LEITURA_PRINCIPAL = 4_500;
+const MAX_TOKENS_HABILITACAO = 3_000;
+const TAMANHO_TEXTO_PRINCIPAL = 60_000;
+const TAMANHO_TEXTO_HABILITACAO = 45_000;
+
 /**
- * Prompt do Analista. Entrega SÓ a leitura do edital (objeto, prazos, obrigações das duas partes, habilitação,
- * requisitos e pontos de atenção) — sem parecer: quem decide participar é a pessoa, com base nesta leitura.
+ * Leitura principal do edital: objeto, prazos, obrigações das duas partes, requisitos e pontos de atenção — sem parecer:
+ * quem decide participar é a pessoa, com base nesta leitura.
  */
 export function promptAnalista(instrucaoFonte: string): string {
   return comRegrasComuns(`FUNÇÃO
 Você é o Analista de licitações do Bidd.IA. Você lê o texto de um edital (e de seus anexos) e separa, de forma objetiva e
-fiel, o que a equipe precisa saber: objeto, prazos, obrigações de cada parte, exigências de habilitação, requisitos e pontos
-de atenção. Você NÃO dá parecer, NÃO recomenda participar ou não participar e NÃO calcula preços.
+fiel, o que a equipe precisa saber: objeto, prazos, obrigações de cada parte, requisitos e pontos de atenção. Você NÃO dá
+parecer, NÃO recomenda participar ou não participar, NÃO calcula preços e NÃO lista a habilitação (outra leitura cuida dela).
+Seja CONCISO: frases curtas e diretas, sem repetir o que já disse em outro campo.
 
 ${instrucaoFonte}
 
-PASSO A PASSO (siga nesta ordem)
-1. Reconheça o documento: modalidade (pregão, concorrência, dispensa, credenciamento etc.), órgão e número do edital, se constarem.
-2. "resumoObjeto": o que será contratado, em 3 a 6 frases — o que é, para quem, onde, por quanto tempo e em que regime (itens,
-   lotes, global), apenas se constar. Sem frases de marketing.
-3. "prazos": TODOS os prazos e datas do edital, sem deixar nenhum de fora, em ordem aproximadamente cronológica do processo.
-   Procure ATIVAMENTE no texto inteiro: abertura da sessão e recebimento de propostas; esclarecimentos e impugnação; envio de
-   documentos de habilitação / proposta ajustada; recursos e contrarrazões; validade da proposta; assinatura do contrato/ata e
-   retirada da nota de empenho; vigência; prazo de execução; prazo de entrega (e de troca de item recusado); recebimento
-   provisório/definitivo; prazo de pagamento; garantia (produto e contratual); amostras/demonstração/visita técnica;
-   regularização fiscal (ME/EPP); prazos de sanções. Copie o prazo EXATAMENTE como o edital escreve (número, unidade, "dias
-   úteis" ou "corridos", marco de contagem) e cite em "referencia" a cláusula/item (ou null). Se um prazo não está no texto,
-   NÃO o liste.
-4. "obrigacoesContratada": tudo o que a empresa vencedora terá que fazer DEPOIS de ganhar (entrega, local, garantia, manutenção,
-   equipe, frequência, relatórios, penalidades relevantes). Uma obrigação por item, em frase curta, terminando com o item do edital
-   entre parênteses, ex.: "Entregar os exames em até 48 horas (item 8.2)".
-5. "obrigacoesContratante": tudo o que o ÓRGÃO contratante se compromete a fazer (pagar no prazo, fornecer informações ou acesso,
-   designar fiscal/gestor, emitir ordem de serviço ou nota de empenho, receber o objeto, reajuste/reequilíbrio). Mesmo formato do
-   item anterior. Só o que o texto diz: se o edital não traz obrigações da contratante, devolva lista vazia.
-6. "habilitacao": todas as exigências de habilitação, agrupadas EXATAMENTE como o edital as agrupa em suas seções (use o título da
-   seção como "categoriaEdital", sem o número). Em "itens", UM item por documento ou condição, com o nome do documento exigido fiel
-   ao edital (ex.: "Certidão Negativa de Débitos Municipais"); quando houver condição, escreva-a no mesmo texto (ex.: "Balanço
-   patrimonial com índices LG, SG e LC maiores que 1"); quando só valer para um caso, diga (ex.: "— somente ME/EPP", "— somente lote 3").
-   "Certidões federal, estadual e municipal" são três itens. Se o edital não tiver seção clara, agrupe pelas categorias da Lei
-   14.133/2021. NUNCA omita uma exigência por achar que é óbvia. Se remeter a outro documento ("conforme Anexo V"), leia o anexo
-   se ele estiver no texto.
-7. "requisitosObrigatorios": o que desclassifica ou inabilita quando faltar (inclui o que não é documento: visita técnica
-   obrigatória, amostra, equipe mínima, certificação).
-8. "requisitosAdicionais": o que apenas pontua, melhora a proposta ou é desejável (não eliminatório).
-9. "pontosDeAtencao": pontos que podem prejudicar a empresa — exigências incomuns ou restritivas, prazos curtos, garantias altas,
-   multas pesadas, pagamento lento, amostra, visita técnica, cláusulas ambíguas, inconsistências entre edital e anexos. Cada ponto:
-   "descricao", "trecho" (o trecho curto do edital que o causa — sem trecho de apoio, NÃO crie o ponto) e "gravidade" ("alta",
-   "media" ou "baixa").
-10. "avisos": o que você NÃO conseguiu ler ou que está ambíguo, cortado ou contraditório (inclusive conflito entre o corpo do edital
-    e um anexo — registre os dois textos). Se o texto parece incompleto, diga qual parte falta.
+O QUE ENTREGAR (e os limites — escolha o que mais importa se passar deles)
+1. "resumoObjeto": o que será contratado, em 2 a 4 frases (o que é, para quem, onde, por quanto tempo, em que regime), só o que consta.
+2. "prazos": até 20 prazos e datas do edital, em ordem do processo: abertura da sessão e propostas; esclarecimentos e impugnação;
+   envio de documentos/proposta ajustada; recursos; validade da proposta; assinatura do contrato/ata; vigência; execução; entrega;
+   recebimento; pagamento; garantia; amostras/visita técnica. Cada um: "tipo" (o que é), "prazo" (copiado como o edital escreve, com
+   unidade e se são dias úteis ou corridos) e "referencia" (item do edital, ou null). Prazo que não está no texto, NÃO liste.
+3. "obrigacoesContratada": até 12 obrigações da empresa vencedora DEPOIS de ganhar (entrega, local, garantia, manutenção, equipe,
+   relatórios, penalidades relevantes). Uma frase curta cada, com o item entre parênteses, ex.: "Entregar os exames em até 48 horas (item 8.2)".
+4. "obrigacoesContratante": até 8 obrigações do ÓRGÃO contratante (pagar no prazo, fornecer informações/acesso, designar fiscal,
+   emitir ordem de serviço/empenho, receber o objeto). Mesmo formato. Se o edital não traz, lista vazia.
+5. "requisitosObrigatorios": até 10 exigências que desclassificam ou inabilitam quando faltam e NÃO são documentos de habilitação
+   (visita técnica, amostra, equipe mínima, certificação, condição de participação).
+6. "requisitosAdicionais": até 6 itens que só pontuam ou são desejáveis (não eliminatórios).
+7. "pontosDeAtencao": até 8 pontos que podem prejudicar a empresa (exigência restritiva, prazo curto, garantia alta, multa pesada,
+   pagamento lento, cláusula ambígua, conflito entre edital e anexo). Cada um: "descricao" (uma frase), "trecho" (até 15 palavras do
+   edital que o causam — sem trecho de apoio, NÃO crie o ponto) e "gravidade" ("alta", "media" ou "baixa").
+8. "avisos": até 3 avisos do que você NÃO conseguiu ler ou está ambíguo/cortado/contraditório. Se o texto parece incompleto, diga qual parte falta.
 
 FORMATO DE SAÍDA (JSON, exatamente estas chaves)
 {
@@ -122,24 +133,45 @@ FORMATO DE SAÍDA (JSON, exatamente estas chaves)
   "prazos": [ { "tipo": string, "prazo": string, "referencia": string | null } ],
   "obrigacoesContratada": string[],
   "obrigacoesContratante": string[],
-  "habilitacao": [ { "categoriaEdital": string, "itens": string[] } ],
   "requisitosObrigatorios": string[],
   "requisitosAdicionais": string[],
   "pontosDeAtencao": [ { "descricao": string, "trecho": string, "gravidade": "alta" | "media" | "baixa" } ],
   "avisos": string[]
 }
 
-REGRAS ESPECÍFICAS
-- Se o edital tiver lotes com exigências diferentes, diga a qual lote cada exigência se aplica.
-- Não calcule valores nem monte preços (é do Financeiro) e não escreva declarações (é do Advogado).
-- Não dê parecer nem recomendação: apenas a leitura.
-
-CONFERÊNCIA FINAL (faça antes de responder)
-- Percorri o edital inteiro procurando habilitação e prazos, ou só a primeira seção que apareceu?
+CONFERÊNCIA FINAL
 - Toda data e prazo listados existem no texto?
 - Cada ponto de atenção tem um trecho de apoio?
-- Se o texto parece incompleto, está escrito em "avisos"?
+- Sem parecer, sem recomendação, sem habilitação?
 - O JSON é válido, completo e sem texto em volta?`);
+}
+
+/**
+ * Leitura da habilitação: só os documentos e condições de habilitação, agrupados como o edital agrupa (o Secretário monta o
+ * checklist e as pastas a partir disto). Nomes curtos dos documentos — o texto literal das exigências é do Auditor de Habilitação.
+ */
+export function promptHabilitacao(instrucaoFonte: string): string {
+  return comRegrasComuns(`FUNÇÃO
+Você é o Analista de licitações do Bidd.IA, lendo SÓ a parte de HABILITAÇÃO de um edital. Liste os documentos e condições que a
+empresa precisa apresentar para ser habilitada, agrupados exatamente como o edital agrupa. Seja CONCISO: nomes curtos.
+
+${instrucaoFonte}
+
+O QUE ENTREGAR
+1. "habilitacao": grupos { "categoriaEdital", "itens" }. "categoriaEdital" é o título da seção como no edital (sem o número). Em
+   "itens", UM item por documento ou condição, com o nome do documento exigido, fiel ao edital (ex.: "Certidão Negativa de Débitos
+   Municipais"). Quando houver condição, escreva-a curta no mesmo item (ex.: "Balanço patrimonial com índices LG, SG e LC maiores que 1");
+   quando só valer para um caso, diga (ex.: "— somente ME/EPP", "— somente lote 3"). "Certidões federal, estadual e municipal" são TRÊS
+   itens. Se o edital não tiver seção clara, agrupe pelas categorias da Lei 14.133/2021. NUNCA omita uma exigência por achar que é óbvia.
+2. "avisos": até 3 avisos do que você NÃO conseguiu ler ou está ambíguo/cortado (ex.: "o texto da seção de habilitação parece incompleto").
+
+FORMATO DE SAÍDA (JSON, exatamente estas chaves)
+{ "habilitacao": [ { "categoriaEdital": string, "itens": string[] } ], "avisos": string[] }
+
+CONFERÊNCIA FINAL
+- Cada documento exigido é um item separado e com nome curto?
+- Os grupos têm os mesmos títulos do edital?
+- O JSON é válido e sem texto em volta?`);
 }
 
 export async function executarAgente2(editalId: string, opts?: { notaCorrecao?: string }) {
@@ -148,11 +180,15 @@ export async function executarAgente2(editalId: string, opts?: { notaCorrecao?: 
 
     // Não busca mais o detalhe da contratação no PNCP aqui: o valor já está gravado no
     // edital e o texto completo do PDF (abaixo) cobre objeto/informação complementar
-    // com muito mais precisão — a chamada extra ao PNCP só somava latência.
-    const { textoEdital, textoTermoReferencia, temTextoCompleto } =
-      await obterTextoCompletoEdital(editalId, { palavrasChave: PALAVRAS_CHAVE_ANALISE, tamanhoMax: 70_000 });
+    // com muito mais precisão — a chamada extra ao PNCP só somava latência. O texto dos PDFs fica guardado depois da
+    // primeira leitura, então pedir as duas versões (geral e de habilitação) não lê o PDF duas vezes.
+    const [principal, habilitacaoTexto] = await Promise.all([
+      obterTextoCompletoEdital(editalId, { palavrasChave: PALAVRAS_CHAVE_ANALISE, tamanhoMax: TAMANHO_TEXTO_PRINCIPAL }),
+      obterTextoCompletoEdital(editalId, { palavrasChave: PALAVRAS_CHAVE_HABILITACAO, tamanhoMax: TAMANHO_TEXTO_HABILITACAO }),
+    ]);
+    const temTextoCompleto = principal.temTextoCompleto;
 
-    const contexto = `
+    const cabecalho = `
 Título: ${edital.titulo}
 Órgão: ${edital.orgaoNome} (${edital.orgaoCnpj})
 Modalidade: ${edital.modalidade ?? "não informado"}
@@ -160,11 +196,14 @@ UF/Município: ${edital.uf ?? "?"}/${edital.municipio ?? "?"}
 Valor estimado: ${edital.valorGlobal ?? "não informado"}
 Descrição/objeto (busca PNCP): ${edital.descricao}
 Data de abertura da proposta: ${edital.dataAberturaProposta?.toISOString() ?? "não informado"}
-Data de encerramento da proposta: ${edital.dataEncerramentoProposta?.toISOString() ?? "não informado"}
-${textoEdital ? `\n=== TEXTO COMPLETO DO EDITAL (extraído do PDF oficial) ===\n${textoEdital}` : ""}
-${textoTermoReferencia ? `\n=== TEXTO COMPLETO DO TERMO DE REFERÊNCIA (extraído do PDF oficial) ===\n${textoTermoReferencia}` : ""}
-${opts?.notaCorrecao ? `\n=== CORREÇÃO PEDIDA PELO USUÁRIO (sobre a sua análise anterior) ===\n${opts.notaCorrecao}\nRefaça a análise levando isso em conta — é prioridade sobre o que você concluiu antes, mas só vale o que o texto do edital sustenta; se a nota pedir algo que o texto não sustenta, diga isso em "avisos" e não invente.` : ""}
-`.trim();
+Data de encerramento da proposta: ${edital.dataEncerramentoProposta?.toISOString() ?? "não informado"}`.trim();
+    const correcao = opts?.notaCorrecao
+      ? `\n=== CORREÇÃO PEDIDA PELO USUÁRIO (sobre a sua análise anterior) ===\n${opts.notaCorrecao}\nRefaça levando isso em conta — é prioridade sobre o que você concluiu antes, mas só vale o que o texto do edital sustenta; se a nota pedir algo que o texto não sustenta, diga isso em "avisos" e não invente.`
+      : "";
+    const montarContexto = (t: typeof principal) =>
+      `${cabecalho}
+${t.textoEdital ? `\n=== TEXTO COMPLETO DO EDITAL (extraído do PDF oficial) ===\n${t.textoEdital}` : ""}
+${t.textoTermoReferencia ? `\n=== TEXTO COMPLETO DO TERMO DE REFERÊNCIA (extraído do PDF oficial) ===\n${t.textoTermoReferencia}` : ""}${correcao}`.trim();
 
     const instrucaoFonte = temTextoCompleto
       ? `Você TEM ACESSO ao texto completo do edital e/ou do termo de referência (marcados acima entre "===").
@@ -175,28 +214,33 @@ metadados públicos resumidos acima. Não afirme ter lido cláusulas específica
 (objeto e as datas informadas), deixe as demais listas vazias e diga em "avisos" que a leitura completa do PDF continua
 necessária.`;
 
-    const result = await askJSON<AnalysisResult>(promptAnalista(instrucaoFonte), contexto, {
-      model: MODELO_HAIKU,
-      // 8000: a habilitação vem agrupada em objetos e há várias listas — editais grandes e cheios de seções
-      // podiam estourar um teto menor e truncar o JSON no meio.
-      maxTokens: 8000,
-    });
+    // As duas leituras andam juntas: o tempo total é o da mais lenta.
+    const [leitura, habilitacao] = await Promise.all([
+      askJSON<LeituraPrincipal>(promptAnalista(instrucaoFonte), montarContexto(principal), {
+        model: MODELO_HAIKU,
+        maxTokens: MAX_TOKENS_LEITURA_PRINCIPAL,
+      }),
+      askJSON<LeituraHabilitacao>(promptHabilitacao(instrucaoFonte), montarContexto(habilitacaoTexto), {
+        model: MODELO_HAIKU,
+        maxTokens: MAX_TOKENS_HABILITACAO,
+      }),
+    ]);
 
     // O que a IA devolve passa por aqui antes de ser gravado: grupo de habilitação sem "itens", objeto no
     // lugar de texto etc. quebravam a tela (React: objeto como filho) e o Agente Secretário.
-    const obrigacoes = normalizarObrigacoes({ contratada: result.obrigacoesContratada, contratante: result.obrigacoesContratante });
+    const obrigacoes = normalizarObrigacoes({ contratada: leitura.obrigacoesContratada, contratante: leitura.obrigacoesContratante });
     // Avisos de leitura entram junto dos pontos de atenção (a tela mostra tudo num lugar só, sem coluna nova no banco).
-    const avisos = normalizarLista(result.avisos).map((a) => `Aviso de leitura: ${a}`);
+    const avisos = [...normalizarLista(leitura.avisos), ...normalizarLista(habilitacao.avisos)].map((a) => `Aviso de leitura: ${a}`);
     const dadosSeguros = {
-      resumoObjeto: paraTexto(result.resumoObjeto),
+      resumoObjeto: paraTexto(leitura.resumoObjeto),
       obrigacoesContratada: serializarObrigacoes(obrigacoes),
-      habilitacao: JSON.stringify(normalizarGruposHabilitacao(result.habilitacao)),
-      requisitosObrigatorios: JSON.stringify(normalizarLista(result.requisitosObrigatorios)),
-      requisitosAdicionais: JSON.stringify(normalizarLista(result.requisitosAdicionais)),
-      riscos: JSON.stringify([...normalizarPontosDeAtencao(result.pontosDeAtencao), ...avisos]),
+      habilitacao: JSON.stringify(normalizarGruposHabilitacao(habilitacao.habilitacao)),
+      requisitosObrigatorios: JSON.stringify(normalizarLista(leitura.requisitosObrigatorios)),
+      requisitosAdicionais: JSON.stringify(normalizarLista(leitura.requisitosAdicionais)),
+      riscos: JSON.stringify([...normalizarPontosDeAtencao(leitura.pontosDeAtencao), ...avisos]),
       // O Analista não dá mais parecer (a coluna continua existindo, vazia).
       parecer: "",
-      prazos: JSON.stringify(normalizarPrazos(result.prazos)),
+      prazos: JSON.stringify(normalizarPrazos(leitura.prazos)),
       baseadoEmTextoCompleto: temTextoCompleto,
     };
 
@@ -216,9 +260,9 @@ necessária.`;
       "Agente Analista",
       opts?.notaCorrecao ? "Correção via chat" : "Análise do edital",
       "OK",
-      `Análise ${opts?.notaCorrecao ? "refeita a pedido do usuário" : "concluída"} ${temTextoCompleto ? "com leitura do texto completo do edital" : "apenas com metadados (texto do edital indisponível)"}: ${paraTexto(result.resumoObjeto)}`
+      `Análise ${opts?.notaCorrecao ? "refeita a pedido do usuário" : "concluída"} ${temTextoCompleto ? "com leitura do texto completo do edital" : "apenas com metadados (texto do edital indisponível)"}: ${paraTexto(leitura.resumoObjeto)}`
     );
 
-    return result;
+    return leitura;
   });
 }
