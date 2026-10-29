@@ -8,11 +8,15 @@ import { baixarDocumentosPendentes } from "@/lib/agents/agente1-comercial";
 import { prewarmTextoDocumentos } from "@/lib/agents/pdf-extract";
 
 /**
- * Agente Auditor Sênior — HEAD da equipe. Confere o resultado de cada agente e,
- * ao encontrar uma etapa ausente ou com erro, aciona novamente o agente responsável
- * como resolução imediata, registrando tudo em log de auditoria.
+ * Agente Auditor Sênior — HEAD da equipe. Último a rodar: NÃO produz conteúdo novo. Confere se cada agente entregou o
+ * que devia, tenta consertar UMA vez o que faltou (sem repetir em laço) e diz com sinceridade a situação final do
+ * edital: COMPLETO (as 4 entregas existem e nenhum reparo falhou) ou COM PENDÊNCIAS (alguma entrega falta, algum reparo
+ * falhou ou há documentos obrigatórios dependendo de uma pessoa). Tudo fica no histórico.
  */
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+// Execução que ficou "rodando" por mais tempo que isso morreu no meio (a função da Vercel cai em 60s): conta como erro.
+export const LIMITE_EXECUCAO_PRESA_MS = 10 * 60 * 1000;
 
 // OK < ALERTA < ERRO — usado pra nunca deixar uma checagem posterior rebaixar a
 // severidade que uma checagem anterior já elevou (ver uso em `checar` abaixo).
@@ -24,10 +28,37 @@ function elevarSeveridade(
   return ORDEM_SEVERIDADE[nova] > ORDEM_SEVERIDADE[atual] ? nova : atual;
 }
 
+export type EstadoFinalAuditor = "COMPLETO" | "COM_PENDENCIAS";
+
+/**
+ * Estado final: COMPLETO só quando as 4 entregas existem, nenhum reparo falhou e não há documento obrigatório esperando
+ * uma pessoa. "Sem erro" não basta — é a PRESENÇA das entregas que conta.
+ */
+export function definirEstadoFinal(args: {
+  entregasFaltando: string[];
+  reparosQueFalharam: string[];
+  acoesHumanas: number;
+}): EstadoFinalAuditor {
+  return args.entregasFaltando.length === 0 && args.reparosQueFalharam.length === 0 && args.acoesHumanas === 0 ? "COMPLETO" : "COM_PENDENCIAS";
+}
+
 export async function executarAgente6(editalId: string) {
   return withAgentRun(editalId, "agente6-auditor", async () => {
     const acoes: string[] = [];
+    const reparosQueFalharam: string[] = [];
+    const entregasFaltando: string[] = [];
     let severidadeFinal: "OK" | "ALERTA" | "ERRO" = "OK";
+
+    // Execuções deste edital que ficaram "rodando" há mais de 10 minutos não estão em andamento: morreram. Marca como
+    // erro, com o motivo, para ninguém esperar por elas e para o histórico dizer a verdade.
+    const presas = await prisma.agentRun.updateMany({
+      where: { editalId, status: "RUNNING", startedAt: { lt: new Date(Date.now() - LIMITE_EXECUCAO_PRESA_MS) } },
+      data: { status: "ERROR", finishedAt: new Date(), message: "Execução presa: ficou mais de 10 minutos sem terminar (a função foi interrompida)." },
+    });
+    if (presas.count > 0) {
+      severidadeFinal = elevarSeveridade(severidadeFinal, "ALERTA");
+      acoes.push(`${presas.count} execução(ões) de agente estava(m) presa(s) há mais de 10 minutos e foi(ram) marcada(s) como erro.`);
+    }
 
     const checar = async (
       nomeEtapa: string,
@@ -59,17 +90,22 @@ export async function executarAgente6(editalId: string) {
       }
 
       severidadeFinal = elevarSeveridade(severidadeFinal, "ALERTA");
-      acoes.push(`${nomeEtapa} ausente — reexecutando o agente responsável.`);
+      acoes.push(`${nomeEtapa} ausente — reexecutando o agente responsável (uma vez).`);
       try {
         await corrigir();
         acoes.push(`${nomeEtapa} corrigido com sucesso após nova execução.`);
       } catch (err) {
         severidadeFinal = elevarSeveridade(severidadeFinal, "ERRO");
         const msg = err instanceof Error ? err.message : "erro desconhecido";
+        reparosQueFalharam.push(nomeEtapa);
         acoes.push(`Falha ao corrigir ${nomeEtapa.toLowerCase()}: ${msg}`);
       }
+      // A entrega só conta se EXISTE de verdade depois do reparo (reexecutar sem erro não basta).
+      if (!(await existe())) entregasFaltando.push(nomeEtapa);
     };
 
+    // A análise e a proposta só contam como entregues quando o TEXTO do edital foi lido (baseadoEmTextoCompleto). Edital
+    // lido por inteiro e sem tabela de preços é uma entrega VÁLIDA (proposta sem itens): não se reexecuta à toa.
     await checar(
       "Análise do edital (Agente Analista)",
       "agente2-analista",
@@ -104,9 +140,8 @@ export async function executarAgente6(editalId: string) {
     await checar(
       "Anexos jurídicos (Agente Advogado)",
       "agente4-advogado",
-      // Não checa mais "gerou algum documento": um edital sem nenhum modelo de
-      // declaração reproduzível no texto legitimamente não gera anexo nenhum agora —
-      // o que importa é só se o agente já rodou até o fim para este edital.
+      // Não checa "gerou algum documento": um edital sem nenhum modelo de declaração legitimamente não gera anexo
+      // nenhum — o que importa é só se o agente já rodou até o fim para este edital.
       async () =>
         (await prisma.agentRun.count({ where: { editalId, agentKey: "agente4-advogado", status: "DONE" } })) > 0,
       () => executarAgente4(editalId)
@@ -135,27 +170,39 @@ export async function executarAgente6(editalId: string) {
       () => executarAgente5(editalId)
     );
 
-    const checklistFaltante = await prisma.checklistItem.count({
+    const acoesHumanas = await prisma.checklistItem.count({
       where: { editalId, obrigatorio: true, status: { in: ["FALTANTE", "VENCIDO"] } },
     });
-    if (checklistFaltante > 0) {
+    if (acoesHumanas > 0) {
       if (severidadeFinal === "OK") severidadeFinal = "ALERTA";
       acoes.push(
-        `${checklistFaltante} documento(s) obrigatório(s) do checklist ainda dependem de envio pelo usuário — não é uma falha dos agentes, mas requer ação humana.`
+        `${acoesHumanas} documento(s) obrigatório(s) do checklist ainda dependem de envio pelo usuário — não é uma falha dos agentes, mas requer ação humana.`
       );
     }
+
+    const estado = definirEstadoFinal({ entregasFaltando, reparosQueFalharam, acoesHumanas });
+    if (estado === "COM_PENDENCIAS" && severidadeFinal === "OK") severidadeFinal = "ALERTA";
+
+    const resumoEstado =
+      estado === "COMPLETO"
+        ? "Estado final: COMPLETO — as 4 entregas (análise, proposta, anexos jurídicos e checklist) existem, nenhum reparo falhou e não há documento obrigatório dependendo de uma pessoa."
+        : `Estado final: COM PENDÊNCIAS — ${[
+            entregasFaltando.length > 0 ? `entrega(s) faltando: ${entregasFaltando.join("; ")}` : null,
+            reparosQueFalharam.length > 0 ? `reparo(s) que falharam: ${reparosQueFalharam.join("; ")}` : null,
+            acoesHumanas > 0 ? `${acoesHumanas} ação(ões) humana(s) pendente(s) no checklist` : null,
+          ]
+            .filter(Boolean)
+            .join(" | ")}.`;
 
     await logAudit(
       editalId,
       "Agente Auditor (HEAD)",
       "Auditoria geral do pipeline",
       severidadeFinal,
-      acoes.length > 0
-        ? acoes.join(" ")
-        : "Todas as etapas do pipeline foram concluídas com sucesso e sem pendências.",
+      [resumoEstado, ...acoes].join(" "),
       acoes.length > 0 ? "Correções automáticas aplicadas quando possível." : undefined
     );
 
-    return { severidade: severidadeFinal, acoes };
+    return { severidade: severidadeFinal, estado, acoes };
   });
 }

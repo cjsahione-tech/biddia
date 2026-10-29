@@ -1,6 +1,6 @@
 import JSZip from "jszip";
 import { prisma } from "@/lib/prisma";
-import { nomePastaCategoria } from "@/lib/habilitacao-categorias";
+import { pastaDoItemNoZip } from "@/lib/habilitacao-categorias";
 import { baixarAnexo } from "@/lib/storage";
 
 export type ResultadoChecklistZip = { buffer: Buffer; nomeArquivo: string } | { erro: string };
@@ -43,7 +43,7 @@ export async function gerarChecklistZip(editalId: string, companyId: string): Pr
     }
     if (!bytes) continue;
 
-    const pasta = nomePastaCategoria(item.categoria);
+    const pasta = pastaDoItemNoZip({ documentoNome: item.documentoNome, categoria: item.categoria, ehDeclaracaoGerada: doc.tipo === "ANEXO_GERADO" });
     let nomeArquivo = (item.anexoNome || doc.nome || item.documentoNome).replace(/[\\/]/g, "-");
 
     // Evita colisão de nome dentro da mesma pasta (ex: dois itens com anexo "certidao.pdf").
@@ -64,6 +64,20 @@ export async function gerarChecklistZip(editalId: string, companyId: string): Pr
   }
 
   if (adicionados === 0) return { erro: "Nenhum documento anexado ainda neste checklist." };
+
+  // Lista do que ainda falta, junto dos arquivos: quem monta a pasta vê de uma vez o que já está e o que falta enviar.
+  const pendentes = await prisma.checklistItem.findMany({
+    where: { editalId, obrigatorio: true, status: { in: ["FALTANTE", "VENCIDO"] } },
+    orderBy: { documentoNome: "asc" },
+  });
+  if (pendentes.length > 0) {
+    const linhas = pendentes.map(
+      (p) => `- [${p.status === "VENCIDO" ? "VENCIDO" : "FALTA"}] ${p.documentoNome}${p.observacao ? ` — ${p.observacao}` : ""}`
+    );
+    // Quebra de linha do Windows (CRLF) para abrir certo no Bloco de Notas.
+    const texto = [`Documentos obrigatórios que ainda faltam para este edital (${pendentes.length}):`, "", ...linhas, ""].join("\r\n");
+    zip.file("00 - LEIA-ME - Documentos pendentes.txt", texto);
+  }
 
   const buffer = await zip.generateAsync({ type: "nodebuffer" });
   const nomeZip = `habilitacao-${edital.titulo.replace(/[^a-zA-Z0-9-_ ]/g, "").trim().slice(0, 60) || "edital"}.zip`;

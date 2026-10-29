@@ -95,3 +95,62 @@ export function lerLista(json: string | null | undefined): string[] {
     return [];
   }
 }
+
+// ── Obrigações (contratada e contratante) ───────────────────────────────────
+//
+// Antes, o campo `obrigacoesContratada` guardava só uma lista de textos (as obrigações da contratada). Agora a
+// análise também separa as obrigações da CONTRATANTE (o órgão). Para não mexer no banco, as duas listas ficam no
+// mesmo campo, como um objeto { contratada, contratante }. Análises antigas (lista simples) continuam valendo:
+// são lidas como "só contratada". Se um dia houver uma coluna própria para a contratante, basta mover.
+
+export type ObrigacoesAnalise = { contratada: string[]; contratante: string[] };
+
+export function normalizarObrigacoes(valor: unknown): ObrigacoesAnalise {
+  if (valor && typeof valor === "object" && !Array.isArray(valor)) {
+    const o = valor as Record<string, unknown>;
+    return { contratada: normalizarLista(o.contratada), contratante: normalizarLista(o.contratante) };
+  }
+  return { contratada: normalizarLista(valor), contratante: [] };
+}
+
+/** JSON do campo → obrigações das duas partes (aceita o formato antigo; JSON inválido = listas vazias). */
+export function lerObrigacoes(json: string | null | undefined): ObrigacoesAnalise {
+  if (!json) return { contratada: [], contratante: [] };
+  try {
+    return normalizarObrigacoes(JSON.parse(json));
+  } catch {
+    return { contratada: [], contratante: [] };
+  }
+}
+
+/** Texto gravado no campo: o objeto com as duas listas. */
+export function serializarObrigacoes(o: ObrigacoesAnalise): string {
+  return JSON.stringify({ contratada: o.contratada, contratante: o.contratante });
+}
+
+// ── Pontos de atenção ───────────────────────────────────────────────────────
+
+const ROTULO_GRAVIDADE: Record<string, string> = { alta: "Alta", media: "Média", média: "Média", baixa: "Baixa" };
+
+/**
+ * Pontos de atenção do edital. A IA devolve objetos { descricao, trecho, gravidade } (ou textos soltos); cada um vira UMA
+ * linha de texto: "Gravidade — descrição (trecho: «…»)". Ponto sem descrição é descartado.
+ */
+export function normalizarPontosDeAtencao(valor: unknown): string[] {
+  if (!Array.isArray(valor)) return normalizarLista(valor);
+  const linhas: string[] = [];
+  for (const p of valor) {
+    if (p && typeof p === "object" && !Array.isArray(p)) {
+      const o = p as Record<string, unknown>;
+      const descricao = paraTexto(o.descricao);
+      if (!descricao) continue;
+      const trecho = paraTexto(o.trecho);
+      const gravidade = ROTULO_GRAVIDADE[paraTexto(o.gravidade).toLowerCase()];
+      linhas.push(`${gravidade ? `${gravidade} — ` : ""}${descricao}${trecho ? ` (trecho: «${trecho}»)` : ""}`);
+    } else {
+      const t = paraTexto(p);
+      if (t) linhas.push(t);
+    }
+  }
+  return linhas;
+}

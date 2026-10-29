@@ -2,7 +2,7 @@ import { FonteBadge } from "@/components/ui/FonteBadge";
 import { AgentChat } from "@/components/editais/AgentChat";
 import type { EditalDetail } from "@/lib/types";
 
-import { lerGruposHabilitacao, lerLista, lerPrazos, type GrupoHabilitacao, type PrazoEdital } from "@/lib/analise-dados";
+import { lerGruposHabilitacao, lerLista, lerObrigacoes, lerPrazos, type GrupoHabilitacao, type PrazoEdital } from "@/lib/analise-dados";
 
 // Dados da IA passam sempre por lerLista/lerGruposHabilitacao: a IA às vezes devolve objeto onde o
 // formato pedia texto (ou um grupo sem "itens"), e desenhar um objeto na tela derruba a página inteira.
@@ -88,6 +88,8 @@ function SectionHabilitacao({ grupos }: { grupos: GrupoHabilitacao[] }) {
 
 export function AnalysisTab({ edital, onUpdate }: { edital: EditalDetail; onUpdate: () => void }) {
   const analysis = edital.analysis;
+  // As obrigações das duas partes ficam no mesmo campo (análises antigas só têm as da contratada).
+  const obrigacoes = lerObrigacoes(analysis?.obrigacoesContratada);
 
   return (
     <div className="space-y-8">
@@ -115,18 +117,14 @@ export function AnalysisTab({ edital, onUpdate }: { edital: EditalDetail; onUpda
           <SectionPrazos prazos={parsePrazos(analysis.prazos)} analiseAntiga={analysis.prazos == null} />
 
           <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
-            <Section title="Obrigações da contratada" items={parseList(analysis.obrigacoesContratada)} />
+            <Section title="Obrigações da contratada" items={obrigacoes.contratada} />
+            <Section title="Obrigações da contratante" items={obrigacoes.contratante} />
             <SectionHabilitacao grupos={parseHabilitacaoGrupos(analysis.habilitacao)} />
             <Section title="Requisitos obrigatórios" items={parseList(analysis.requisitosObrigatorios)} />
             <Section title="Requisitos adicionais" items={parseList(analysis.requisitosAdicionais)} />
           </div>
 
-          <Section title="Riscos e pontos de atenção" items={parseList(analysis.riscos)} />
-
-          <div className="rounded-card bg-surface shadow-card p-5">
-            <h4 className="text-sm font-semibold text-foreground">Parecer do Agente Analista</h4>
-            <p className="mt-2 text-sm text-foreground/80">{analysis.parecer}</p>
-          </div>
+          <Section title="Pontos de atenção" items={parseList(analysis.riscos)} />
         </>
       )}
 

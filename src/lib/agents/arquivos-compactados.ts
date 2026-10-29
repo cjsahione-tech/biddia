@@ -110,3 +110,16 @@ export async function extrairTextoDeZip(
 
   return partes.length > 0 ? partes.join("\n\n") : null;
 }
+
+/**
+ * Se o ZIP é um pacote com UM ÚNICO arquivo PDF (e mais nada além de pastas/lixo do sistema), devolve esse PDF — é o caso de
+ * editais publicados "dentro de um ZIP" só para trafegar. Pacotes com vários arquivos, Word e Excel devolvem null (nada a
+ * extrair).
+ */
+export async function extrairPdfUnicoDoZip(bytes: Uint8Array): Promise<Uint8Array | null> {
+  const zip = await JSZip.loadAsync(bytes);
+  if (zip.file("word/document.xml") || ehPacoteXlsx(Object.keys(zip.files))) return null;
+  const arquivos = Object.values(zip.files).filter((f) => !f.dir && !f.name.startsWith("__MACOSX/"));
+  if (arquivos.length !== 1 || !arquivos[0].name.toLowerCase().endsWith(".pdf")) return null;
+  return arquivos[0].async("uint8array");
+}

@@ -7,6 +7,7 @@ import { corrigirAgente5ViaChat } from "@/lib/agents/agente5-secretario";
 import { executarAgente6 } from "@/lib/agents/agente6-auditor";
 import { logAudit } from "@/lib/agents/run-tracker";
 import { parseItens } from "@/lib/proposal";
+import { lerObrigacoes } from "@/lib/analise-dados";
 
 // Uma aba de chat por agente que produz algo revisável pelo usuário — o Agente
 // Comercial fica de fora porque atua na captação (fora do edital já criado), não numa
@@ -67,14 +68,15 @@ async function montarContextoConversa(editalId: string, agentKey: AgentChatKey):
     case "agente2-analista": {
       const a = await prisma.analysis.findUnique({ where: { editalId } });
       if (!a) return "Você ainda não analisou este edital.";
+      const obrigacoes = lerObrigacoes(a.obrigacoesContratada);
       return `Resumo do objeto: ${a.resumoObjeto}
-Obrigações da contratada: ${a.obrigacoesContratada}
+Obrigações da contratada: ${JSON.stringify(obrigacoes.contratada)}
+Obrigações da contratante: ${JSON.stringify(obrigacoes.contratante)}
 Habilitação exigida: ${a.habilitacao}
 Requisitos obrigatórios: ${a.requisitosObrigatorios}
 Requisitos adicionais: ${a.requisitosAdicionais}
-Riscos: ${a.riscos}
-Prazos do edital: ${a.prazos ?? "(análise anterior à lista de prazos)"}
-Parecer: ${a.parecer}`;
+Pontos de atenção: ${a.riscos}
+Prazos do edital: ${a.prazos ?? "(análise anterior à lista de prazos)"}`;
     }
     case "agente3-financeiro": {
       const p = await prisma.proposal.findUnique({ where: { editalId } });
@@ -181,7 +183,7 @@ async function processarCorrecaoChat(
   switch (agentKey) {
     case "agente2-analista":
       await executarAgente2(editalId, { notaCorrecao });
-      return "Reanalisei o edital considerando sua observação e atualizei o resumo, as obrigações, a habilitação, os riscos e o parecer.";
+      return "Reanalisei o edital considerando sua observação e atualizei o resumo, os prazos, as obrigações, a habilitação, os requisitos e os pontos de atenção.";
 
     case "agente3-financeiro":
       return corrigirAgente3ViaChat(editalId, notaCorrecao);

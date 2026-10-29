@@ -3,8 +3,11 @@ import { askJSON, MODELO_HAIKU, MODELO_SONNET } from "@/lib/anthropic";
 import { obterTextoCompletoEdital } from "@/lib/agents/pdf-extract";
 import { withAgentRun, logAudit } from "@/lib/agents/run-tracker";
 import { buscarItensCompra, parseNumeroControlePNCP } from "@/lib/agents/pncp";
-import { CAMPOS_EXTRAS_CATALOGO, chaveCampoExtraValida, type ChaveCampoExtra, type LoteMeta } from "@/lib/proposal";
+import { CAMPOS_EXTRAS_CATALOGO, chaveCampoExtraValida, parseItens, type ChaveCampoExtra, type LoteMeta } from "@/lib/proposal";
 import { acharLacunasDeNumeracao, blocosSuspeitos, conferirLinhas, pontuarDefeitos } from "@/lib/agents/financeiro-conferencia";
+import { aplicarRevisaoConjunto, promptRevisaoConjunto, type RevisaoConjunto } from "@/lib/agents/financeiro-revisao";
+import { preservarEdicoesManuais } from "@/lib/agents/financeiro-edicoes";
+import { comRegrasComuns } from "@/lib/agents/regras-comuns";
 
 // Quanto de saída reservar na chamada de IA, em função de quantos itens se espera —
 // reservar 16k tokens para um edital de 20 itens só fazia a chamada disputar cota de
@@ -24,6 +27,8 @@ type ItemProposta = {
   // Só para a conferência (não vão para o banco): o total da linha como o edital imprime, e de qual trecho veio.
   valorTotalLinha?: number | null;
   bloco?: number;
+  // true quando o preço veio de uma sugestão de mercado pedida pelo usuário (não do edital).
+  precoSugerido?: boolean;
 };
 
 type FinanceiroResult = {
@@ -135,34 +140,46 @@ const LISTA_CAMPOS_EXTRAS_CATALOGO = Object.entries(CAMPOS_EXTRAS_CATALOGO)
   .join(", ");
 
 function montarPromptBloco(indice: number, total: number, reforco?: string, estrutura?: string): string {
-  return `Você é o agente financeiro de uma empresa, extraindo a tabela de itens/preços de um edital
-público brasileiro. Abaixo está APENAS UM TRECHO de uma tabela (trecho ${indice + 1} de ${total}) — TRANSCREVA
-TODOS os itens presentes NESTE TRECHO, um por um, exatamente como estão (mesmo que a tabela continue antes ou
-depois dele, fora do que foi te mostrado). Não invente itens que não estejam neste trecho, e É OBRIGATÓRIO não
-pular nenhum item que esteja nele, por mais numeroso ou repetitivo que pareça — isso é transcrição literal linha
-por linha, não um resumo. Faltar um item na lista é um erro grave para quem vai usar esta proposta.
+  return comRegrasComuns(`FUNÇÃO
+Você é o extrator de itens da proposta de preços do Bidd.IA. Você recebe APENAS UM TRECHO (trecho ${indice + 1} de ${total}) de uma
+tabela de itens de um edital público brasileiro e devolve TODOS os itens de compra ou serviço que aparecem NESTE TRECHO, um por um,
+exatamente como estão escritos (mesmo que a tabela continue antes ou depois dele). Você NÃO calcula, NÃO estima e NÃO sugere preços.
+É OBRIGATÓRIO não pular nenhum item do trecho, por mais numeroso ou repetitivo que pareça: isso é transcrição literal linha por
+linha, não um resumo. Faltar um item é um erro grave para quem vai usar esta proposta.
 
-Preste atenção especial a três pontos:
-1. Se este trecho tiver um cabeçalho do tipo "LOTE X" ou "GRUPO X" (numeral ou por extenso) antes de uma sequência
-de itens, preencha "lote" com esse número/identificação em TODOS os itens daquela sequência, até o próximo
-cabeçalho de lote/grupo. Se não houver estrutura de lote/grupo neste edital, deixe "lote" como null em todos.
-Preencha também "numero" com o número do item como aparece na própria tabela do edital (ex: "Item 3" → 3), ou
-null se não houver numeração clara.
-2. Se a tabela já tiver, ela mesma, uma coluna extra batendo com uma destas (e SOMENTE estas — nunca invente
-outra chave): ${LISTA_CAMPOS_EXTRAS_CATALOGO}, preencha "camposExtras" com um objeto usando exatamente essas
-chaves. Colunas que não batem com nenhuma dessas são ignoradas (não force encaixe).
-
-3. "valorTotalLinha" é o valor TOTAL daquele item como está IMPRESSO na própria linha da tabela (a coluna de valor
-total/global do item), copiado literalmente — NÃO calcule nada: se a tabela não tiver coluna de total por linha,
-use null. Ele serve para conferir depois se quantidade × valor unitário fecha; copiar errado ou calcular por conta
-própria estraga essa conferência.
-${estrutura ? `\nESTRUTURA DA TABELA (cabeçalho lido no início da tabela, vale para todos os trechos — use-o para saber qual coluna é qual, mesmo que este trecho não mostre o cabeçalho):\n${estrutura}\n` : ""}
+PASSO A PASSO
+1. Procure as linhas de itens: número do item, descrição, unidade, quantidade e valores. Tabelas de texto podem aparecer
+   "quebradas" (cada célula em uma linha): reconstrua cada item juntando as células da mesma linha.
+2. Lote: se o trecho tiver um cabeçalho "LOTE X" ou "GRUPO X" antes de uma sequência de itens, preencha "lote" com essa
+   identificação em TODOS os itens da sequência, até o próximo cabeçalho. Sem estrutura de lote neste edital, "lote" é null.
+   Preencha "numero" com o número do item como aparece na tabela (ex: "Item 3" → 3), ou null se não houver numeração clara.
+3. Colunas extras: se a tabela tiver uma coluna que bata com uma destas (e SOMENTE estas — nunca invente outra chave):
+   ${LISTA_CAMPOS_EXTRAS_CATALOGO}, preencha "camposExtras" com essas chaves. Colunas que não batem com nenhuma são ignoradas.
+4. "valorTotalLinha" é o valor TOTAL do item como está IMPRESSO na própria linha (coluna de valor total/global), copiado
+   literalmente — NÃO calcule: se a tabela não tiver essa coluna, use null. Ele serve para conferir depois se quantidade × valor
+   unitário fecha.
+5. SEM PREÇO NO TEXTO = PREÇO VAZIO: se o edital não traz valor unitário, "valorUnitario" é null. É PROIBIDO sugerir, estimar ou pesquisar preço.
+6. Não repita: o mesmo item aparecendo duas vezes no trecho (cabeçalho repetido em outra página) é devolvido uma vez.
+7. Não é item: linha de total geral, subtotal, cabeçalho, rodapé, nem condição do edital ("prazo de entrega: 10 dias").
+8. Não some, não multiplique, não corrija: se quantidade × unitário não bate com o total do texto, devolva os três como estão escritos.
+9. Sem tabela neste trecho = "itens": []. Nunca crie itens para "preencher".
+${estrutura ? `
+ESTRUTURA DA TABELA (cabeçalho lido no início da tabela, vale para todos os trechos — use-o para saber qual coluna é qual, mesmo que este trecho não mostre o cabeçalho):
+${estrutura}
+` : ""}
 ${INSTRUCAO_FORMATO_NUMERICO}
 ${reforco ?? ""}
 
-Responda em JSON: { "itens": [{ "numero": number | null, "descricao": string, "unidade": string, "quantidade": number,
-"valorUnitario": number, "valorTotalLinha": number | null, "lote": string | null, "camposExtras"?: object }] }
-Se este trecho não contiver nenhuma linha de tabela reconhecível, devolva "itens": [].`;
+FORMATO DE SAÍDA (JSON)
+{ "itens": [ { "numero": number | null, "descricao": string, "unidade": string, "quantidade": number, "valorUnitario": number | null,
+"valorTotalLinha": number | null, "lote": string | null, "camposExtras"?: object } ] }
+
+CONFERÊNCIA FINAL
+- Todo item devolvido existe, com esse número e esta descrição, neste trecho?
+- Nenhum preço foi inventado, estimado ou sugerido?
+- Nenhum subtotal, total geral, cabeçalho ou condição do edital virou item?
+- Itens repetidos foram unificados?
+- O JSON é válido e sem texto em volta?`);
 }
 
 /**
@@ -504,7 +521,7 @@ export async function preencherPrecosFaltantes(
       }
     })
   );
-  const preenchidos = itens.map((it, i) => (mapa.has(i) ? { ...it, valorUnitario: mapa.get(i)! } : it));
+  const preenchidos = itens.map((it, i) => (mapa.has(i) ? { ...it, valorUnitario: mapa.get(i)!, precoSugerido: true } : it));
   return { itens: preenchidos, qtdEstimados: mapa.size };
 }
 
@@ -534,7 +551,6 @@ Responda em JSON: { "precos": [{ "indice": number, "valorUnitario": number }] }`
 export async function executarAgente3(editalId: string) {
   return withAgentRun(editalId, "agente3-financeiro", async () => {
     const edital = await prisma.edital.findUniqueOrThrow({ where: { id: editalId } });
-    const analysis = await prisma.analysis.findUnique({ where: { editalId } });
 
     const valorReferencia = edital.valorGlobal;
     if (!valorReferencia) {
@@ -552,19 +568,6 @@ export async function executarAgente3(editalId: string) {
         palavrasChave: PALAVRAS_CHAVE_FINANCEIRO,
         tamanhoMax: MAX_CHARS_FINANCEIRO,
       });
-
-    // Anexo de preços primeiro: é o candidato mais provável a conter a tabela de itens
-    // de verdade, então entra logo no início do contexto (modelos tendem a dar mais
-    // peso ao que aparece cedo quando o texto é longo).
-    const contexto = `
-Objeto: ${edital.titulo}
-Descrição: ${edital.descricao}
-Resumo do objeto (análise): ${analysis?.resumoObjeto ?? "não disponível"}
-Valor global de referência publicado no PNCP: ${valorReferencia ?? "não publicado"}
-${textoAnexosPrecos ? `\n=== TRECHOS DE ANEXO(S) COM POSSÍVEL TABELA DE ITENS/PREÇOS ===\n${textoAnexosPrecos}` : ""}
-${textoTermoReferencia ? `\n=== TRECHOS RELEVANTES DO TERMO DE REFERÊNCIA ===\n${textoTermoReferencia}` : ""}
-${textoEdital ? `\n=== TRECHOS RELEVANTES DO EDITAL ===\n${textoEdital}` : ""}
-`.trim();
 
     const areaFinanceira = [textoAnexosPrecos, textoTermoReferencia, textoEdital].filter(Boolean).join("\n");
     const itensEsperados = estimarQuantidadeDeItens(areaFinanceira);
@@ -599,55 +602,39 @@ ${textoEdital ? `\n=== TRECHOS RELEVANTES DO EDITAL ===\n${textoEdital}` : ""}
       const itensPorBloco = await Promise.all(
         blocos.map((bloco, i) => extrairBlocoDeItens(bloco, i, blocos.length, cabecalho, estruturaTabela))
       );
-      let itens = deduplicarItens(preencherLotePorArrastamento(itensPorBloco.flat()));
+      const itens = deduplicarItens(preencherLotePorArrastamento(itensPorBloco.flat()));
 
-      // Edital publicou a tabela sem coluna de preço (comum em registro de preços) —
-      // sem isso, todo item ficaria com valorTotal zerado, o que é enganoso.
-      const semPrecoAntes = itens.filter((i) => i.valorUnitario == null || i.valorUnitario === 0).length;
-      let avisoPreco = "";
-      if (itens.length > 0 && semPrecoAntes / itens.length > 0.5) {
-        const { itens: preenchidos, qtdEstimados } = await preencherPrecosFaltantes(edital, itens);
-        itens = preenchidos;
-        if (qtdEstimados > 0) {
-          avisoPreco = ` O edital não publicou valor unitário de referência para ${qtdEstimados} item(ns) — a Bidd.IA sugeriu preços de mercado plausíveis para eles; ajuste antes de enviar a proposta.`;
-        }
-      }
+      // Edital que publica a tabela sem coluna de preço (comum em registro de preços): o preço fica VAZIO, como no
+      // edital. A Bidd.IA não inventa preço sozinha — a sugestão de preço de mercado é opcional, pedida pelo usuário
+      // (botão "Sugerir preços de mercado" na aba Financeiro) e marcada como sugestão.
+      const semPreco = itens.filter((i) => i.valorUnitario == null || i.valorUnitario === 0).length;
+      const avisoPreco =
+        semPreco > 0
+          ? ` O edital não publicou valor unitário de referência para ${semPreco} item(ns) — eles ficaram sem preço. Preencha na tela ou, se quiser, peça a sugestão de preços de mercado (ela é só uma sugestão, não vem do edital).`
+          : "";
 
       result = {
         itensEncontradosNoTexto: itens.length > 0,
         itens,
         observacoes:
           itens.length > 0
-            ? `Tabela de itens transcrita do texto do edital${blocos.length > 1 ? ` (extraída em ${blocos.length} trechos)` : ""} e conferida linha a linha. Revise antes do envio.${avisoPreco}`
-            : "Não foi possível identificar itens de uma tabela de preços no texto — monte a proposta manualmente a partir do PDF original.",
+            ? `Tabela de itens transcrita do texto do edital${blocos.length > 1 ? ` (extraída em ${blocos.length} trechos)` : ""}. Revise antes do envio.${avisoPreco}`
+            : "Li o texto do edital, mas não encontrei tabela de itens e preços. Se a tabela está em algum anexo ou página específica, diga no chat do Agente Financeiro quais são as páginas, ou importe a sua planilha.",
       };
     } else {
-      // Sem texto do edital: não há como saber a lista real, então monta uma
-      // composição plausível com base no objeto e no valor de referência (quando houver).
-      const promptEstimativa = `Você é o agente financeiro de uma empresa que está estruturando uma proposta
-comercial para um edital público brasileiro. O texto completo do edital não estava disponível — você não tem como
-saber a lista real de itens. Monte uma composição PLAUSÍVEL com base no objeto e no valor de referência (quando
-houver), e marque "itensEncontradosNoTexto": false. A soma dos itens deve fechar aproximadamente no valor de
-referência informado. Deixe claro nas observações que isso é uma estimativa e precisa ser conferida pelo usuário
-contra o edital real antes do envio.
-
-Responda em JSON:
-{
-  "itensEncontradosNoTexto": false,
-  "itens": [{ "descricao": string, "unidade": string, "quantidade": number, "valorUnitario": number }],
-  "observacoes": string
-}
-Gere entre 2 e 20 itens plausíveis. Use números puros (sem "R$" ou separadores de milhar) em quantidade e valorUnitario.`;
-
-      result = await askJSON<FinanceiroResult>(promptEstimativa, contexto, {
-        model: MODELO_SONNET,
-        maxTokens: 4_000,
-      });
+      // Sem o texto do edital não há como saber a lista real: a proposta fica SEM itens, nunca com uma "composição
+      // plausível" inventada.
+      result = {
+        itensEncontradosNoTexto: false,
+        itens: [],
+        observacoes:
+          "Não consegui ler o texto deste edital, então não montei a lista de itens (a Bidd.IA não inventa itens). Quando os arquivos do edital estiverem disponíveis, o Agente Financeiro tenta de novo; você também pode importar a sua planilha.",
+      };
     }
 
-    // Segunda passada de revisão: confere a lista extraída contra o texto-fonte e
-    // devolve só um "diff" (o que corrigir/adicionar/remover) — rápido e sem risco de
-    // truncar a lista.
+    // Segunda passada de revisão: a IA só APONTA problemas da lista extraída (item que não é item, duplicado, lote
+    // errado, número suspeito) — nunca acrescenta item nem muda preço ou quantidade. Os números são conferidos pela
+    // aritmética (adiante), não pela opinião de um revisor.
     let itensFinais = result.itens;
     let observacoesFinais = result.observacoes;
     const LIMITE_ITENS_PARA_REVISAO = 300;
@@ -657,66 +644,22 @@ Gere entre 2 e 20 itens plausíveis. Use números puros (sem "R$" ou separadores
           .map((it, i) => `[${i}] ${it.descricao} | ${it.unidade} | qtd ${it.quantidade} | unit ${it.valorUnitario} | total impresso ${it.valorTotalLinha ?? "-"} | lote ${it.lote ?? "-"}`)
           .join("\n");
 
-        const diff = await askJSON<RevisaoDiff>(
-          `Você é um revisor financeiro rigoroso. Abaixo estão (1) trechos do edital/TR com a tabela de itens e (2)
-uma lista de itens JÁ extraída, com índices [0..${result.itens.length - 1}]. Confira a lista contra o texto-fonte
-e devolva SOMENTE o que precisa mudar — não repita a lista inteira:
-- "correcoes": para cada item cujo texto/quantidade/unidade/valor unitário/lote não bate com a fonte, um objeto com
-  o "indice" e SÓ os campos a corrigir.
-- "itensFaltantes": itens que existem na tabela do texto mas não estão na lista.
-- "indicesParaRemover": índices de itens que NÃO existem de fato no texto-fonte.
-Se estiver tudo certo, devolva as três listas vazias.
-
-${INSTRUCAO_FORMATO_NUMERICO}
-
-Responda em JSON:
-{
-  "correcoes": [{ "indice": number, "descricao"?: string, "unidade"?: string, "quantidade"?: number, "valorUnitario"?: number, "lote"?: string }],
-  "itensFaltantes": [{ "descricao": string, "unidade": string, "quantidade": number, "valorUnitario": number, "lote"?: string }],
-  "indicesParaRemover": [number]
-}`,
+        const diff = await askJSON<RevisaoConjunto>(
+          promptRevisaoConjunto(result.itens.length),
           `=== TEXTO-FONTE ===\n${textoAnexosPrecos ?? ""}\n${textoTermoReferencia ?? ""}\n${textoEdital ?? ""}\n\n=== LISTA EXTRAÍDA (${result.itens.length} itens) ===\n${listaIndexada}`,
           // Conferência mecânica e resposta pequena (só o diff) — Haiku dá conta e é rápido.
           { model: MODELO_HAIKU, maxTokens: 4_000 }
         );
 
-        const ajustes: string[] = [];
-        const revisados = result.itens.map((item, i) => {
-          const c = diff.correcoes?.find((x) => x.indice === i);
-          if (!c) return item;
-          ajustes.push(`item "${item.descricao}" ajustado`);
-          return {
-            // valorTotalLinha e bloco (só da conferência) continuam valendo: se a revisão mexer num valor e a
-            // linha deixar de fechar com o total impresso, a conferência logo adiante pega.
-            ...item,
-            numero: typeof c.numero === "number" ? c.numero : item.numero,
-            descricao: c.descricao ?? item.descricao,
-            unidade: c.unidade ?? item.unidade,
-            quantidade: typeof c.quantidade === "number" ? c.quantidade : item.quantidade,
-            valorUnitario: typeof c.valorUnitario === "number" ? c.valorUnitario : item.valorUnitario,
-            lote: c.lote ?? item.lote,
-            // Mescla campo a campo em vez de substituir o objeto inteiro — a correção
-            // pode mandar só a coluna extra que está errada, sem isso as outras
-            // (ex: prazoGarantiaMeses) seriam perdidas mesmo sem terem mudado.
-            camposExtras: c.camposExtras ? { ...item.camposExtras, ...c.camposExtras } : item.camposExtras,
-          };
-        });
-
-        const remover = new Set(diff.indicesParaRemover ?? []);
-        const faltantes = (diff.itensFaltantes ?? []).filter(
-          (f) => f && f.descricao && typeof f.quantidade === "number" && typeof f.valorUnitario === "number"
-        );
-        // Trava de segurança: nunca deixa a revisão apagar mais de 20% da lista.
-        const podeRemover = remover.size <= result.itens.length * 0.2;
-        itensFinais = [...revisados.filter((_, i) => !(podeRemover && remover.has(i))), ...faltantes];
-
-        if (ajustes.length + faltantes.length + (podeRemover ? remover.size : 0) > 0) {
-          const partes = [];
-          if (ajustes.length) partes.push(`${ajustes.length} item(ns) corrigido(s)`);
-          if (faltantes.length) partes.push(`${faltantes.length} item(ns) que faltavam adicionado(s)`);
-          if (podeRemover && remover.size) partes.push(`${remover.size} item(ns) inexistente(s) removido(s)`);
-          observacoesFinais = `${result.observacoes}\n\nRevisão automática: ${partes.join(", ")}.`;
+        const aplicada = aplicarRevisaoConjunto(result.itens, diff);
+        itensFinais = aplicada.itens;
+        if (aplicada.conferirManualmente.length > 0) {
+          console.log(`[agente3-financeiro] edital ${editalId}: revisão apontou ${aplicada.conferirManualmente.length} item(ns) com número suspeito.`);
         }
+        const partes: string[] = [];
+        if (aplicada.removidos > 0) partes.push(`${aplicada.removidos} item(ns) que não eram itens (ou repetidos) removido(s)`);
+        if (aplicada.lotesCorrigidos > 0) partes.push(`${aplicada.lotesCorrigidos} lote(s) corrigido(s)`);
+        if (partes.length > 0) observacoesFinais = `${result.observacoes}\n\nRevisão automática: ${partes.join(", ")}.`;
       } catch (err) {
         // A revisão é um reforço de qualidade, não um requisito — se falhar, segue com
         // o resultado da primeira passada em vez de derrubar o agente inteiro.
@@ -750,17 +693,24 @@ Responda em JSON:
     // nunca sobrescreve o que a IA já leu com confiança (ver conferirComPncp).
     itensFinais = await conferirComPncp(edital, itensFinais);
 
-    const itensComTotal = itensFinais.map((item) => ({
-      numero: item.numero ?? null,
-      descricao: item.descricao,
-      unidade: item.unidade,
-      quantidade: item.quantidade,
-      valorUnitario: item.valorUnitario,
-      valorTotal: Number((item.quantidade * item.valorUnitario).toFixed(2)),
-      lote: item.lote ?? null,
-      camposExtras: item.camposExtras,
-      editadoManualmente: false,
-    }));
+    const itensExtraidos = itensFinais.map((item) => {
+      // Item sem preço no edital: valor unitário null vira 0 (a tela mostra o campo vazio para preencher).
+      const valorUnitario = typeof item.valorUnitario === 'number' && Number.isFinite(item.valorUnitario) ? item.valorUnitario : 0;
+      return {
+        numero: item.numero ?? null,
+        descricao: item.descricao,
+        unidade: item.unidade,
+        quantidade: item.quantidade,
+        valorUnitario,
+        valorTotal: Number((item.quantidade * valorUnitario).toFixed(2)),
+        lote: item.lote ?? null,
+        camposExtras: item.camposExtras,
+        editadoManualmente: false,
+      };
+    });
+    // Preços que a pessoa editou à mão na tela continuam valendo quando o agente roda de novo.
+    const propostaAnterior = await prisma.proposal.findUnique({ where: { editalId }, select: { itensJson: true } });
+    const itensComTotal = preservarEdicoesManuais(itensExtraidos, propostaAnterior ? parseItens(propostaAnterior.itensJson) : []);
     const somaItens = itensComTotal.reduce((acc, i) => acc + i.valorTotal, 0);
     const lotes = montarLotes(itensComTotal);
 
@@ -771,7 +721,7 @@ Responda em JSON:
         valorGlobalReferencia: valorReferencia ?? somaItens,
         itensJson: JSON.stringify(itensComTotal),
         observacoes: observacoesFinais,
-        baseadoEmTextoCompleto: !!result.itensEncontradosNoTexto,
+        baseadoEmTextoCompleto: temTextoCompleto,
         lotesJson: lotes.length > 0 ? JSON.stringify(lotes) : null,
         colunasExtrasJson: colunasExtras.length > 0 ? JSON.stringify(colunasExtras) : null,
       },
@@ -779,7 +729,7 @@ Responda em JSON:
         valorGlobalReferencia: valorReferencia ?? somaItens,
         itensJson: JSON.stringify(itensComTotal),
         observacoes: observacoesFinais,
-        baseadoEmTextoCompleto: !!result.itensEncontradosNoTexto,
+        baseadoEmTextoCompleto: temTextoCompleto,
         lotesJson: lotes.length > 0 ? JSON.stringify(lotes) : null,
         colunasExtrasJson: colunasExtras.length > 0 ? JSON.stringify(colunasExtras) : null,
       },
@@ -801,7 +751,7 @@ Responda em JSON:
 
     const origemLabel = result.itensEncontradosNoTexto
       ? "transcritos do texto do edital, com revisão automática"
-      : "estimados, texto do edital indisponível";
+      : "nenhum item: o texto do edital estava indisponível";
 
     await logAudit(
       editalId,
@@ -928,30 +878,34 @@ Responda em JSON:
   );
   let itensFinais = [...revisados.filter((_, i) => !remover.has(i)), ...faltantes];
 
-  // Mesma checagem de "edital sem coluna de preço" da extração cheia — o usuário pode
-  // estar reportando exatamente esse sintoma (proposta com tudo R$ 0,00) via chat.
-  const semPrecoAntes = itensFinais.filter((i) => i.valorUnitario == null || i.valorUnitario === 0).length;
+  // Sugestão de preço de mercado SÓ quando o usuário pede (a Bidd.IA não inventa preço sozinha). Itens editados à mão
+  // e itens que já têm preço nunca são tocados; os preenchidos ficam marcados como "sugestão".
   let qtdEstimados = 0;
-  if (itensFinais.length > 0 && semPrecoAntes / itensFinais.length > 0.5) {
+  const pediuSugestaoDePreco = /sugir|sugest|estim|pre[çc]os?\s+(de|do)\s+mercado|valor(es)?\s+(de|do)\s+mercado/i.test(notaCorrecao);
+  if (pediuSugestaoDePreco && itensFinais.some((i) => i.valorUnitario == null || i.valorUnitario === 0)) {
     const preenchido = await preencherPrecosFaltantes(edital, itensFinais);
     itensFinais = preenchido.itens;
     qtdEstimados = preenchido.qtdEstimados;
   }
 
-  const itensComTotal = itensFinais.map((item) => ({
-    numero: item.numero ?? null,
-    descricao: item.descricao,
-    unidade: item.unidade,
-    quantidade: item.quantidade,
-    valorUnitario: item.valorUnitario,
-    valorTotal: Number((item.quantidade * item.valorUnitario).toFixed(2)),
-    lote: item.lote ?? null,
-    camposExtras: item.camposExtras,
-    // Preserva a marcação de quem editou manualmente um preço via FinanceTab (ver
-    // PATCH /proposal/itens) pros itens que esta correção via chat não tocou —
-    // itens novos (faltantes) e os efetivamente corrigidos ficam false naturalmente.
-    editadoManualmente: "editadoManualmente" in item ? !!item.editadoManualmente : false,
-  }));
+  const itensComTotal = itensFinais.map((item) => {
+    const valorUnitario = typeof item.valorUnitario === "number" && Number.isFinite(item.valorUnitario) ? item.valorUnitario : 0;
+    return {
+      numero: item.numero ?? null,
+      descricao: item.descricao,
+      unidade: item.unidade,
+      quantidade: item.quantidade,
+      valorUnitario,
+      valorTotal: Number((item.quantidade * valorUnitario).toFixed(2)),
+      lote: item.lote ?? null,
+      camposExtras: item.camposExtras,
+      // Preserva a marcação de quem editou manualmente um preço via FinanceTab (ver
+      // PATCH /proposal/itens) pros itens que esta correção via chat não tocou —
+      // itens novos (faltantes) e os efetivamente corrigidos ficam false naturalmente.
+      editadoManualmente: "editadoManualmente" in item ? !!item.editadoManualmente : false,
+      ...("precoSugerido" in item && item.precoSugerido ? { precoSugerido: true } : {}),
+    };
+  });
   const somaItens = itensComTotal.reduce((acc, i) => acc + i.valorTotal, 0);
   const lotes = montarLotes(itensComTotal);
 

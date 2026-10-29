@@ -36,6 +36,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     valorUnitario,
     valorTotal: round2(itens[indice].quantidade * valorUnitario),
     editadoManualmente: true,
+    precoSugerido: false, // o preço agora é da pessoa, não mais uma sugestão
   };
 
   const updated = await prisma.proposal.update({

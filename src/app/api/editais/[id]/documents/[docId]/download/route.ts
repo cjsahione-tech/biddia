@@ -4,16 +4,33 @@ import { requireCompany } from "@/lib/api-utils";
 import { baixarEPersistirDocumento } from "@/lib/agents/document-download";
 import { tocarEdital } from "@/lib/agents/run-tracker";
 import { criarUrlDownload } from "@/lib/storage";
+import { ehZip, extrairPdfUnicoDoZip } from "@/lib/agents/arquivos-compactados";
+import { contentTypeReal, nomeComExtensao, tipoDoArquivo } from "@/lib/agents/tipo-arquivo";
 
-function respondFromDataUrl(dataUrl: string, filename: string) {
-  const [meta, base64] = dataUrl.split(",");
-  const contentType = meta.match(/^data:(.*);base64$/)?.[1] ?? "application/pdf";
-  return new NextResponse(Buffer.from(base64, "base64"), {
+/**
+ * Entrega o arquivo com o formato REAL (descoberto pelos bytes): PDF sempre sai como application/pdf e com ".pdf" no
+ * nome — antes o tipo e o nome dependiam do que o servidor de origem dizia e "alternavam". Um ZIP que contém um único
+ * PDF entrega esse PDF.
+ */
+async function responderArquivo(bytes: Uint8Array, contentTypeOrigem: string | null, nome: string) {
+  let conteudo = bytes;
+  if (ehZip(conteudo)) {
+    const unico = await extrairPdfUnicoDoZip(conteudo).catch(() => null);
+    if (unico) conteudo = unico;
+  }
+  const tipo = tipoDoArquivo(conteudo);
+  return new NextResponse(Buffer.from(conteudo), {
     headers: {
-      "Content-Type": contentType,
-      "Content-Disposition": `inline; filename="${filename}"`,
+      "Content-Type": contentTypeReal(conteudo, contentTypeOrigem),
+      "Content-Disposition": `inline; filename="${nomeComExtensao(nome, tipo)}"`,
     },
   });
+}
+
+async function respondFromDataUrl(dataUrl: string, filename: string) {
+  const [meta, base64] = dataUrl.split(",");
+  const contentType = meta.match(/^data:(.*);base64$/)?.[1] ?? "application/pdf";
+  return responderArquivo(new Uint8Array(Buffer.from(base64, "base64")), contentType, filename);
 }
 
 export async function GET(
@@ -49,7 +66,7 @@ export async function GET(
   // avulso anterior). Serve direto do banco, sem depender do PNCP/LicitaNet estar no ar.
   const oficial = doc.tipo === "DOCUMENTO_PNCP" || doc.tipo === "DOCUMENTO_LICITANET";
   if (doc.conteudoBase64) {
-    return respondFromDataUrl(doc.conteudoBase64, oficial ? nomeArquivo : `${nomeArquivo}.pdf`);
+    return await respondFromDataUrl(doc.conteudoBase64, oficial ? nomeArquivo : `${nomeArquivo}.pdf`);
   }
 
   // Sem cópia local ainda: baixa agora e JÁ PERSISTE no Document (não serve só uma
@@ -64,12 +81,7 @@ export async function GET(
         company!.id
       );
       await tocarEdital(id);
-      return new NextResponse(Buffer.from(arquivo.bytes), {
-        headers: {
-          "Content-Type": arquivo.contentType,
-          "Content-Disposition": `inline; filename="${nomeArquivo}"`,
-        },
-      });
+      return await responderArquivo(arquivo.bytes, arquivo.contentType, nomeArquivo);
     } catch (err) {
       console.error(`Falha ao baixar documento ${doc.id} pra download avulso:`, err);
       return NextResponse.json(

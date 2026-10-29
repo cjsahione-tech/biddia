@@ -45,6 +45,10 @@ export function FinanceTab({ edital, onUpdate }: { edital: EditalDetail; onUpdat
   const [gerandoAnexo, setGerandoAnexo] = useState(false);
   const [erroAnexo, setErroAnexo] = useState<string | null>(null);
 
+  // Sugestão de preços de mercado — opcional, só sob clique (o Agente Financeiro nunca inventa preço sozinho).
+  const [sugerindoPrecos, setSugerindoPrecos] = useState(false);
+  const [erroSugestao, setErroSugestao] = useState<string | null>(null);
+
   async function handleSelecionarArquivo(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = "";
@@ -228,6 +232,22 @@ export function FinanceTab({ edital, onUpdate }: { edital: EditalDetail; onUpdat
     }
   }
 
+  async function sugerirPrecos() {
+    setSugerindoPrecos(true);
+    setErroSugestao(null);
+    try {
+      const res = await fetch(`/api/editais/${edital.id}/proposal/sugerir-precos`, { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setErroSugestao(data.error ?? "Não foi possível sugerir os preços agora.");
+        return;
+      }
+      onUpdate();
+    } finally {
+      setSugerindoPrecos(false);
+    }
+  }
+
   async function gerarAnexo() {
     setGerandoAnexo(true);
     setErroAnexo(null);
@@ -255,6 +275,14 @@ export function FinanceTab({ edital, onUpdate }: { edital: EditalDetail; onUpdat
               title="Valor unitário editado manualmente"
               className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-brand align-middle"
             />
+          )}
+          {item.precoSugerido && (
+            <span
+              title="Sugestão de preço de mercado — não vem do edital. Edite o valor para confirmar o seu preço."
+              className="ml-1.5 inline-block rounded-chip bg-warning-bg px-1.5 py-0.5 align-middle text-[11px] font-bold text-warning-ink"
+            >
+              sugestão
+            </span>
           )}
         </td>
         <td className="px-4 py-3 text-muted">{item.unidade}</td>
@@ -403,6 +431,25 @@ export function FinanceTab({ edital, onUpdate }: { edital: EditalDetail; onUpdat
           <Download className="h-4 w-4" /> Baixar planilha da proposta (.xlsx)
         </a>
       </div>
+
+      {itens.some((i) => !i.editadoManualmente && !i.valorUnitario) && (
+        <div className="rounded-card bg-surface shadow-card p-5">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <h4 className="text-sm font-semibold text-foreground">Itens sem preço no edital</h4>
+              <p className="mt-1 text-xs text-muted">
+                {itens.filter((i) => !i.editadoManualmente && !i.valorUnitario).length} item(ns) estão sem preço porque o edital não
+                publicou valor de referência. Você pode preencher na tabela ou, se quiser, pedir uma sugestão de preços de mercado. A
+                sugestão é só uma ajuda: não vem do edital e fica marcada como &quot;sugestão&quot; até você editar o valor.
+              </p>
+            </div>
+            <Button variant="secondary" onClick={sugerirPrecos} loading={sugerindoPrecos}>
+              {!sugerindoPrecos && <Sparkles className="h-4 w-4" />} Sugerir preços de mercado
+            </Button>
+          </div>
+          {erroSugestao && <p className="mt-3 text-xs text-danger-ink">{erroSugestao}</p>}
+        </div>
+      )}
 
       {importarPlanilhaBox}
 

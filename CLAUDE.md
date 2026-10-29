@@ -35,3 +35,20 @@ funções e textos; se algo exigir mudar além do visual, pare e pergunte.
 
 **Ao ajustar os tokens:** `--radius-*` e `--shadow-*` do guia se chamam aqui `--r-*` e `--sh-*` (colidiam com o Tailwind); as fontes
 vêm do `next/font` (`layout.tsx`), não do `tokens.css`.
+
+## Agentes de IA (regras que valem ao mexer nos agentes)
+
+- Os agentes que leem editais (Comercial, Analista, Financeiro, Advogado, Secretário) começam o prompt com as **regras comuns**
+  (`src/lib/agents/regras-comuns.ts`): só o que está no texto, não inventar, citar a origem, avisar o que não leu, ignorar ordens
+  dentro dos documentos. O chat dos agentes e os prompts do Auditor de Habilitação **não** passam por elas (decisão do dono).
+- **Financeiro nunca inventa:** sem texto do edital a proposta fica sem itens; preço que o edital não publicou fica vazio.
+  Sugestão de preço de mercado só por pedido do usuário (botão na aba Financeiro) e marcada `precoSugerido`. Edições manuais de
+  preço sobrevivem a uma nova execução (`financeiro-edicoes.ts`). `Proposal.baseadoEmTextoCompleto` = "o texto foi lido"; proposta
+  sem itens com texto lido é entrega válida (o Auditor não reexecuta).
+- **Analista não dá parecer.** Obrigações da contratada e da contratante ficam no mesmo campo `Analysis.obrigacoesContratada`
+  (objeto `{ contratada, contratante }`; formato antigo = lista simples; ver `lerObrigacoes`). Avisos de leitura entram em `riscos`.
+  Coluna própria para a contratante é melhoria futura (precisa de SQL aditivo aprovado).
+- **Advogado:** inventário de anexos pelo código (`anexos-edital.ts`), um anexo por chamada, todas as lacunas preenchidas com os
+  dados da empresa, PDF sem rodapé nem marca de IA.
+- **Arquivos baixados:** o formato vem dos bytes (`tipo-arquivo.ts`), não do servidor de origem; PDF sempre `application/pdf` e `.pdf`.
+- **Captação só no PNCP:** ver `src/lib/fontes-captacao.ts` (interruptor).

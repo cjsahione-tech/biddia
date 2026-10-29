@@ -1,5 +1,15 @@
 import { describe, it, expect } from "vitest";
-import { lerGruposHabilitacao, lerLista, normalizarGruposHabilitacao, normalizarLista, paraTexto } from "@/lib/analise-dados";
+import {
+  lerGruposHabilitacao,
+  lerLista,
+  lerObrigacoes,
+  normalizarGruposHabilitacao,
+  normalizarLista,
+  normalizarObrigacoes,
+  normalizarPontosDeAtencao,
+  paraTexto,
+  serializarObrigacoes,
+} from "@/lib/analise-dados";
 
 // Regressão: o Analista devolveu, num edital republicado, um grupo de habilitação SEM "itens". A tela tentava
 // desenhar o objeto ("Objects are not valid as a React child" → "This page couldn't load") e o Secretário falhava.
@@ -71,5 +81,40 @@ describe("prazos do edital", () => {
     for (const p of r) expect(typeof p.tipo + typeof p.prazo).toBe("stringstring");
     expect(normalizarPrazos("x")).toEqual([]);
     expect(lerPrazos("não é json")).toEqual([]);
+  });
+});
+
+describe("obrigações da contratada e da contratante", () => {
+  it("lê o formato antigo (lista simples) como só da contratada", () => {
+    expect(lerObrigacoes(JSON.stringify(["Entregar em 10 dias", "Manter equipe"]))).toEqual({
+      contratada: ["Entregar em 10 dias", "Manter equipe"],
+      contratante: [],
+    });
+  });
+
+  it("lê o formato novo com as duas partes", () => {
+    const json = serializarObrigacoes({ contratada: ["Entregar"], contratante: ["Pagar em 30 dias"] });
+    expect(lerObrigacoes(json)).toEqual({ contratada: ["Entregar"], contratante: ["Pagar em 30 dias"] });
+  });
+
+  it("aguenta lixo sem quebrar", () => {
+    expect(lerObrigacoes("não é json")).toEqual({ contratada: [], contratante: [] });
+    expect(lerObrigacoes(null)).toEqual({ contratada: [], contratante: [] });
+    expect(normalizarObrigacoes({ contratada: "uma só", contratante: [{ a: "x" }] })).toEqual({ contratada: ["uma só"], contratante: ["x"] });
+  });
+});
+
+describe("pontos de atenção", () => {
+  it("junta gravidade, descrição e trecho numa linha", () => {
+    expect(normalizarPontosDeAtencao([{ descricao: "Garantia de 5%", trecho: "item 12.1", gravidade: "alta" }])).toEqual([
+      "Alta — Garantia de 5% (trecho: «item 12.1»)",
+    ]);
+  });
+
+  it("aceita textos soltos e descarta o que não tem descrição", () => {
+    expect(normalizarPontosDeAtencao(["Visita técnica obrigatória", { trecho: "x" }, { descricao: "Prazo curto", gravidade: "estranha" }])).toEqual([
+      "Visita técnica obrigatória",
+      "Prazo curto",
+    ]);
   });
 });

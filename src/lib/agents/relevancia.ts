@@ -1,5 +1,6 @@
 import { askJSON, isAIConfigured, MODELO_HAIKU } from "@/lib/anthropic";
 import { classificarTipoObjeto, type TipoObjeto } from "@/lib/agents/classificador-objeto";
+import { comRegrasComuns } from "@/lib/agents/regras-comuns";
 import { mapComLimite } from "@/lib/concorrencia";
 
 export type ClassificacaoEdital = {
@@ -32,9 +33,103 @@ function normalizarTipo(t: RespostaItemIA["tipoObjeto"]): TipoObjeto {
   return null;
 }
 
+// Texto usado quando não foi possível gerar exemplos para a empresa (sem IA, resposta inválida...): a regra geral
+// vale para qualquer ramo, sem citar nenhum setor específico.
+export const EXEMPLOS_GENERICOS = `a mesma área de atuação não basta. Compare o objeto da licitação com o que o objeto social diz que a empresa faz.
+Uma licitação de OUTRA especialidade da mesma área (por exemplo, quem fornece o produto, quem aluga o equipamento, quem faz a obra,
+quem presta um serviço parecido mas diferente) NÃO é da empresa, mesmo que use palavras parecidas.`;
+
+const cacheExemplos = new Map<string, string>();
+const TETO_CACHE_EXEMPLOS = 200;
+
+/**
+ * Monta, a partir do objeto social, os exemplos de "parece igual e não é" que calibram o filtro para o ramo de CADA
+ * empresa (antes o filtro tinha exemplos fixos de laboratório de análises clínicas e errava para qualquer outro ramo).
+ * Uma chamada barata à IA por empresa, guardada em memória; se falhar, vale a regra geral (EXEMPLOS_GENERICOS).
+ */
+export async function gerarExemplosDaEmpresa(objetoSocial: string): Promise<string> {
+  const chave = objetoSocial.trim();
+  if (!chave) return EXEMPLOS_GENERICOS;
+  const guardado = cacheExemplos.get(chave);
+  if (guardado) return guardado;
+
+  try {
+    const r = await askJSON<{ exemplos?: unknown }>(
+      `Você calibra um filtro de licitações públicas para UMA empresa. Com base SOMENTE no objeto social abaixo, escreva
+exemplos curtos para ajudar o filtro a distinguir o que é da empresa do que só parece ser:
+- de 3 a 5 linhas "subdomínios que parecem iguais e não são": cada uma diz o que a empresa faz e o que parece ser a
+  mesma coisa mas é outra atividade (outro tipo de empresa seria a contratada);
+- 2 linhas de licitações que seriam RELEVANTES e 2 que NÃO seriam.
+Não invente atividades que o objeto social não menciona. Se o objeto social for vago, escreva menos linhas em vez de chutar.
+
+Responda em JSON: { "exemplos": string[] } (uma linha de texto por item da lista).`,
+      `Objeto social da empresa: ${chave.slice(0, 1500)}`,
+      { model: MODELO_HAIKU, maxTokens: 700 }
+    );
+    const linhas = Array.isArray(r.exemplos) ? r.exemplos.filter((l): l is string => typeof l === "string" && l.trim() !== "") : [];
+    const texto = linhas.length > 0 ? linhas.map((l) => `   - ${l.trim()}`).join("\n") : EXEMPLOS_GENERICOS;
+    if (cacheExemplos.size >= TETO_CACHE_EXEMPLOS) cacheExemplos.clear();
+    cacheExemplos.set(chave, texto);
+    return texto;
+  } catch (err) {
+    console.error("Falha ao gerar os exemplos do filtro de relevância — usando a regra geral:", err);
+    return EXEMPLOS_GENERICOS;
+  }
+}
+
+export function promptRelevancia(exemplosDaEmpresa: string): string {
+  return comRegrasComuns(`FUNÇÃO
+Você é o filtro de oportunidades do Bidd.IA. Para cada licitação da lista que receber, você decide duas coisas:
+(1) se vale a pena a empresa descrita olhar essa licitação e (2) o que a contratada entregaria principalmente.
+
+A PERGUNTA-GUIA
+Para cada licitação, faça uma única pergunta: "a EMPRESA descrita seria a CONTRATADA principal deste objeto específico?"
+Estar na mesma área não basta. O subdomínio precisa bater.
+
+DADOS QUE VOCÊ RECEBE
+- O objeto social da empresa.
+- Uma lista numerada de licitações. Cada item traz numeroControle, título e descrição resumida (a descrição pode estar cortada).
+
+PASSO A PASSO (faça para cada licitação, uma de cada vez)
+1. Leia o título e a descrição inteiros.
+2. Identifique o que seria entregue: um serviço executado, um produto fornecido, os dois, ou não dá para saber.
+3. Compare com o objeto social da empresa. Ela realmente executa ou fornece isso?
+4. Verifique o subdomínio. Exemplos para a empresa descrita (use como guia, não como lista fechada):
+${exemplosDaEmpresa}
+5. Decida "relevante":
+   - true somente se a empresa seria, de forma realista e direta, a contratada principal daquele objeto.
+   - false se a contratada natural seria outro tipo de empresa.
+   - NA DÚVIDA REAL entre relevante e não relevante: escolha true. Perder uma oportunidade custa mais caro do que olhar um edital a mais.
+6. Decida "tipoObjeto":
+   - "SERVICO": prestação de serviço, mão de obra, execução, credenciamento de prestador, realização de exames/laudos.
+   - "BEM": fornecimento, aquisição ou compra de produtos, insumos, materiais ou equipamentos. Atenção: "aquisição de
+     insumos COM comodato de equipamento e manutenção" continua sendo "BEM". O núcleo é o fornecimento; o comodato e a
+     manutenção do equipamento fornecido são acessórios.
+   - "AMBOS": use APENAS quando fornecer o bem E prestar o serviço são partes essenciais, de valor relevante e claramente
+     separáveis. Na dúvida entre "AMBOS" e um tipo específico, escolha o tipo dominante.
+   - "INDEFINIDO": quando o texto realmente não permite saber.
+
+FORMATO DE SAÍDA (JSON, um item por licitação, na mesma ordem da lista)
+{ "itens": [ { "numeroControle": string (copie exatamente o valor entre colchetes), "relevante": boolean, "tipoObjeto": "SERVICO" | "BEM" | "AMBOS" | "INDEFINIDO" } ] }
+
+REGRAS ESPECÍFICAS
+- A resposta deve ter exatamente um item para cada licitação recebida, nem mais, nem menos.
+- Copie o numeroControle caractere por caractere. Se errar uma letra, o sistema perde o item.
+- Não escreva justificativa fora do JSON.
+- Não use null. Use "INDEFINIDO" quando não souber o tipo.
+
+CONFERÊNCIA FINAL (faça antes de responder)
+- Contei os itens da lista e os itens da resposta: o número é o mesmo?
+- Todos os numeroControle estão idênticos aos recebidos?
+- Nenhum item marcado como relevante só porque "é da mesma área" (mas na dúvida real, true)?
+- Nenhum item de aquisição de insumo com comodato marcado como "AMBOS" ou "SERVICO"?
+- O JSON é válido e sem texto em volta?`);
+}
+
 async function classificarGrupo(
   objetoSocial: string,
-  candidatos: CandidatoParaClassificar[]
+  candidatos: CandidatoParaClassificar[],
+  exemplosDaEmpresa: string
 ): Promise<Map<string, ClassificacaoEdital>> {
   const lista = candidatos
     .map(
@@ -44,36 +139,7 @@ async function classificarGrupo(
     .join("\n");
 
   const resposta = await askJSON<{ itens: RespostaItemIA[] }>(
-    `Você filtra e classifica licitações públicas para uma empresa participar. Para CADA licitação da lista,
-avalie duas coisas. A pergunta-guia é sempre: "a EMPRESA descrita seria a CONTRATADA principal deste objeto?"
-
-1. "relevante": true só se a empresa realista e diretamente seria a contratada daquele objeto específico —
-   não basta ser da mesma área, e o SUBDOMÍNIO precisa bater. "Análises clínicas" = exames laboratoriais de
-   pacientes (sangue, urina, microbiologia clínica, anatomia patológica, sorologia etc.); é coisa diferente de
-   "análises de água / efluentes / ambientais", "análises de solo / asfalto / materiais de obra", "análises de
-   alimentos" e "ensaios industriais (ISO 17025)". Um laboratório de análises clínicas NÃO é a contratada de um
-   edital de análise de água, e vice-versa.
-   Exemplos para um laboratório de análises clínicas (que PRESTA serviço de exames de pacientes):
-   - "credenciamento de laboratório para realizar exames laboratoriais / análises clínicas dos pacientes do
-     SUS" / "contratação de laboratório para exames de sangue e urina" → RELEVANTE
-   - "aquisição de reagentes / insumos / kits laboratoriais", "comodato de equipamento com fornecimento de
-     reagentes", "locação de equipamento de laboratório", "reforma do laboratório", "análises físico-químicas e
-     microbiológicas de água tratada", "análise de solo/asfalto para obras" → NÃO RELEVANTE (a contratada seria
-     uma distribuidora de reagentes, uma locadora de equipamento, uma construtora ou um laboratório ambiental —
-     não um laboratório de análises clínicas de pacientes).
-
-2. "tipoObjeto" — o que a contratada PRINCIPALMENTE entrega:
-   - "SERVICO": prestação de serviço, mão de obra, execução, credenciamento de prestador, realização de exames/laudos
-   - "BEM": fornecimento/aquisição/compra de produtos, insumos, reagentes, materiais ou equipamentos. IMPORTANTE:
-     "aquisição de reagentes/insumos COM comodato de equipamento e manutenção" continua sendo BEM — o núcleo é o
-     fornecimento; comodato e manutenção do próprio equipamento fornecido são acessórios.
-   - "AMBOS": use APENAS quando fornecimento de bem E prestação de serviço são partes essenciais, vultosas e
-     claramente separáveis do contrato (ex: fornecer equipamentos E operá-los com equipe própria dedicada). Na
-     dúvida entre "AMBOS" e um tipo específico, escolha SEMPRE o tipo dominante.
-   - "INDEFINIDO": não dá para saber pelo texto.
-
-Responda em JSON, um item por licitação, na mesma ordem:
-{ "itens": [ { "numeroControle": string (copie exatamente o valor entre colchetes), "relevante": boolean, "tipoObjeto": "SERVICO" | "BEM" | "AMBOS" | "INDEFINIDO" } ] }`,
+    promptRelevancia(exemplosDaEmpresa),
     `Objeto social da empresa: ${objetoSocial}\n\nLicitações:\n${lista}`,
     { model: MODELO_HAIKU, maxTokens: 2000 }
   );
@@ -95,6 +161,9 @@ Responda em JSON, um item por licitação, na mesma ordem:
  * em grupos processados em paralelo, para dar conta de ~100 candidatos por palavra-chave
  * sem estourar o tempo da requisição.
  *
+ * Na dúvida, o edital é ENVIADO (relevante = true): a IA com dúvida, a falha de um grupo e o item que a IA
+ * esqueceu de devolver caem todos nesse lado — perder uma oportunidade custa mais que olhar um edital a mais.
+ *
  * Sem chave de IA, cai para a heurística por palavra-chave no tipo e considera tudo
  * relevante (a filtragem por palavra-chave já se aplicou antes).
  */
@@ -115,13 +184,15 @@ export async function classificarEditaisEmLote(
     return resultado;
   }
 
+  const exemplosDaEmpresa = await gerarExemplosDaEmpresa(objetoSocial);
+
   const grupos: CandidatoParaClassificar[][] = [];
   for (let i = 0; i < candidatos.length; i += TAMANHO_GRUPO) {
     grupos.push(candidatos.slice(i, i + TAMANHO_GRUPO));
   }
 
   const resultadosPorGrupo = await mapComLimite(grupos, LIMITE_GRUPOS_PARALELOS, (grupo) =>
-    classificarGrupo(objetoSocial, grupo).catch((err) => {
+    classificarGrupo(objetoSocial, grupo, exemplosDaEmpresa).catch((err) => {
       console.error("Falha ao classificar grupo de editais:", err);
       // Fallback do grupo: não descarta por relevância (não dá para avaliar), mas
       // ainda tenta o tipo pela heurística para o filtro de perfil funcionar.

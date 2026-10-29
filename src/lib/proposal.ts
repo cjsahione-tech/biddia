@@ -30,6 +30,8 @@ export type ItemProposta = {
   // Distingue valor extraído pela IA (false) de valor que o usuário sobrescreveu na
   // tela (true) — usado só pra exibição/auditoria, nunca muda o cálculo em si.
   editadoManualmente: boolean;
+  // true quando o preço veio de uma sugestão de mercado pedida pelo usuário — não vem do edital.
+  precoSugerido?: boolean;
 };
 
 export type ItemPropostaComDesconto = ItemProposta & {
@@ -56,6 +58,7 @@ export function parseItens(itensJson: string): ItemProposta[] {
         lote: it.lote ?? null,
         camposExtras: it.camposExtras,
         editadoManualmente: it.editadoManualmente ?? false,
+        precoSugerido: it.precoSugerido === true ? true : undefined,
       })
     );
   } catch {

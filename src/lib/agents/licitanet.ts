@@ -1,3 +1,4 @@
+import { contentTypeReal } from "@/lib/agents/tipo-arquivo";
 // Cliente para o boletim público do LicitaNet (https://licitanet.com.br/boletim).
 // Não existe uma API documentada — a página é uma SPA Inertia.js (Laravel) cujo HTML
 // inicial já traz todos os dados da listagem embutidos num atributo `data-page`
@@ -136,8 +137,8 @@ export async function baixarArquivoLicitaNet(url: string): Promise<{ bytes: Uint
     throw new Error(`Não foi possível baixar o arquivo do LicitaNet (${lastStatus}): ${url}`);
   }
 
-  const buffer = await res.arrayBuffer();
-  return { bytes: new Uint8Array(buffer), contentType: res.headers.get("content-type") ?? "application/octet-stream" };
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  return { bytes, contentType: contentTypeReal(bytes, res.headers.get("content-type")) };
 }
 
 /**

@@ -189,8 +189,7 @@ export function criarExecutorAssistente(companyId: string): ExecutarFerramenta {
             `\nAnálise do Agente Analista:`,
             `- Resumo: ${edital.analysis.resumoObjeto}`,
             `- Habilitação exigida: ${edital.analysis.habilitacao}`,
-            `- Riscos: ${edital.analysis.riscos}`,
-            `- Parecer: ${edital.analysis.parecer}`
+            `- Pontos de atenção: ${edital.analysis.riscos}`
           );
         } else {
           partes.push(`\nAinda não há análise do Agente Analista para este edital.`);

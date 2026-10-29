@@ -2,6 +2,7 @@
 // Endpoints reais e não autenticados, confirmados em https://pncp.gov.br/api/search e
 // https://pncp.gov.br/pncp-consulta/v3/api-docs.
 import { fetchViaProxy } from "@/lib/proxy-fetch";
+import { contentTypeReal } from "@/lib/agents/tipo-arquivo";
 
 const SEARCH_BASE = "https://pncp.gov.br/api/search/";
 const CONSULTA_BASE = "https://pncp.gov.br/pncp-consulta";
@@ -328,8 +329,9 @@ export async function baixarArquivoPncp(url: string): Promise<{ bytes: Uint8Arra
     throw new Error(`Não foi possível baixar o arquivo do PNCP (${lastStatus}): ${url}`);
   }
 
-  const buffer = await res.arrayBuffer();
-  return { bytes: new Uint8Array(buffer), contentType: res.headers.get("content-type") ?? "application/pdf" };
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  // O tipo vem dos bytes, não do servidor (o PNCP às vezes diz "octet-stream" para um PDF): PDF é sempre "application/pdf".
+  return { bytes, contentType: contentTypeReal(bytes, res.headers.get("content-type")) };
 }
 
 /**

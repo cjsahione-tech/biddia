@@ -4,7 +4,8 @@ import { askJSON, MODELO_HAIKU } from "@/lib/anthropic";
 import { withAgentRun, logAudit } from "@/lib/agents/run-tracker";
 import { dentroDaValidadeComMargem, escolherMelhorDocumento, FORMA_LABEL } from "@/lib/documentos-empresa";
 import { CHECKLIST_BASE, CATEGORIA_BASE } from "@/lib/checklist-base";
-import { CHECKLIST_BASE_PARA_CATALOGO, chaveEfetivaDoDocumento } from "@/lib/catalogo-documentos";
+import { CATALOGO_DOCUMENTOS, CHECKLIST_BASE_PARA_CATALOGO, chaveEfetivaDoDocumento, equivalentesDe, itemPorChave } from "@/lib/catalogo-documentos";
+import { comRegrasComuns } from "@/lib/agents/regras-comuns";
 import { lerGruposHabilitacao } from "@/lib/analise-dados";
 
 export { CHECKLIST_BASE, CATEGORIA_BASE };
@@ -21,7 +22,12 @@ async function classificarCabecalhos(cabecalhos: string[]): Promise<Map<string, 
   const result = await askJSON<{
     classificacoes: { cabecalho: string; categoria: HabilitacaoCategoria | null }[];
   }>(
-    `Classifique cada cabeçalho de seção de habilitação/qualificação de um edital de licitação pública brasileira
+    comRegrasComuns(`FUNÇÃO
+Você é o Secretário de documentos do Bidd.IA. Você CLASSIFICA, não decide se a empresa atende e não cria exigências novas.
+Devolva exatamente um resultado por item recebido, com o texto do cabeçalho idêntico ao recebido; não apague, una nem reescreva nada.
+Na dúvida entre duas categorias, escolha a mais específica.
+
+Classifique cada cabeçalho de seção de habilitação/qualificação de um edital de licitação pública brasileira
 (Lei 14.133/2021) em UMA destas categorias:
 - FISCAL_TRABALHISTA_ECONOMICO_FINANCEIRA_JURIDICA: regularidade fiscal (Receita Federal/Estadual/Municipal),
   trabalhista (FGTS, CNDT), econômico-financeira (balanço, índices) e/ou jurídica (contrato social, capacidade
@@ -35,7 +41,7 @@ async function classificarCabecalhos(cabecalhos: string[]): Promise<Map<string, 
 Responda "categoria": null só se o cabeçalho genuinamente não se encaixar em nenhuma (raro).
 
 Responda em JSON:
-{ "classificacoes": [ { "cabecalho": string (exatamente como veio na lista), "categoria": "FISCAL_TRABALHISTA_ECONOMICO_FINANCEIRA_JURIDICA" | "QUALIFICACAO_TECNICA_EMPRESA" | "QUALIFICACAO_EQUIPE_TECNICA" | "GARANTIA_CONTRATO" | null } ] }`,
+{ "classificacoes": [ { "cabecalho": string (exatamente como veio na lista), "categoria": "FISCAL_TRABALHISTA_ECONOMICO_FINANCEIRA_JURIDICA" | "QUALIFICACAO_TECNICA_EMPRESA" | "QUALIFICACAO_EQUIPE_TECNICA" | "GARANTIA_CONTRATO" | null } ] }`),
     cabecalhos.map((c, i) => `${i + 1}. ${c}`).join("\n"),
     { model: MODELO_HAIKU, maxTokens: 1500 }
   );
@@ -56,7 +62,13 @@ async function classificarItensSemCabecalho(itens: string[]): Promise<Map<string
   const result = await askJSON<{
     classificacoes: { item: string; categoria: HabilitacaoCategoria | null }[];
   }>(
-    `Classifique cada exigência de habilitação de uma licitação pública brasileira (Lei 14.133/2021) em UMA
+    comRegrasComuns(`FUNÇÃO
+Você é o Secretário de documentos do Bidd.IA. Você CLASSIFICA, não decide se a empresa atende e não cria exigências novas.
+Devolva exatamente um resultado por item recebido, com o texto do item idêntico ao recebido; não apague, una, divida nem reescreva nada.
+Uma DECLARAÇÃO vai na categoria do assunto dela (a de que não emprega menor vai em regularidade trabalhista). Na dúvida entre duas
+categorias, escolha a mais específica.
+
+Classifique cada exigência de habilitação de uma licitação pública brasileira (Lei 14.133/2021) em UMA
 destas categorias:
 - FISCAL_TRABALHISTA_ECONOMICO_FINANCEIRA_JURIDICA: regularidade com Receita Federal/Estadual/Municipal, FGTS,
   débitos trabalhistas (CNDT), balanço patrimonial, índices contábeis, capital social, contrato social,
@@ -71,13 +83,50 @@ Se um item não se encaixar claramente em nenhuma categoria, responda "categoria
 errada só para preencher.
 
 Responda em JSON:
-{ "classificacoes": [ { "item": string (exatamente como veio na lista), "categoria": "FISCAL_TRABALHISTA_ECONOMICO_FINANCEIRA_JURIDICA" | "QUALIFICACAO_TECNICA_EMPRESA" | "QUALIFICACAO_EQUIPE_TECNICA" | "GARANTIA_CONTRATO" | null } ] }`,
+{ "classificacoes": [ { "item": string (exatamente como veio na lista), "categoria": "FISCAL_TRABALHISTA_ECONOMICO_FINANCEIRA_JURIDICA" | "QUALIFICACAO_TECNICA_EMPRESA" | "QUALIFICACAO_EQUIPE_TECNICA" | "GARANTIA_CONTRATO" | null } ] }`),
     itens.map((item, i) => `${i + 1}. ${item}`).join("\n"),
     { model: MODELO_HAIKU, maxTokens: 2000 }
   );
 
   for (const c of result.classificacoes ?? []) {
     if (c.categoria) mapa.set(c.item, c.categoria);
+  }
+  return mapa;
+}
+
+const LISTA_CATALOGO = CATALOGO_DOCUMENTOS.map((i) => `- ${i.chave}: ${i.nome}`).join("\n");
+
+/**
+ * Para os itens ESPECÍFICOS do edital (os que não são da lista padrão), descobre qual documento do catálogo da aba
+ * Documentos é exatamente aquele — assim o Secretário também puxa da aba Documentos o que o edital pede além do básico.
+ * Só casa quando o documento é MESMO esse (nada de "parecido"); na dúvida, fica para a pessoa anexar. Se a IA falhar,
+ * esses itens continuam manuais, como antes.
+ */
+export async function casarItensComCatalogo(nomes: string[]): Promise<Map<string, string[]>> {
+  const mapa = new Map<string, string[]>();
+  if (nomes.length === 0) return mapa;
+  try {
+    const r = await askJSON<{ itens?: { id?: number; chave?: string | null }[] }>(
+      comRegrasComuns(`FUNÇÃO
+Você é o Secretário de documentos do Bidd.IA. Para cada exigência de documento de habilitação da lista, diga qual item do
+catálogo abaixo é EXATAMENTE esse documento ("chave"), ou null. Não use um item parecido, da mesma categoria ou "quase igual":
+"Registro Comercial" NÃO é o Cartão CNPJ; "comprovante de opção pelo Simples" NÃO é a certidão de tributos federais. Exigência
+vaga ou que não é um documento do catálogo (declaração, atestado de um serviço específico etc.) = null.
+Devolva um resultado por exigência, com o mesmo "id".
+
+CATÁLOGO:
+${LISTA_CATALOGO}
+
+Responda em JSON: { "itens": [ { "id": number, "chave": string | null } ] }`),
+      nomes.map((n, i) => `${i + 1}. ${n}`).join("\n"),
+      { model: MODELO_HAIKU, maxTokens: 1500 }
+    );
+    for (const x of r.itens ?? []) {
+      const nome = typeof x?.id === "number" ? nomes[x.id - 1] : undefined;
+      if (nome && x.chave && itemPorChave(x.chave)) mapa.set(nome, [x.chave, ...equivalentesDe(x.chave)]);
+    }
+  } catch (err) {
+    console.error("Agente Secretário: falha ao casar itens do edital com o catálogo de documentos:", err);
   }
   return mapa;
 }
@@ -92,12 +141,14 @@ Responda em JSON:
  * parte — o checklist já É o "manifesto".
  */
 async function preencherChecklistComDossie(
-  edital: Pick<Edital, "id" | "companyId" | "dataAberturaProposta" | "dataEncerramentoProposta">
+  edital: Pick<Edital, "id" | "companyId" | "dataAberturaProposta" | "dataEncerramentoProposta">,
+  // Itens específicos do edital -> itens do catálogo que podem preenchê-los (ver casarItensComCatalogo).
+  chavesDosEspecificos: Map<string, string[]> = new Map()
 ): Promise<{ preenchidosDoDossie: number; dossieVencidos: number }> {
   const dataReferencia = edital.dataAberturaProposta ?? edital.dataEncerramentoProposta ?? new Date();
 
   const itensBaseFaltantes = await prisma.checklistItem.findMany({
-    where: { editalId: edital.id, documentoNome: { in: CHECKLIST_BASE }, status: "FALTANTE" },
+    where: { editalId: edital.id, documentoNome: { in: [...CHECKLIST_BASE, ...chavesDosEspecificos.keys()] }, status: "FALTANTE" },
   });
   if (itensBaseFaltantes.length === 0) return { preenchidosDoDossie: 0, dossieVencidos: 0 };
 
@@ -111,7 +162,7 @@ async function preencherChecklistComDossie(
   });
   const idPorItem = new Map<string, string>();
   for (const item of itensBaseFaltantes) {
-    const chaves = CHECKLIST_BASE_PARA_CATALOGO[item.documentoNome] ?? [];
+    const chaves = CHECKLIST_BASE_PARA_CATALOGO[item.documentoNome] ?? chavesDosEspecificos.get(item.documentoNome) ?? [];
     // Com mais de um documento servindo ao item, usa o que está válido na data da sessão.
     const candidatos = metadados.filter(
       (d) => d.tipo === item.documentoNome || chaves.includes(chaveEfetivaDoDocumento(d) ?? "")
@@ -262,11 +313,20 @@ export async function executarAgente5(editalId: string) {
             documentoNome: doc.nome,
             obrigatorio: true,
             status: "OK",
-            observacao: "Anexo gerado automaticamente pela plataforma",
+            observacao: "Declaração preenchida com os dados da empresa — confira e assine.",
+            anexoDocId: doc.id,
+            anexoNome: doc.nome,
           },
           update: {},
         });
         criados++;
+      } else {
+        // Item criado antes de o arquivo ser ligado ao checklist: liga agora (só se ainda não tem anexo), para a
+        // declaração entrar na pasta do ZIP.
+        await prisma.checklistItem.updateMany({
+          where: { editalId, documentoNome: doc.nome, anexoDocId: null },
+          data: { anexoDocId: doc.id, anexoNome: doc.nome },
+        });
       }
     }
 
@@ -275,7 +335,14 @@ export async function executarAgente5(editalId: string) {
     // edital novo. Só mexe em itens ainda "FALTANTE": nunca sobrescreve o que o usuário
     // já tratou manualmente. Itens específicos deste edital (fora de CHECKLIST_BASE)
     // continuam manuais — o dossiê não tenta casar com eles.
-    const { preenchidosDoDossie, dossieVencidos } = await preencherChecklistComDossie(edital);
+    // Itens específicos do edital: casa com o catálogo da aba Documentos e puxa o que a empresa já tem lá.
+    const faltantesEspecificos = (
+      await prisma.checklistItem.findMany({ where: { editalId, status: "FALTANTE", anexoDocId: null }, select: { documentoNome: true } })
+    )
+      .map((i) => i.documentoNome)
+      .filter((nome) => !CHECKLIST_BASE.includes(nome));
+    const chavesDosEspecificos = await casarItensComCatalogo(faltantesEspecificos.slice(0, 80));
+    const { preenchidosDoDossie, dossieVencidos } = await preencherChecklistComDossie(edital, chavesDosEspecificos);
 
     const hoje = new Date();
     const itensAtuais = await prisma.checklistItem.findMany({ where: { editalId } });
