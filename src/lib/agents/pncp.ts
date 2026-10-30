@@ -58,19 +58,19 @@ async function fetchComTimeout(url: string, timeoutMs = 10_000): Promise<Respons
   }
 }
 
-// O PNCP aceita até 100 itens por página numa única chamada — o suficiente para trazer
-// "as 100 mais recentes" sem paginar. `ordenacao=-data` ordena por data de última
-// atualização (desc), que é exatamente a ordem que o site do PNCP mostra.
-export async function searchEditaisPorPalavraChave(
-  termo: string,
-  maxResultados = 100
-): Promise<PncpSearchItem[]> {
+// O PNCP aceita até 100 itens por página. `ordenacao=-data` ordena por data de última atualização (desc), que é
+// exatamente a ordem que o site do PNCP mostra. Uma palavra-chave pode ter bem mais de 100 editais abertos: a busca anda
+// pelas páginas seguintes (até maxResultados) em vez de parar na primeira — antes, o que passava dos 100 primeiros nunca
+// chegava à empresa.
+const ITENS_POR_PAGINA = 100;
+
+async function buscarPaginaDeEditais(termo: string, pagina: number, tamPagina: number): Promise<PncpSearchResponse> {
   const url = new URL(SEARCH_BASE);
   url.searchParams.set("q", termo);
   url.searchParams.set("tipos_documento", "edital");
   url.searchParams.set("ordenacao", "-data");
-  url.searchParams.set("pagina", "1");
-  url.searchParams.set("tam_pagina", String(Math.min(Math.max(maxResultados, 1), 100)));
+  url.searchParams.set("pagina", String(pagina));
+  url.searchParams.set("tam_pagina", String(tamPagina));
   url.searchParams.set("status", "recebendo_proposta");
 
   // O PNCP tem instabilidades intermitentes (502/503, ou a conexão trava sem
@@ -93,9 +93,36 @@ export async function searchEditaisPorPalavraChave(
   if (!res || !res.ok) {
     throw new Error(`PNCP search indisponível no momento (${lastStatus}) para termo "${termo}"`);
   }
+  return (await res.json()) as PncpSearchResponse;
+}
 
-  const data = (await res.json()) as PncpSearchResponse;
-  return data.items ?? [];
+export async function searchEditaisPorPalavraChave(
+  termo: string,
+  maxResultados = 100,
+  maxPaginas = 5
+): Promise<PncpSearchItem[]> {
+  const tamPagina = Math.min(Math.max(maxResultados, 1), ITENS_POR_PAGINA);
+  const itens: PncpSearchItem[] = [];
+
+  for (let pagina = 1; pagina <= maxPaginas && itens.length < maxResultados; pagina++) {
+    let data: PncpSearchResponse;
+    try {
+      data = await buscarPaginaDeEditais(termo, pagina, tamPagina);
+    } catch (err) {
+      // A 1ª página falhando é erro da busca (a palavra-chave fica "indisponível"); uma página seguinte falhando não
+      // derruba o que já veio: devolve o que tem.
+      if (pagina === 1) throw err;
+      console.error(`PNCP: falha na página ${pagina} da busca "${termo}" — seguindo com o que já veio:`, err);
+      break;
+    }
+    const doBloco = data.items ?? [];
+    itens.push(...doBloco);
+    // Acabou: página incompleta ou já veio o total que o PNCP informa.
+    if (doBloco.length < tamPagina) break;
+    if (typeof data.total === "number" && itens.length >= data.total) break;
+  }
+
+  return itens.slice(0, maxResultados);
 }
 
 export type PncpCompraDetalhe = {

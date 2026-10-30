@@ -21,7 +21,7 @@ import { buscarLicitacoesComprasGov, resolverUasg, linkComprasGov, type ComprasG
 import { fonteAtiva } from "@/lib/fontes-captacao";
 import { verificarAcessoPlano } from "@/lib/plano";
 import { classificarTipoObjeto, empresaAtende, type TipoObjeto } from "@/lib/agents/classificador-objeto";
-import { classificarEditaisEmLote } from "@/lib/agents/relevancia";
+import { classificarEditaisEmLote, type ClassificacaoEdital } from "@/lib/agents/relevancia";
 import { askJSON, MODELO_HAIKU } from "@/lib/anthropic";
 import { comContextoIA } from "@/lib/ia-contexto";
 import { extrairTextoPdf, base64ParaBytes } from "@/lib/agents/pdf-extract";
@@ -34,7 +34,9 @@ import { somarValorDosItens } from "@/lib/valor-edital";
 
 // Quantos editais trazer por palavra-chave (PNCP) ou por segmento (LicitaNet), na ordem
 // de cada fonte — o mesmo recorte que os sites de origem mostram nas primeiras páginas.
-const MAX_POR_PALAVRA_CHAVE = 100;
+// Até 3 páginas de 100 por palavra-chave: a busca anda pelas páginas do PNCP em vez de parar nos 100 primeiros.
+const MAX_POR_PALAVRA_CHAVE = 300;
+const MAX_PAGINAS_POR_PALAVRA_CHAVE = 3;
 const MAX_POR_SEGMENTO_LICITANET = 100;
 
 /**
@@ -118,15 +120,71 @@ function normalizarBusca(s: string): string {
  */
 export type ProgressoCaptacao = { fase: "buscando" | "classificando" | "criando"; analisados: number; novos: number };
 
+/** Totais da busca somados de uma etapa para a outra (ver EstadoCaptacao). */
+export type AcumuladoCaptacao = {
+  analisados: number;
+  novos: number;
+  descartadosPerfil: number;
+  descartadosRelevancia: number;
+  retificados: number;
+  falhasPncp: number;
+};
+
+/**
+ * O que sobrou de uma busca que não coube no tempo de uma execução (a função da Vercel cai em 60s): os candidatos ainda
+ * sem avaliação pela IA, os já aprovados que ainda não viraram card, o que a IA já decidiu sobre estes e os totais até
+ * aqui. A busca CONTINUA de onde parou com este estado (ver captacao.ts) — nada se perde nem se refaz.
+ */
+export type EstadoCaptacao = {
+  pendentesClassificar: Candidato[];
+  pendentesCriar: Candidato[];
+  classificacoes: Record<string, ClassificacaoEdital>;
+  acumulado: AcumuladoCaptacao;
+};
+
+export type OpcoesCaptacao = {
+  /** Instante (ms desde 1970) em que esta etapa precisa parar de começar trabalho novo. Sem isso, não há limite. */
+  limiteMs?: number;
+  /** Continuação de uma etapa anterior: pula a busca no PNCP e segue do estado guardado. */
+  estado?: EstadoCaptacao;
+};
+
+export type ResultadoCaptacao = {
+  novos: number;
+  analisados: number;
+  mensagem: string;
+  descartadosPerfil?: number;
+  descartadosRelevancia?: number;
+  retificados?: number;
+  /** Presente quando a busca NÃO terminou nesta etapa: é só continuar com este estado. */
+  estado?: EstadoCaptacao;
+};
+
 /** Busca de editais da empresa. O consumo de IA feito aqui é registrado no nome do Agente Comercial. */
-export function executarAgente1(companyId: string, onProgresso?: (p: ProgressoCaptacao) => void | Promise<void>) {
-  return comContextoIA({ agente: "agente1-comercial", companyId }, () => executarAgente1Interno(companyId, onProgresso));
+export function executarAgente1(
+  companyId: string,
+  onProgresso?: (p: ProgressoCaptacao) => void | Promise<void>,
+  opts?: OpcoesCaptacao
+): Promise<ResultadoCaptacao> {
+  return comContextoIA({ agente: "agente1-comercial", companyId }, () => executarAgente1Interno(companyId, onProgresso, opts));
 }
 
 async function executarAgente1Interno(
   companyId: string,
-  onProgresso?: (p: ProgressoCaptacao) => void | Promise<void>
-) {
+  onProgresso?: (p: ProgressoCaptacao) => void | Promise<void>,
+  opts?: OpcoesCaptacao
+): Promise<ResultadoCaptacao> {
+  // Continuação de uma etapa anterior (a busca no PNCP já foi feita; segue do estado guardado).
+  const continuando = !!opts?.estado;
+  const limite = opts?.limiteMs ?? Number.POSITIVE_INFINITY;
+  const acumulado: AcumuladoCaptacao = opts?.estado?.acumulado ?? {
+    analisados: 0,
+    novos: 0,
+    descartadosPerfil: 0,
+    descartadosRelevancia: 0,
+    retificados: 0,
+    falhasPncp: 0,
+  };
   const inicioBusca = Date.now();
   const company = await prisma.company.findUnique({
     where: { id: companyId },
@@ -157,10 +215,10 @@ async function executarAgente1Interno(
   let falhasPncp = 0;
   const vistos = new Set<string>();
   const candidatos: Candidato[] = [];
-  const buscaPncp = mapComLimite(company.keywords, 4, async (kw) => {
+  const buscaPncp = continuando ? Promise.resolve() : mapComLimite(company.keywords, 4, async (kw) => {
     let items: PncpSearchItem[];
     try {
-      items = await searchEditaisPorPalavraChave(kw.term, MAX_POR_PALAVRA_CHAVE);
+      items = await searchEditaisPorPalavraChave(kw.term, MAX_POR_PALAVRA_CHAVE, MAX_PAGINAS_POR_PALAVRA_CHAVE);
     } catch (err) {
       console.error(`Agente Comercial: falha ao buscar "${kw.term}" no PNCP:`, err);
       falhasPncp++;
@@ -184,7 +242,7 @@ async function executarAgente1Interno(
   // PNCP, então uma falha aqui não impede o restante da busca (e vice-versa).
   let falhaLicitaNet: string | null = null;
   const buscaLicitaNet = (async () => {
-    if (!usaLicitaNet || !company.licitanetSegmentoId) return;
+    if (continuando || !usaLicitaNet || !company.licitanetSegmentoId) return;
     try {
       const publicacoes = await buscarPublicacoesLicitaNet(company.licitanetSegmentoId, MAX_POR_SEGMENTO_LICITANET);
       for (const item of publicacoes) {
@@ -212,7 +270,7 @@ async function executarAgente1Interno(
   // campo de "encerramento" nesta fonte, ver comprasgov.ts).
   let falhaComprasGov: string | null = null;
   const buscaComprasGov = (async () => {
-    if (!fonteAtiva("COMPRASGOV") || company.keywords.length === 0 || !(await verificarAcessoPlano(company.id, "CAPTACAO_COMPRASGOV"))) return;
+    if (continuando || !fonteAtiva("COMPRASGOV") || company.keywords.length === 0 || !(await verificarAcessoPlano(company.id, "CAPTACAO_COMPRASGOV"))) return;
     try {
       const licitacoes = await buscarLicitacoesComprasGov();
       const termos = company.keywords.map((k) => ({ termo: k.term, normalizado: normalizarBusca(k.term) }));
@@ -240,12 +298,17 @@ async function executarAgente1Interno(
   })();
 
   await Promise.all([buscaPncp, buscaLicitaNet, buscaComprasGov]);
-  console.log(
-    `Agente Comercial (empresa ${company.id}): busca nas fontes concluída em ${Date.now() - inicioBusca}ms — ${candidatos.length} candidato(s), ${falhasPncp} falha(s) PNCP`
-  );
-  await onProgresso?.({ fase: "classificando", analisados: candidatos.length, novos: 0 });
+  if (!continuando) {
+    console.log(
+      `Agente Comercial (empresa ${company.id}): busca nas fontes concluída em ${Date.now() - inicioBusca}ms — ${candidatos.length} candidato(s), ${falhasPncp} falha(s) PNCP`
+    );
+  }
 
-  const analisados = candidatos.length;
+  const analisados = continuando ? acumulado.analisados : candidatos.length;
+  await onProgresso?.({ fase: "classificando", analisados, novos: acumulado.novos });
+
+  // Na continuação, o universo é o que sobrou da etapa anterior (a lista de candidatos vem do estado, não do PNCP).
+  const universo: Candidato[] = continuando ? [...opts!.estado!.pendentesClassificar, ...opts!.estado!.pendentesCriar] : candidatos;
 
   // 2. Descarta os que já estão na plataforma ou que o usuário já excluiu antes (o card
   // saiu do quadro, mas a chave fica registrada em EditalExcluido pra não voltar).
@@ -253,14 +316,14 @@ async function executarAgente1Interno(
     prisma.edital.findMany({
       where: {
         companyId: company.id,
-        numeroControlePNCP: { in: candidatos.map((c) => c.numeroControle) },
+        numeroControlePNCP: { in: universo.map((c) => c.numeroControle) },
       },
       select: { id: true, numeroControlePNCP: true, dataAtualizacaoPncp: true, orcamentoSigiloso: true, linkPortal: true },
     }),
     prisma.editalExcluido.findMany({
       where: {
         companyId: company.id,
-        numeroControlePNCP: { in: candidatos.map((c) => c.numeroControle) },
+        numeroControlePNCP: { in: universo.map((c) => c.numeroControle) },
       },
       select: { numeroControlePNCP: true },
     }),
@@ -268,9 +331,10 @@ async function executarAgente1Interno(
   const jaExistentesPorChave = new Map(jaExistentesRows.map((e) => [e.numeroControlePNCP, e]));
   const jaExistentes = new Set(jaExistentesRows.map((e) => e.numeroControlePNCP));
   const jaExcluidos = new Set(jaExcluidosRows.map((e) => e.numeroControlePNCP));
-  const novosCandidatos = candidatos.filter(
-    (c) => !jaExistentes.has(c.numeroControle) && !jaExcluidos.has(c.numeroControle)
-  );
+  const semCardNemExclusao = (c: Candidato) => !jaExistentes.has(c.numeroControle) && !jaExcluidos.has(c.numeroControle);
+  const novosCandidatos = (continuando ? opts!.estado!.pendentesClassificar : candidatos).filter(semCardNemExclusao);
+  // Já aprovados na etapa anterior e ainda sem card (a etapa acabou antes de criá-los).
+  const aguardandoCriar = continuando ? opts!.estado!.pendentesCriar.filter(semCardNemExclusao) : [];
 
   // 2b. Para editais do PNCP já capturados antes: o próprio PNCP marca
   // data_atualizacao_pncp toda vez que o órgão retifica a contratação — se essa data
@@ -387,27 +451,25 @@ async function executarAgente1Interno(
           ...company.keywords.map((k) => k.term),
           ...(usaLicitaNet && company.licitanetSegmentoNome ? [company.licitanetSegmentoNome] : []),
         ].join("; ")}`;
-  const classificacoes = await classificarEditaisEmLote(
-    objetoParaRelevancia,
-    novosCandidatos.map((c) => ({ numeroControle: c.numeroControle, titulo: c.titulo, descricao: c.descricao }))
-  );
+  const classificacoes = new Map<string, ClassificacaoEdital>(Object.entries(opts?.estado?.classificacoes ?? {}));
 
   // 4. Filtra: precisa ser relevante E do tipo que a empresa atende.
   let descartadosPerfil = 0;
   let descartadosRelevancia = 0;
-  const aprovados = novosCandidatos.filter((c) => {
-    const cl = classificacoes.get(c.numeroControle);
-    if (!cl) return true;
-    if (!cl.relevante) {
-      descartadosRelevancia++;
-      return false;
-    }
-    if (!empresaAtende(cl.tipoObjeto, company)) {
-      descartadosPerfil++;
-      return false;
-    }
-    return true;
-  });
+  const aprovar = (lista: Candidato[]) =>
+    lista.filter((c) => {
+      const cl = classificacoes.get(c.numeroControle);
+      if (!cl) return true;
+      if (!cl.relevante) {
+        descartadosRelevancia++;
+        return false;
+      }
+      if (!empresaAtende(cl.tipoObjeto, company)) {
+        descartadosPerfil++;
+        return false;
+      }
+      return true;
+    });
 
   // 5. Para os aprovados: monta o edital + os registros de documento (o download dos
   // arquivos em si fica para o passo 6). PNCP precisa de duas chamadas extras (valor e
@@ -416,7 +478,14 @@ async function executarAgente1Interno(
   let criadosPncp = 0;
   let criadosLicitaNet = 0;
   let criadosComprasGov = 0;
-  await mapComLimite(aprovados, 8, async (c) => {
+  const novosAteAgora = () => acumulado.novos + criadosIds.length;
+  // Aprovado que ficou sem card porque o tempo desta etapa acabou: vai no estado, para a etapa seguinte criar.
+  const restoParaCriar: Candidato[] = [];
+  const criarAprovados = (aprovados: Candidato[]) => mapComLimite(aprovados, 8, async (c) => {
+    if (Date.now() > limite) {
+      restoParaCriar.push(c);
+      return;
+    }
     const cl = classificacoes.get(c.numeroControle);
     const tipoObjeto = cl?.tipoObjeto ?? classificarTipoObjeto(c.titulo, c.descricao);
 
@@ -579,7 +648,7 @@ async function executarAgente1Interno(
     else criadosComprasGov++;
     // Progresso incremental — a tela atualiza o quadro enquanto os cards vão sendo criados,
     // sem esperar a busca terminar (ver CaptacaoRun e GET /api/editais/search).
-    void Promise.resolve(onProgresso?.({ fase: "criando", analisados, novos: criadosIds.length })).catch(() => {});
+    void Promise.resolve(onProgresso?.({ fase: "criando", analisados, novos: novosAteAgora() })).catch(() => {});
 
     for (const doc of documentosParaCriar) {
       await prisma.document.create({
@@ -600,6 +669,22 @@ async function executarAgente1Interno(
     // disputados. Ela começa quando o edital entra em Qualificação (ver auditoria-gatilho.ts).
   });
 
+  // Aprovados da etapa anterior primeiro; depois a IA avalia os candidatos em blocos de 60 e cada bloco já vira card (a tela
+  // vê os cards aparecendo). Quando o tempo desta etapa acaba, o que sobrou vai no estado e a busca continua sozinha.
+  if (aguardandoCriar.length > 0) await criarAprovados(aguardandoCriar);
+
+  const pendentesClassificar = [...novosCandidatos];
+  const limiteClassificar = limite - 6_000; // folga para criar os cards do último bloco
+  while (pendentesClassificar.length > 0 && Date.now() < limiteClassificar) {
+    const bloco = pendentesClassificar.splice(0, 60);
+    const resultadoDoBloco = await classificarEditaisEmLote(
+      objetoParaRelevancia,
+      bloco.map((c) => ({ numeroControle: c.numeroControle, titulo: c.titulo, descricao: c.descricao }))
+    );
+    for (const [k, v] of resultadoDoBloco) classificacoes.set(k, v);
+    await criarAprovados(aprovar(bloco));
+  }
+
   // 6. O download dos documentos e a extração do texto só acontecem quando o usuário
   // demonstra interesse de verdade — ver dispararPipeline em pipeline.ts (disparado ao
   // sair de "Oportunidade") ou o download avulso de um documento (rota
@@ -611,26 +696,55 @@ async function executarAgente1Interno(
     usaLicitaNet ? `${criadosLicitaNet} do LicitaNet` : null,
     criadosComprasGov > 0 ? `${criadosComprasGov} do Compras.gov.br` : null,
   ].filter((s): s is string => s !== null);
-  const partes = [`${criadosIds.length} novo(s) edital(is) captado(s)`];
+  // Totais da busca inteira (somando as etapas anteriores).
+  const novosTotal = novosAteAgora();
+  const perfilTotal = acumulado.descartadosPerfil + descartadosPerfil;
+  const relevanciaTotal = acumulado.descartadosRelevancia + descartadosRelevancia;
+  const retificadosTotal = acumulado.retificados + retificados;
+  const falhasTotal = acumulado.falhasPncp + falhasPncp;
+  const partes = [`${novosTotal} novo(s) edital(is) captado(s)`];
   partes[0] += fontesUsadas.length > 1 ? ` (${fontesUsadas.join(", ")}).` : ".";
-  const descartados = descartadosPerfil + descartadosRelevancia;
+  const descartados = perfilTotal + relevanciaTotal;
   if (descartados > 0) {
     partes.push(
-      `${descartados} não listado(s): ${descartadosPerfil} fora do tipo que a empresa atende, ${descartadosRelevancia} sem relação direta com o objeto social.`
+      `${descartados} não listado(s): ${perfilTotal} fora do tipo que a empresa atende, ${relevanciaTotal} sem relação direta com o objeto social.`
     );
   }
-  if (falhasPncp > 0) partes.push(`${falhasPncp} palavra-chave indisponível no PNCP no momento.`);
+  if (falhasTotal > 0) partes.push(`${falhasTotal} palavra-chave indisponível no PNCP no momento.`);
   if (falhaLicitaNet) partes.push(`LicitaNet indisponível no momento (${falhaLicitaNet}).`);
   if (falhaComprasGov) partes.push(`Compras.gov.br indisponível no momento (${falhaComprasGov}).`);
-  if (retificados > 0) partes.push(`${retificados} edital(is) já capturado(s) foi(ram) retificado(s) pelo órgão — revise antes de prosseguir.`);
+  if (retificadosTotal > 0) partes.push(`${retificadosTotal} edital(is) já capturado(s) foi(ram) retificado(s) pelo órgão — revise antes de prosseguir.`);
 
-  return {
-    novos: criadosIds.length,
+  const incompleta = pendentesClassificar.length > 0 || restoParaCriar.length > 0;
+  const acumuladoFinal: AcumuladoCaptacao = {
     analisados,
-    descartadosPerfil,
-    descartadosRelevancia,
-    retificados,
+    novos: novosTotal,
+    descartadosPerfil: perfilTotal,
+    descartadosRelevancia: relevanciaTotal,
+    retificados: retificadosTotal,
+    falhasPncp: falhasTotal,
+  };
+  return {
+    novos: novosTotal,
+    analisados,
+    descartadosPerfil: perfilTotal,
+    descartadosRelevancia: relevanciaTotal,
+    retificados: retificadosTotal,
     mensagem: partes.join(" "),
+    estado: incompleta
+      ? {
+          pendentesClassificar,
+          pendentesCriar: restoParaCriar,
+          // Só o que a próxima etapa precisa: o que a IA já decidiu sobre os aprovados ainda sem card.
+          classificacoes: Object.fromEntries(
+            restoParaCriar.flatMap((c) => {
+              const cl = classificacoes.get(c.numeroControle);
+              return cl ? [[c.numeroControle, cl] as const] : [];
+            })
+          ),
+          acumulado: acumuladoFinal,
+        }
+      : undefined,
   };
 }
 

@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verificarCronSecret } from "@/lib/cron-auth";
-import { executarAgente1 } from "@/lib/agents/agente1-comercial";
+import { dispararCaptacaoAgendada } from "@/lib/captacao";
 import { mapComLimite } from "@/lib/concorrencia";
 import { vigiarAuditorias } from "@/lib/agents/auditoria-fila";
-import { notificarNovosEditais } from "@/lib/notifications";
 import { excluirRascunhosVencidos } from "@/lib/rascunho-expiracao";
 import { repararEditais } from "@/lib/agents/edital-disponivel";
 import { fonteAtiva } from "@/lib/fontes-captacao";
@@ -24,30 +23,23 @@ export async function GET(req: Request) {
     where: fonteAtiva("LICITANET")
       ? { OR: [{ keywords: { some: {} } }, { licitanetSegmentoId: { not: null } }] }
       : { keywords: { some: {} } },
-    select: {
-      id: true,
-      razaoSocial: true,
-      whatsapp: true,
-      user: { select: { email: true } },
-    },
+    select: { id: true },
   });
 
-  const resultados: { companyId: string; novos: number; erro?: string }[] = [];
+  // Cada empresa recebe a sua própria execução (com os seus 60s, em etapas se precisar): antes todas dividiam os 60s desta
+  // rota e a busca parava no meio quando havia muitas empresas ou muitos editais. A notificação por e-mail/WhatsApp sai
+  // quando a busca DA EMPRESA termina (ver captacao.ts).
+  const origin = new URL(req.url).origin;
+  const resultados: { companyId: string; iniciada: boolean; motivo?: string; erro?: string }[] = [];
 
-  await mapComLimite(empresas, 3, async (empresa) => {
+  await mapComLimite(empresas, 5, async (empresa) => {
     try {
-      const resultado = await executarAgente1(empresa.id);
-      resultados.push({ companyId: empresa.id, novos: resultado.novos });
-      if (resultado.novos > 0) {
-        await notificarNovosEditais(
-          { email: empresa.user.email, whatsapp: empresa.whatsapp, razaoSocial: empresa.razaoSocial },
-          resultado.novos
-        );
-      }
+      const r = await dispararCaptacaoAgendada(empresa.id, origin);
+      resultados.push({ companyId: empresa.id, ...r });
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Erro desconhecido";
-      console.error(`[cron/buscar-editais] Falha na empresa ${empresa.id}:`, err);
-      resultados.push({ companyId: empresa.id, novos: 0, erro: msg });
+      console.error(`[cron/buscar-editais] Falha ao iniciar a busca da empresa ${empresa.id}:`, err);
+      resultados.push({ companyId: empresa.id, iniciada: false, erro: msg });
     }
   });
 
@@ -66,7 +58,7 @@ export async function GET(req: Request) {
     limpezaRascunhos: limpeza,
     reparoEditais: reparo,
     empresasProcessadas: resultados.length,
-    totalNovos: resultados.reduce((acc, r) => acc + r.novos, 0),
+    buscasIniciadas: resultados.filter((r) => r.iniciada).length,
     resultados,
   });
 }
