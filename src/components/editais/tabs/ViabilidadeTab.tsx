@@ -1,133 +1,121 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
-import { Loader2 } from "lucide-react";
-import { formatBRL } from "@/lib/format";
-import type { ResultadoCalculoViabilidade } from "@/lib/calculo-viabilidade";
-
-type Estudo = {
-  id: string;
-  editalId: string | null;
-  ramo: "SERVICO" | "PRODUTO";
-  nome: string | null;
-  regimeTributario: string | null;
-  resultadoCalculoJson: string | null;
-  updatedAt: string;
-};
-
-const REGIME: Record<string, string> = { SIMPLES_NACIONAL: "Simples Nacional", LUCRO_PRESUMIDO: "Lucro Presumido", LUCRO_REAL: "Lucro Real" };
-const DECISAO = {
-  PARTICIPAR: { texto: "Sim", cor: "bg-success-bg text-success-ink" },
-  PARTICIPAR_COM_RESSALVAS: { texto: "Com ressalvas", cor: "bg-warning-bg text-warning-ink" },
-  NAO_PARTICIPAR: { texto: "Não", cor: "bg-danger-bg text-danger-ink" },
-} as const;
-
-function lerResultado(json: string | null): ResultadoCalculoViabilidade | null {
-  if (!json) return null;
-  try {
-    const r = JSON.parse(json);
-    return r?.consolidado && r?.recomendacao ? (r as ResultadoCalculoViabilidade) : null;
-  } catch {
-    return null;
-  }
-}
+import { Loader2, Package, Wrench } from "lucide-react";
+import { Button } from "@/components/ui/Button";
+import { Cartao } from "@/components/ui/Cartao";
+import { Chip } from "@/components/ui/Chip";
+import { EstudoProdutoAba } from "@/components/estudo-viabilidade/aba/EstudoProdutoAba";
+import { EstudoServicoAba } from "@/components/estudo-viabilidade/aba/EstudoServicoAba";
+import type { PacoteAba } from "@/lib/estudo-aba-tipos";
+import type { RamoEstudo } from "@/lib/estudo-viabilidade";
 
 /**
- * Aba "Viabilidade" do edital no celular: resumo do estudo de viabilidade ligado a este edital (o estudo completo
- * continua sendo o passo a passo de Estudo de Viabilidade). Só leitura.
+ * Aba "Viabilidade" do edital. O estudo acontece aqui mesmo, com o edital já ligado:
+ *  - Produtos: uma tela só com custos por item e os preços Inicial / Alvo / Piso ao vivo.
+ *  - Serviços: as etapas do estudo completo, empilhadas.
+ * O Bidd.IA guarda os custos de cada estudo concluído e usa como sugestão nos próximos.
  */
 export function ViabilidadeTab({ editalId }: { editalId: string }) {
-  const [estudos, setEstudos] = useState<Estudo[] | null>(null);
+  const [pacote, setPacote] = useState<PacoteAba | null>(null);
   const [erro, setErro] = useState(false);
+  const [criando, setCriando] = useState<RamoEstudo | null>(null);
+  const [erroCriar, setErroCriar] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelado = false;
-    fetch("/api/estudos")
+    fetch(`/api/editais/${editalId}/estudo`)
       .then(async (r) => {
         if (!r.ok) throw new Error();
-        const d = await r.json();
-        if (!cancelado) setEstudos((d.estudos as Estudo[]).filter((e) => e.editalId === editalId));
+        const dados = (await r.json()) as PacoteAba;
+        if (!cancelado) setPacote(dados);
       })
-      .catch(() => !cancelado && setErro(true));
+      .catch(() => {
+        if (!cancelado) setErro(true);
+      });
     return () => {
       cancelado = true;
     };
   }, [editalId]);
 
-  if (erro) return <p className="text-sm text-danger-ink">Não foi possível carregar o estudo de viabilidade.</p>;
-  if (!estudos) {
-    return (
-      <div className="flex justify-center py-10 text-muted">
-        <Loader2 className="h-5 w-5 animate-spin" />
-      </div>
-    );
+  async function criar(ramo: RamoEstudo) {
+    setCriando(ramo);
+    setErroCriar(null);
+    try {
+      const res = await fetch(`/api/editais/${editalId}/estudo`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ramo }),
+      });
+      const dados = await res.json();
+      if (!res.ok) {
+        setErroCriar(dados.error ?? "Não foi possível criar o estudo.");
+        return;
+      }
+      setPacote(dados as PacoteAba);
+    } catch {
+      setErroCriar("Sem conexão. Tente de novo.");
+    } finally {
+      setCriando(null);
+    }
   }
-  if (estudos.length === 0) {
+
+  if (erro) return <p className="tipo-pequeno text-danger-ink">Não foi possível carregar o estudo de viabilidade.</p>;
+  if (!pacote) {
     return (
-      <div className="rounded-card bg-surface p-5 text-center">
-        <p className="text-[15px] font-bold text-foreground">Ainda não há estudo para este edital</p>
-        <p className="mt-1 text-xs text-muted">O estudo calcula custos, tributos e a margem para decidir se vale participar.</p>
-        <Link href="/estudo-viabilidade" className="mt-3 inline-flex h-11 items-center justify-center rounded-card bg-brand px-5 text-sm font-bold text-on-brand">
-          Criar estudo de viabilidade
-        </Link>
+      <div className="flex justify-center py-10 text-ink-muted">
+        <Loader2 className="h-5 w-5 animate-spin" aria-label="Carregando" />
       </div>
     );
   }
 
-  return (
-    <div className="space-y-3">
-      {estudos.map((e) => {
-        const r = lerResultado(e.resultadoCalculoJson);
-        const d = r ? DECISAO[r.recomendacao.decisao] : null;
-        return (
-          <div key={e.id} className="space-y-3 rounded-card bg-surface p-4">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-[15px] font-bold text-foreground">Vale participar?</p>
-                <p className="truncate text-xs text-muted">{e.nome ?? (e.ramo === "SERVICO" ? "Estudo de serviço" : "Estudo de produto")}</p>
+  const estudo = pacote.estudo;
+
+  if (!estudo) {
+    const sugerido = pacote.ramoSugerido;
+    return (
+      <Cartao className="space-y-4">
+        <div>
+          <h3 className="tipo-titulo-3 text-ink">Vale a pena participar deste edital?</h3>
+          <p className="tipo-corpo mt-1 text-ink-muted">
+            O estudo calcula quanto custa entregar, quanto vai de imposto e qual é o menor preço que ainda dá lucro. Cada estudo concluído ensina o
+            Bidd.IA: nos próximos editais ele já traz seus custos e suas margens preenchidos.
+          </p>
+        </div>
+
+        <p className="tipo-corpo-forte text-ink">Este edital é de:</p>
+        <div className="grid gap-3 md:grid-cols-2">
+          {(
+            [
+              { ramo: "PRODUTO", titulo: "Produtos", texto: "Você compra e revende: custo de compra, frete e impostos.", Icone: Package },
+              { ramo: "SERVICO", titulo: "Serviços", texto: "Você presta o serviço: equipe, salários, encargos e custos mensais.", Icone: Wrench },
+            ] as const
+          ).map(({ ramo, titulo, texto, Icone }) => (
+            <div key={ramo} className="flex flex-col gap-3 rounded-tile border border-border p-4">
+              <div className="flex items-center gap-2">
+                <Icone className="h-5 w-5 text-brand-600" aria-hidden />
+                <p className="tipo-corpo-forte text-ink">{titulo}</p>
+                {sugerido === ramo && <Chip tom="info">Sugerido para este edital</Chip>}
               </div>
-              {d && <span className={`flex-none rounded-chip px-3 py-1 text-xs font-bold ${d.cor}`}>{d.texto}</span>}
+              <p className="tipo-pequeno text-ink-muted">{texto}</p>
+              <Button variant={sugerido === ramo || sugerido == null ? "primary" : "secondary"} loading={criando === ramo} disabled={criando !== null} onClick={() => criar(ramo)}>
+                Começar estudo de {titulo.toLowerCase()}
+              </Button>
             </div>
-            {r ? (
-              <>
-                <p className="text-[13px] text-foreground">{r.recomendacao.motivo}</p>
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="rounded-2xl bg-background p-3">
-                    <p className="text-[11px] text-muted">Custo total</p>
-                    <p className="font-[family-name:var(--font-rubik)] text-[17px] font-semibold text-foreground">
-                      {formatBRL(r.consolidado.custoDiretoTotal + r.consolidado.despesasIndiretasTotal)}
-                    </p>
-                  </div>
-                  <div className="rounded-2xl bg-background p-3">
-                    <p className="text-[11px] text-muted">Margem estimada</p>
-                    <p className="font-[family-name:var(--font-rubik)] text-[17px] font-semibold text-foreground">{r.consolidado.margemLiquidaConsolidada.toFixed(1).replace(".", ",")}%</p>
-                  </div>
-                  <div className="rounded-2xl bg-background p-3">
-                    <p className="text-[11px] text-muted">Valor do edital</p>
-                    <p className="text-[14px] font-bold text-foreground">{formatBRL(r.consolidado.valorTetoTotal)}</p>
-                  </div>
-                  <div className="rounded-2xl bg-background p-3">
-                    <p className="text-[11px] text-muted">Preço mínimo viável</p>
-                    <p className="text-[14px] font-bold text-foreground">{formatBRL(r.consolidado.precoMinimoTotal)}</p>
-                  </div>
-                </div>
-                <p className="text-[11.5px] text-muted">
-                  {r.consolidado.qtdItensViaveis} item(ns) viável(is) · {r.consolidado.qtdItensMarginais} marginal(is) · {r.consolidado.qtdItensInviaveis} inviável(is)
-                </p>
-              </>
-            ) : (
-              <p className="text-xs text-muted">O cálculo ainda não foi concluído. Abra o estudo para continuar de onde parou.</p>
-            )}
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-muted">{e.regimeTributario ? REGIME[e.regimeTributario] ?? e.regimeTributario : "Regime não escolhido"}</span>
-              <Link href={`/estudo-viabilidade/${e.id}`} className="font-bold text-brand">
-                Abrir estudo completo →
-              </Link>
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
+          ))}
+        </div>
+
+        {erroCriar && (
+          <p role="alert" className="tipo-pequeno text-danger-ink">
+            {erroCriar}
+          </p>
+        )}
+      </Cartao>
+    );
+  }
+
+  if (estudo.ramo === "PRODUTO" && pacote.produto) {
+    return <EstudoProdutoAba key={estudo.id} pacote={pacote} onPacote={setPacote} />;
+  }
+  return <EstudoServicoAba pacote={pacote} onPacote={setPacote} />;
 }
