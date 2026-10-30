@@ -16,7 +16,7 @@ import {
   FILTROS_PADRAO,
   type SituacaoFiltro,
 } from "@/lib/resultados";
-import { ETAPAS_KANBAN } from "@/lib/kanban";
+import { ETAPAS_KANBAN, ETAPA_LABEL } from "@/lib/kanban";
 import { LABEL_CATEGORIA, LABEL_OUTROS } from "@/lib/habilitacao-categorias";
 import { RAMO_LABEL, etapaAtualDoEstudo, ETAPAS_ESTUDO } from "@/lib/estudo-viabilidade";
 import type { EtapaKanban } from "@/lib/types";
@@ -39,21 +39,94 @@ pela tela normal da plataforma, e diga onde.
 Quando gerar um arquivo, não descreva o conteúdo dele como se estivesse te devolvendo em texto — apenas confirme que
 foi gerado e está pronto pra baixar (o arquivo aparece anexado na sua resposta).
 
-Responda sempre em português, de forma direta e natural — como conversa entre colegas de trabalho, sem enrolação.`;
+Sobre os dados: a situação de cada edital (em andamento, ganho ou perdido) e as contagens por etapa já vêm prontas nas
+ferramentas — use-as como estão, sem recontar. Para editais ganhos, informe o VALOR HOMOLOGADO quando ele existir e diga
+sempre qual valor está citando (estimado ou homologado); se o ganho ainda não tem valor homologado registrado, diga que
+ele não foi registrado em vez de usar o estimado como se fosse o homologado. Não calcule nem informe taxas e percentuais
+(conversão, desconto etc.) por conta própria: cite apenas o que as ferramentas entregarem; sem isso, descreva a situação
+em números absolutos.
+
+ESTILO DE COMUNICAÇÃO
+Você responde como o(a) diretor(a) de licitações da empresa do usuário, dirigindo-se ao sócio ou à diretoria: formal,
+preciso, objetivo e cordial, sem informalidade. Isto vale para o tom, não para a identidade: nunca afirme ser humano e,
+se lhe perguntarem diretamente, confirme com simplicidade que é a assistente virtual da Bidd.IA.
+
+Regras de escrita:
+1. A tela exibe texto simples e não interpreta markdown. Escreva em prosa corrida, em parágrafos curtos, sem nenhuma
+sintaxe de formatação: nada de "#", "**", "---", crases ou tabelas. Use no máximo uma lista simples, com hífen no início
+da linha, e só quando houver quatro ou mais itens comparáveis (por exemplo, editais com valores).
+2. Nunca use emojis, emoticons ou símbolos decorativos.
+3. Não use interjeições nem fórmulas de chatbot: "Beleza!", "Show!", "Claro!", "Ótima pergunta!", "Agora ficou claro",
+"Aqui vai", "Vamos lá", "Com certeza". Comece direto pelo assunto, com uma saudação breve apenas na primeira mensagem da
+conversa. A saudação é sempre apenas "Prezado," — nunca acrescente o período do dia ("boa tarde", "bom dia", "boa
+noite"), porque você não sabe o horário do usuário. Se a mensagem for apenas uma saudação, responda em uma ou duas
+frases curtas, sem listar tudo o que sabe fazer.
+4. Primeiro a conclusão, depois o detalhe. A primeira frase responde à pergunta. Em seguida, os números que a sustentam
+e, por último, a recomendação ou o próximo passo.
+5. Precisão numérica. Use os números exatos retornados pelas ferramentas, com valores em reais no formato
+R$ 28.200.000,00 ou, quando for mais legível, R$ 28,2 milhões. Nunca arredonde contagens ("cerca de 15"). Se não tiver
+o dado, diga que a informação não está disponível; jamais estime ou invente.
+6. Linguagem neutra e sóbria. Não comemore nem dramatize ("boa notícia", "infelizmente", "destaques"). Descreva fatos e,
+quando cabível, uma avaliação técnica ponderada ("o resultado ainda é pouco representativo, pois há um único edital com
+desfecho").
+7. Dirija-se ao usuário de forma respeitosa e impessoal ("Prezado", "o senhor/a senhora" apenas se ele usar esse
+tratamento); só use o nome dele se ele próprio o informar na conversa. Evite gírias, abreviações de internet e
+exclamações.
+8. Encerre, quando fizer sentido, com no máximo UMA frase de encaminhamento objetiva ("Posso preparar o relatório em PDF
+ou detalhar algum edital específico."). Sem perguntas retóricas ("Como posso ajudar?") e sem repetir ofertas a cada
+mensagem.
+9. Use a terminologia do setor: "Pregão Eletrônico nº 51/2026", "valor homologado", "valor estimado", "órgão licitante",
+"proposta", "habilitação", "classificação". Chame as etapas pelo nome que o usuário vê no quadro (por exemplo "Ganhas").
+10. Mantenha respostas proporcionais: pergunta simples, resposta curta (2 a 4 frases). Relatórios, no máximo 4
+parágrafos.
+
+Exemplo do estilo a evitar e do estilo esperado, para a pergunta "Quais os resultados da empresa?". Os nomes, valores e
+quantidades abaixo são ilustrativos: servem só para mostrar o estilo e nunca devem ser reaproveitados numa resposta.
+
+ANTES (errado): "Beleza! Agora ficou claro. Aqui vai o resumo completo dos resultados: ## 🎯 Resultados ### Números
+gerais: - Total de editais: 64 - ✅ Ganhos: 1 edital - ❌ Perdidos: 0 ... 🔥 Jaboatão dos Guararapes: R$ 28,2 milhões
+Observação importante: Boa notícia — não tem nenhum edital perdido até agora! 🎉 Quer que eu gere o PDF...?"
+
+DEPOIS (certo): "Prezado, segue o panorama dos editais da empresa. Foram analisados 64 editais: 1 foi ganho, nenhum foi
+perdido e 63 permanecem em andamento. O edital ganho é o Pregão Eletrônico nº 51/2026, do Município de Ibiritê, no valor
+homologado de R$ 3.000.000,00.
+
+Entre os 63 em andamento, a maior parte ainda se encontra em Rascunho; 4 estão em Qualificação (Crixás/GO, Paraíba do
+Sul/RJ, Mococa/SP e São Francisco/SP) e nenhum está em Pronta para Enviar ou Enviada para Disputa. Os de maior valor
+estimado são Jaboatão dos Guararapes (R$ 28,2 milhões), Alto Jequitinhonha (R$ 26,8 milhões), os dois editais de
+Itapoá/SC (R$ 26,3 milhões cada) e Crixás (R$ 16,4 milhões).
+
+Como há apenas um edital com desfecho registrado, a taxa de conversão ainda não é representativa. Posso preparar o
+relatório de resultados em PDF ou detalhar algum edital específico."`;
 }
 
 const ETAPA_KEYS = ETAPAS_KANBAN.map((e) => e.key);
 const SITUACOES: SituacaoFiltro[] = ["TODOS", "ANDAMENTO", "GANHOS", "PERDIDOS"];
+const ETAPAS_E_ROTULOS = ETAPAS_KANBAN.map((e) => `${e.key} = ${e.label}`).join("; ");
+
+const ROTULO_SITUACAO = { ANDAMENTO: "em andamento", GANHOS: "ganho", PERDIDOS: "perdido" } as const;
+
+/** Contagens exatas por situação e por etapa — o modelo usa estes números em vez de contar linha por linha. */
+function resumoDasContagens(editais: { etapaKanban: string }[]): string {
+  const porSituacao = { ANDAMENTO: 0, GANHOS: 0, PERDIDOS: 0 };
+  const porEtapa = new Map<string, number>();
+  for (const e of editais) {
+    porSituacao[situacaoDoEdital({ etapaKanban: e.etapaKanban as EtapaKanban })]++;
+    porEtapa.set(e.etapaKanban, (porEtapa.get(e.etapaKanban) ?? 0) + 1);
+  }
+  const etapas = ETAPAS_KANBAN.filter((e) => porEtapa.has(e.key)).map((e) => `${e.label}: ${porEtapa.get(e.key)}`);
+  return `Por situação: ${porSituacao.ANDAMENTO} em andamento, ${porSituacao.GANHOS} ganho(s), ${porSituacao.PERDIDOS} perdido(s). Por etapa: ${etapas.join("; ")}.`;
+}
 
 export const FERRAMENTAS_ASSISTENTE: FerramentaDef[] = [
   {
     name: "listar_editais",
     description:
-      "Lista os editais da empresa com um resumo (título, órgão, etapa do Kanban, valor, prazo de encerramento). Aceita filtro opcional por etapa ou situação (ganhos/perdidos/em andamento).",
+      "Lista os editais da empresa com um resumo (título, órgão, etapa do Kanban, situação, valor estimado e, nos ganhos, valor homologado, prazo de encerramento), mais as contagens exatas por situação e por etapa. Aceita filtro opcional por etapa ou situação (ganhos/perdidos/em andamento).",
     input_schema: {
       type: "object",
       properties: {
-        etapa: { type: "string", enum: ETAPA_KEYS, description: "Filtra por uma etapa exata do Kanban." },
+        etapa: { type: "string", enum: ETAPA_KEYS, description: `Filtra por uma etapa exata do Kanban (código = nome na tela): ${ETAPAS_E_ROTULOS}.` },
         situacao: { type: "string", enum: SITUACOES, description: "Filtra por situação agregada (padrão TODOS)." },
       },
     },
@@ -150,6 +223,7 @@ export function criarExecutorAssistente(companyId: string): ExecutarFerramenta {
             orcamentoSigiloso: true,
             dataEncerramentoProposta: true,
             proposal: { select: { valorGlobalReferencia: true } },
+            resultado: { select: { valorHomologado: true } },
           },
         });
         const filtrados = editais.filter((e) => {
@@ -158,29 +232,33 @@ export function criarExecutorAssistente(companyId: string): ExecutarFerramenta {
           return true;
         });
         if (filtrados.length === 0) return { resultadoTexto: "Nenhum edital encontrado com esse filtro." };
-        const linhas = filtrados.map(
-          (e) =>
-            `- [${e.id}] ${e.titulo} — ${e.orgaoNome} — etapa: ${e.etapaKanban} — valor: ${
-              e.orcamentoSigiloso ? "sigiloso" : formatBRL(e.valorGlobal ?? e.proposal?.valorGlobalReferencia ?? null)
-            } — encerra: ${formatDate(e.dataEncerramentoProposta?.toISOString() ?? null)}`
-        );
-        return { resultadoTexto: `${filtrados.length} edital(is):\n${linhas.join("\n")}` };
+        const linhas = filtrados.map((e) => {
+          const sit = situacaoDoEdital(e);
+          const homologado = sit === "GANHOS" ? ` — valor homologado: ${e.resultado ? formatBRL(e.resultado.valorHomologado) : "não registrado"}` : "";
+          return `- [${e.id}] ${e.titulo} — ${e.orgaoNome} — etapa: ${ETAPA_LABEL[e.etapaKanban as EtapaKanban]} — situação: ${ROTULO_SITUACAO[sit]} — valor estimado: ${
+            e.orcamentoSigiloso ? "sigiloso" : formatBRL(e.valorGlobal ?? e.proposal?.valorGlobalReferencia ?? null)
+          }${homologado} — encerra: ${formatDate(e.dataEncerramentoProposta?.toISOString() ?? null)}`;
+        });
+        return { resultadoTexto: `${filtrados.length} edital(is). ${resumoDasContagens(filtrados)}\n${linhas.join("\n")}` };
       }
 
       case "detalhar_edital": {
         const editalId = String(input.editalId ?? "");
         const edital = await prisma.edital.findFirst({
           where: { id: editalId, companyId },
-          include: { analysis: true, proposal: true, checklistItems: true },
+          include: { analysis: true, proposal: true, checklistItems: true, resultado: { select: { valorHomologado: true } } },
         });
         if (!edital) return { resultadoTexto: "Edital não encontrado nesta conta." };
 
+        const sit = situacaoDoEdital(edital);
         const partes = [
           `Título: ${edital.titulo}`,
           `Órgão: ${edital.orgaoNome}`,
-          `Etapa no Kanban: ${edital.etapaKanban}`,
+          `Etapa no Kanban: ${ETAPA_LABEL[edital.etapaKanban as EtapaKanban]}`,
+          `Situação: ${ROTULO_SITUACAO[sit]}`,
           `Objeto: ${edital.descricao}`,
-          `Valor de referência (PNCP): ${edital.orcamentoSigiloso ? "sigiloso" : formatBRL(edital.valorGlobal)}`,
+          `Valor estimado (de referência, PNCP): ${edital.orcamentoSigiloso ? "sigiloso" : formatBRL(edital.valorGlobal)}`,
+          ...(sit === "GANHOS" ? [`Valor homologado: ${edital.resultado ? formatBRL(edital.resultado.valorHomologado) : "ainda não registrado"}`] : []),
           `Encerramento das propostas: ${formatDate(edital.dataEncerramentoProposta?.toISOString() ?? null)}`,
         ];
 
