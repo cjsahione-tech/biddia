@@ -9,7 +9,9 @@ export const ETAPAS_KANBAN: { key: EtapaKanban; label: string }[] = [
   { key: "ENVIADA_PARA_DISPUTA", label: "Enviada para Disputa" },
   { key: "CLASSIFICACAO", label: "Classificação" },
   { key: "ELIMINADA_APOS_CLASSIFICACAO", label: "Eliminada após Classificação" },
-  { key: "ACEITA", label: "Aceita" },
+  // A etapa interna continua ACEITA (o banco não muda); o que o usuário vê é "Ganhas". Arrastar um card para cá
+  // abre a janela do valor homologado e da planilha final (ver JanelaResultadoGanho.tsx).
+  { key: "ACEITA", label: "Ganhas" },
   { key: "RECUSADA_DESCLASSIFICADA", label: "Recusada/Desclassificada" },
   { key: "EM_CONTRATO", label: "Em contrato" },
   { key: "FINALIZADA", label: "Finalizada" },
@@ -32,6 +34,15 @@ export const ETAPAS_NEGATIVAS = new Set<EtapaKanban>([
 // execução/concluída depois de ganha. Usado pelo Dashboard de Resultados para calcular
 // taxa de conversão e valores ganhos.
 export const ETAPAS_GANHAS = new Set<EtapaKanban>(["ACEITA", "EM_CONTRATO", "FINALIZADA"]);
+
+// De onde um edital costuma chegar em "Ganhas" sem estranhamento: já foi para a disputa, ou já está em contrato.
+// De qualquer outra coluna (Oportunidade, Qualificação, Editais em preparação, Pronta para Enviar, as de
+// desfecho negativo e o Rascunho) a janela pede só uma confirmação extra, para ninguém marcar ganho sem querer.
+const ETAPAS_ORIGEM_NORMAL_DE_GANHO = new Set<EtapaKanban>(["ENVIADA_PARA_DISPUTA", "CLASSIFICACAO", "EM_CONTRATO", "FINALIZADA"]);
+
+export function origemPedeConfirmacaoGanho(etapaAtual: EtapaKanban): boolean {
+  return !ETAPAS_ORIGEM_NORMAL_DE_GANHO.has(etapaAtual);
+}
 
 // Etiquetas de cor do card, estilo Trello — classes já resolvidas para não precisar de
 // template string dinâmica (o Tailwind não gera classe pra string montada em runtime).

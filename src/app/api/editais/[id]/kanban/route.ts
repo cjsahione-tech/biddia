@@ -34,7 +34,7 @@ const ETAPA_LABEL: Record<string, string> = {
   ENVIADA_PARA_DISPUTA: "Enviada para Disputa",
   CLASSIFICACAO: "Classificação",
   ELIMINADA_APOS_CLASSIFICACAO: "Eliminada após Classificação",
-  ACEITA: "Aceita",
+  ACEITA: "Ganhas",
   RECUSADA_DESCLASSIFICADA: "Recusada/Desclassificada",
   EM_CONTRATO: "Em contrato",
   FINALIZADA: "Finalizada",

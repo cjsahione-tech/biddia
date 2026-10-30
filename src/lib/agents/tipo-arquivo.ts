@@ -36,10 +36,16 @@ export function contentTypeReal(bytes: Uint8Array, cabecalho: string | null | un
   return c || "application/octet-stream";
 }
 
+/** Anexo enviado pelo usuário: se o nome já termina numa extensão conhecida (.xlsx, .csv, .png...) ela é mantida; sem extensão, vira ".pdf" como sempre. */
+export function nomeDoAnexoDoUsuario(nome: string): string {
+  return /\.(pdf|xlsx|xls|csv|docx|doc|pptx|ppt|odt|ods|png|jpe?g|gif|txt|zip)$/i.test(nome) ? nome : `${nome}.pdf`;
+}
+
 /** Nome do arquivo para download: PDF sempre termina em ".pdf" (os arquivos do PNCP chegam sem extensão). */
 export function nomeComExtensao(nome: string, tipo: TipoArquivo): string {
   const limpo = nome.trim() || "documento";
   if (tipo === "pdf") return /\.pdf$/i.test(limpo) ? limpo : `${limpo.replace(/\.(zip|bin|dat|tmp)$/i, "")}.pdf`;
-  if (tipo === "zip") return /\.zip$/i.test(limpo) ? limpo : `${limpo}.zip`;
+  // .xlsx/.docx/.pptx também são ZIP por dentro, mas já têm a extensão certa — não ganham ".zip" no fim.
+  if (tipo === "zip") return /\.(zip|xlsx|docx|pptx|odt|ods)$/i.test(limpo) ? limpo : `${limpo}.zip`;
   return limpo;
 }

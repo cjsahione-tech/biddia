@@ -408,11 +408,30 @@ model Edital {
   exigenciasHabilitacao  ExigenciaHabilitacao[]
   agentMessages      AgentMessage[]
   estudosViabilidade EstudoViabilidade[]
+  resultado          ResultadoEdital?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@unique([companyId, numeroControlePNCP])
+}
+
+// Resultado de um edital ganho (card arrastado para "Ganhas"): o valor homologado e os itens da
+// planilha final, já conferidos pelo usuário. O arquivo original fica em Document (aba Documentos);
+// documentoId só aponta para ele. Alimenta a seção "Editais ganhos" da página Resultados.
+model ResultadoEdital {
+  id       String @id @default(cuid())
+  editalId String @unique
+  edital   Edital @relation(fields: [editalId], references: [id], onDelete: Cascade)
+
+  valorHomologado Float
+  // JSON: [{ numero, descricao, unidade, quantidade, valorUnitario, valorTotal }]
+  itensJson       String  @default("[]")
+  nomeArquivo     String?
+  documentoId     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // Chat de correção por agente: cada aba de agente (Análise, Financeiro, Documentos,

@@ -5,7 +5,7 @@ import { baixarEPersistirDocumento } from "@/lib/agents/document-download";
 import { tocarEdital } from "@/lib/agents/run-tracker";
 import { criarUrlDownload } from "@/lib/storage";
 import { ehZip, extrairPdfUnicoDoZip } from "@/lib/agents/arquivos-compactados";
-import { contentTypeReal, nomeComExtensao, tipoDoArquivo } from "@/lib/agents/tipo-arquivo";
+import { contentTypeReal, nomeComExtensao, nomeDoAnexoDoUsuario, tipoDoArquivo } from "@/lib/agents/tipo-arquivo";
 
 /**
  * Entrega o arquivo com o formato REAL (descoberto pelos bytes): PDF sempre sai como application/pdf e com ".pdf" no
@@ -66,7 +66,7 @@ export async function GET(
   // avulso anterior). Serve direto do banco, sem depender do PNCP/LicitaNet estar no ar.
   const oficial = doc.tipo === "DOCUMENTO_PNCP" || doc.tipo === "DOCUMENTO_LICITANET";
   if (doc.conteudoBase64) {
-    return await respondFromDataUrl(doc.conteudoBase64, oficial ? nomeArquivo : `${nomeArquivo}.pdf`);
+    return await respondFromDataUrl(doc.conteudoBase64, oficial ? nomeArquivo : nomeDoAnexoDoUsuario(nomeArquivo));
   }
 
   // Sem cópia local ainda: baixa agora e JÁ PERSISTE no Document (não serve só uma
