@@ -21,6 +21,8 @@ export type EditalParaResultados = {
   createdAt: string; // ISO
   decidedAt: string | null;
   proposalValor: number | null;
+  // Valor homologado registrado na janela de "Ganhas" (ResultadoEdital) — null/ausente = ainda não registrado.
+  valorHomologado?: number | null;
 };
 
 export type SituacaoFiltro = "TODOS" | "ANDAMENTO" | "GANHOS" | "PERDIDOS";
@@ -87,13 +89,30 @@ export function situacaoDoEdital(e: Pick<EditalParaResultados, "etapaKanban">): 
   return "ANDAMENTO";
 }
 
-// Valor de referência do edital para fins de soma: o valor publicado (quando não
+// Valor de referência do edital (o que o órgão publicou): o valor publicado (quando não
 // sigiloso) ou, na falta dele, o valor que a própria proposta acabou montando — nunca os
 // dois somados. `orcamentoSigiloso` já implica `valorGlobal: null` na origem (ver
 // agente1-comercial.ts), então não precisa de um branch específico aqui.
-function valorDoEdital(e: EditalParaResultados): number | null {
+function valorReferenciaDoEdital(e: EditalParaResultados): number | null {
   return e.valorGlobal ?? e.proposalValor ?? null;
 }
+
+// Valor usado nas somas: quando o usuário registrou o valor homologado, ele vale mais do que o
+// de referência — é o que a empresa realmente ganhou.
+function valorDoEdital(e: EditalParaResultados): number | null {
+  const homologado = situacaoDoEdital(e) === "GANHOS" ? (e.valorHomologado ?? null) : null;
+  return homologado ?? valorReferenciaDoEdital(e);
+}
+
+export type GanhoDetalhe = {
+  editalId: string;
+  titulo: string;
+  orgaoNome: string;
+  valorReferencia: number | null;
+  valorHomologado: number | null;
+  /** Quanto o homologado ficou abaixo da referência, em % (negativo = acima). null se faltar algum dos valores. */
+  descontoPercentual: number | null;
+};
 
 export function aplicarFiltros(editais: EditalParaResultados[], filtros: FiltrosResultados): EditalParaResultados[] {
   const de = filtros.de ? new Date(`${filtros.de}T00:00:00`).getTime() : null;
@@ -206,6 +225,10 @@ export type ResultadosAgregados = {
   qtdEmDisputaComValor: number;
   valorPerdido: number;
   qtdSigilosos: number;
+  /** Editais ganhos, com o valor homologado quando já foi registrado (os mais recentes primeiro). */
+  ganhosDetalhe: GanhoDetalhe[];
+  /** Quantos ganhos ainda não têm valor homologado registrado (a soma usa o valor do edital para eles). */
+  qtdGanhosSemRegistro: number;
   tempoMedioDecisaoDias: number | null;
   funil: { etapa: EtapaKanban; label: string; quantidade: number }[];
   porPortal: ContagemComValor[];
@@ -237,6 +260,7 @@ export async function buscarEditaisParaResultados(companyId: string): Promise<Ed
       createdAt: true,
       decidedAt: true,
       proposal: { select: { valorGlobalReferencia: true } },
+      resultado: { select: { valorHomologado: true } },
     },
   });
 
@@ -253,6 +277,7 @@ export async function buscarEditaisParaResultados(companyId: string): Promise<Ed
     createdAt: e.createdAt.toISOString(),
     decidedAt: e.decidedAt ? e.decidedAt.toISOString() : null,
     proposalValor: e.proposal?.valorGlobalReferencia ?? null,
+    valorHomologado: e.resultado?.valorHomologado ?? null,
   }));
 }
 
@@ -281,6 +306,24 @@ export function montarResultados(todos: EditalParaResultados[], filtros: Filtros
 
   const valoresPerdidos = perdidos.map(valorDoEdital).filter((v): v is number => v != null && v > 0);
   const valorPerdido = valoresPerdidos.reduce((a, b) => a + b, 0);
+
+  const ganhosDetalhe: GanhoDetalhe[] = [...ganhos]
+    .sort((a, b) => new Date(b.decidedAt ?? b.createdAt).getTime() - new Date(a.decidedAt ?? a.createdAt).getTime())
+    .map((e) => {
+      const valorReferencia = valorReferenciaDoEdital(e);
+      const valorHomologado = e.valorHomologado ?? null;
+      return {
+        editalId: e.id,
+        titulo: e.titulo,
+        orgaoNome: e.orgaoNome,
+        valorReferencia,
+        valorHomologado,
+        descontoPercentual:
+          valorReferencia != null && valorReferencia > 0 && valorHomologado != null
+            ? ((valorReferencia - valorHomologado) / valorReferencia) * 100
+            : null,
+      };
+    });
 
   const decisoesComTempo = filtrados.filter((e) => e.decidedAt);
   const tempoMedioDecisaoDias =
@@ -330,6 +373,8 @@ export function montarResultados(todos: EditalParaResultados[], filtros: Filtros
     qtdEmDisputaComValor: valoresEmDisputa.length,
     valorPerdido,
     qtdSigilosos: filtrados.filter((e) => e.orcamentoSigiloso).length,
+    ganhosDetalhe,
+    qtdGanhosSemRegistro: ganhosDetalhe.filter((g) => g.valorHomologado == null).length,
     tempoMedioDecisaoDias,
     funil,
     porPortal,

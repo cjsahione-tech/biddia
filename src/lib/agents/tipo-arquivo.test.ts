@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { contentTypeReal, ehPdf, nomeComExtensao, tipoDoArquivo } from "@/lib/agents/tipo-arquivo";
+import { contentTypeReal, ehPdf, nomeComExtensao, nomeDoAnexoDoUsuario, tipoDoArquivo } from "@/lib/agents/tipo-arquivo";
 
 const bytes = (...b: number[]) => new Uint8Array(b);
 const PDF = new TextEncoder().encode("%PDF-1.7\n1 0 obj");
@@ -34,5 +34,19 @@ describe("formato real do arquivo", () => {
     expect(nomeComExtensao("Edital.zip", "pdf")).toBe("Edital.pdf");
     expect(nomeComExtensao("Anexos", "zip")).toBe("Anexos.zip");
     expect(nomeComExtensao("", "pdf")).toBe("documento.pdf");
+  });
+
+  it("planilha e documento do Office (ZIP por dentro) mantêm a extensão própria, sem ganhar .zip", () => {
+    expect(nomeComExtensao("proposta-final.xlsx", "zip")).toBe("proposta-final.xlsx");
+    expect(nomeComExtensao("Contrato.DOCX", "zip")).toBe("Contrato.DOCX");
+    expect(nomeComExtensao("dados.csv", "outro")).toBe("dados.csv");
+  });
+
+  it("anexo do usuário: mantém a extensão conhecida; sem extensão continua virando .pdf", () => {
+    expect(nomeDoAnexoDoUsuario("proposta-final.xlsx")).toBe("proposta-final.xlsx");
+    expect(nomeDoAnexoDoUsuario("dados.CSV")).toBe("dados.CSV");
+    expect(nomeDoAnexoDoUsuario("foto.jpeg")).toBe("foto.jpeg");
+    expect(nomeDoAnexoDoUsuario("contrato assinado")).toBe("contrato assinado.pdf");
+    expect(nomeDoAnexoDoUsuario("Ata 2026.final")).toBe("Ata 2026.final.pdf");
   });
 });

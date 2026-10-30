@@ -12,6 +12,7 @@ import {
 import { formatBRL } from "@/lib/format";
 import { COR_BRAND, COR_ACCENT, COR_GANHO, COR_PERDA, COR_ANDAMENTO } from "@/lib/chart-colors";
 import { Filtros } from "@/components/resultados/Filtros";
+import { GanhosResultado } from "@/components/resultados/GanhosResultado";
 import { PaginaConteudo } from "@/components/ui/PaginaConteudo";
 import { BarraHorizontal, DonutPortal, EvolucaoMensalChart } from "@/components/resultados/Graficos";
 
@@ -160,7 +161,11 @@ export function ResultadosClient() {
                   icon={Trophy}
                   label="Valor ganho"
                   valor={formatBRL(resultados.valorGanho)}
-                  sub={resultados.ticketMedioGanho != null ? `ticket médio ${formatBRL(resultados.ticketMedioGanho)}` : undefined}
+                  sub={
+                    resultados.ticketMedioGanho != null
+                      ? `ticket médio ${formatBRL(resultados.ticketMedioGanho)} · valor homologado quando registrado`
+                      : undefined
+                  }
                   cor={COR_GANHO}
                 />
                 <KpiCard
@@ -190,6 +195,14 @@ export function ResultadosClient() {
                   {resultados.qtdSigilosos} edital(is) no filtro têm orçamento sigiloso (sem valor publicado pelo órgão) — os
                   totais de valor acima podem estar subestimados para eles.
                 </p>
+              )}
+
+              {resultados.ganhosDetalhe.length > 0 && (
+                <GanhosResultado
+                  ganhos={resultados.ganhosDetalhe}
+                  qtdSemRegistro={resultados.qtdGanhosSemRegistro}
+                  onAtualizar={() => carregar(filtros)}
+                />
               )}
 
               <div className="mt-6 grid grid-cols-1 gap-5 lg:grid-cols-2">

@@ -1,10 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { AlertTriangle, CheckSquare, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { empresaAtende } from "@/lib/agents/classificador-objeto";
-import { ETAPAS_KANBAN, classificarModalidade, GRUPOS_MODALIDADE, GRUPO_OUTRAS_MODALIDADES } from "@/lib/kanban";
+import {
+  ETAPAS_KANBAN,
+  ETAPA_LABEL,
+  classificarModalidade,
+  GRUPOS_MODALIDADE,
+  GRUPO_OUTRAS_MODALIDADES,
+  origemPedeConfirmacaoGanho,
+} from "@/lib/kanban";
+import { JanelaResultadoGanho } from "@/components/resultados/JanelaResultadoGanho";
 import { labelPortal } from "@/lib/fonte-edital";
 import type { EditalListItem, EtapaKanban } from "@/lib/types";
 import { KanbanCard } from "@/components/dashboard/KanbanCard";
@@ -35,6 +43,9 @@ export function KanbanBoard({
   const [dragOverPos, setDragOverPos] = useState<DragOverPos | null>(null);
   const [dragOverColumn, setDragOverColumn] = useState<EtapaKanban | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // Card arrastado para "Ganhas" que está esperando o valor homologado (a janela abre antes de o card mudar de coluna).
+  const [ganhoPendente, setGanhoPendente] = useState<{ id: string; insertBeforeId: string | null } | null>(null);
+  const fecharGanho = useCallback(() => setGanhoPendente(null), []);
 
   const [modoSelecao, setModoSelecao] = useState(false);
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
@@ -125,6 +136,28 @@ export function KanbanBoard({
     }
   }
 
+  // Soltar um card em "Ganhas" (vindo de outra coluna) não move direto: abre a janela do valor homologado e da
+  // planilha final. O card só muda de coluna depois de confirmar lá. Reordenar dentro de Ganhas move normalmente.
+  function soltarCard(id: string, etapaDestino: EtapaKanban, insertBeforeId: string | null) {
+    const edital = editais.find((e) => e.id === id);
+    if (etapaDestino === "ACEITA" && edital && edital.etapaKanban !== "ACEITA") {
+      setGanhoPendente({ id, insertBeforeId });
+      return;
+    }
+    moverCard(id, etapaDestino, insertBeforeId);
+  }
+
+  async function concluirGanho() {
+    const pendente = ganhoPendente;
+    setGanhoPendente(null);
+    if (!pendente) return;
+    // O card que serviria de referência pode ter saído da coluna enquanto a janela estava aberta.
+    const aindaNaColuna = pendente.insertBeforeId && cardsDaColuna("ACEITA", pendente.id).some((c) => c.id === pendente.insertBeforeId);
+    await moverCard(pendente.id, "ACEITA", aindaNaColuna ? pendente.insertBeforeId : null);
+  }
+
+  const editalGanho = ganhoPendente ? (editais.find((e) => e.id === ganhoPendente.id) ?? null) : null;
+
   function handleDragStart(id: string) {
     setDraggedId(id);
   }
@@ -152,7 +185,7 @@ export function KanbanBoard({
     const insertBeforeId = dragOverPos === "after" ? (coluna[idx + 1]?.id ?? null) : edital.id;
     const id = draggedId;
     limparDrag();
-    moverCard(id, edital.etapaKanban, insertBeforeId);
+    soltarCard(id, edital.etapaKanban, insertBeforeId);
   }
 
   function handleColumnDragOver(e: React.DragEvent, etapa: EtapaKanban) {
@@ -166,7 +199,7 @@ export function KanbanBoard({
     if (!draggedId) return;
     const id = draggedId;
     limparDrag();
-    moverCard(id, etapa, null);
+    soltarCard(id, etapa, null);
   }
 
   function sairDoModoSelecao() {
@@ -416,6 +449,18 @@ export function KanbanBoard({
           );
         })}
       </div>
+
+      {editalGanho && (
+        <JanelaResultadoGanho
+          editalId={editalGanho.id}
+          tituloEdital={editalGanho.titulo}
+          valorReferencia={editalGanho.valorGlobal ?? editalGanho.proposal?.valorGlobalReferencia ?? null}
+          etapaAtualRotulo={origemPedeConfirmacaoGanho(editalGanho.etapaKanban) ? ETAPA_LABEL[editalGanho.etapaKanban] : null}
+          modo="mover"
+          onFechar={fecharGanho}
+          onSalvo={concluirGanho}
+        />
+      )}
 
       {selectedId && (
         <KanbanCardModal
