@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireCompany } from "@/lib/api-utils";
 import { conversarComFerramentas } from "@/lib/anthropic";
 import { systemPromptAssistente, FERRAMENTAS_ASSISTENTE, criarExecutorAssistente } from "@/lib/assistente";
+import { limparTextoAssistente } from "@/lib/assistente-texto";
 import { comRetry, descreverErro, ehErroTransiente } from "@/lib/ia-erros";
 
 export const maxDuration = 60;
@@ -47,7 +48,7 @@ export async function POST(req: Request) {
         aoFalhar: (e, t) => console.error(`Assistente Bidd.IA — tentativa ${t} falhou, repetindo:`, e),
       }
     );
-    return NextResponse.json({ resposta: texto, arquivos });
+    return NextResponse.json({ resposta: limparTextoAssistente(texto), arquivos });
   } catch (err) {
     console.error("Falha no assistente Bidd.IA:", err);
     const motivo = descreverErro(err);
