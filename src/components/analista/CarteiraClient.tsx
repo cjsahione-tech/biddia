@@ -359,8 +359,9 @@ export function CarteiraClient() {
               <div className="mt-6 border-t border-border pt-5">
                 <p className="text-sm font-medium text-foreground">Busca de editais (opcional)</p>
                 <p className="mt-1 text-xs text-muted">
-                  Com palavras-chave ou segmento informados, o Agente Comercial já começa a buscar editais logo após o
-                  cadastro.
+                  {fonteAtiva("LICITANET")
+                    ? "Com palavras-chave ou segmento informados, o Agente Comercial já começa a buscar editais logo após o cadastro."
+                    : "Com palavras-chave informadas, o Agente Comercial já começa a buscar editais no PNCP logo após o cadastro."}
                 </p>
                 <div className="mt-3">
                   <p className="text-sm font-medium text-foreground">Palavras-chave de pesquisa (PNCP)</p>
